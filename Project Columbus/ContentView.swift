@@ -290,6 +290,7 @@ struct MainMapView: View {
     @State private var showSideMenu = false
     @State private var selectedTab = 0
     @State private var navigateToFeed = false
+    @State private var selectedPin: Pin? = nil
     @EnvironmentObject var pinStore: PinStore
 
     var body: some View {
@@ -300,8 +301,21 @@ struct MainMapView: View {
                 }
 
                 Map(coordinateRegion: $region, annotationItems: pinStore.masterPins) { pin in
-                    MapMarker(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude), tint: .blue)
-                    
+                    MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
+                        Circle()
+                            .fill(pin == selectedPin ? Color.red : Color.blue)
+                            .frame(width: pin == selectedPin ? 30 : 12, height: pin == selectedPin ? 30 : 12)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: pin == selectedPin ? 2 : 0)
+                            )
+                            .shadow(radius: pin == selectedPin ? 4 : 0)
+                            .scaleEffect(pin == selectedPin ? 1.3 : 1.0)
+                            .animation(.easeInOut(duration: 0.2), value: selectedPin)
+                            .onTapGesture {
+                                selectedPin = pin
+                            }
+                    }
                 }
                 .gesture(MagnificationGesture())
                 .edgesIgnoringSafeArea(.all)
