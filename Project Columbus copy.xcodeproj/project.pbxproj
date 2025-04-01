@@ -186,7 +186,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 38BB88342D8766D900D84636 /* Build configuration list for PBXProject "Project Columbus" */;
+			buildConfigurationList = 38BB88342D8766D900D84636 /* Build configuration list for PBXProject "Project Columbus copy" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -396,6 +396,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Project Columbus/Preview Content\"";
+				DEVELOPMENT_TEAM = 5WWUG23JL4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -424,6 +425,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Project Columbus/Preview Content\"";
+				DEVELOPMENT_TEAM = 5WWUG23JL4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -515,7 +517,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		38BB88342D8766D900D84636 /* Build configuration list for PBXProject "Project Columbus" */ = {
+		38BB88342D8766D900D84636 /* Build configuration list for PBXProject "Project Columbus copy" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				38BB885D2D8766DA00D84636 /* Debug */,

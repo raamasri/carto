@@ -9,6 +9,86 @@ enum PinReaction: String, CaseIterable {
     case wantToGo = "Want to Go"
 }
 
+struct CollectionMapView: View {
+    let pins: [Pin]
+    
+    @State private var region: MKCoordinateRegion
+    
+    init(pins: [Pin]) {
+        self.pins = pins
+        if let first = pins.first {
+            _region = State(initialValue: MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: first.latitude, longitude: first.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            ))
+        } else {
+            _region = State(initialValue: MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+                span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+            ))
+        }
+    }
+    
+    var body: some View {
+        Map(coordinateRegion: $region, annotationItems: pins) { pin in
+            MapMarker(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude), tint: .blue)
+        }
+        .edgesIgnoringSafeArea(.all)
+        .navigationTitle("Map View")
+    }
+}
+
+// MARK: - Collection Detail View
+struct CollectionDetailView: View {
+    let collection: PinCollection
+    @State private var selectedCategory: String = "All"
+    let categories = ["All", "Hotel", "Restaurant", "Bar", "Shopping"]
+
+    var filteredPins: [Pin] {
+        if selectedCategory == "All" {
+            return collection.pins
+        } else {
+            return collection.pins.filter { $0.locationName.localizedCaseInsensitiveContains(selectedCategory) }
+        }
+    }
+
+    var body: some View {
+        NavigationView {
+            VStack {
+                HStack {
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(categories, id: \.self) { category in
+                            Text(category).tag(category)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .padding(.leading)
+
+                    Spacer()
+
+                    NavigationLink(destination: CollectionMapView(pins: filteredPins)) {
+                        Image(systemName: "map")
+                            .font(.title2)
+                            .padding(.trailing)
+                    }
+                }
+
+                List(filteredPins) { pin in
+                    VStack(alignment: .leading) {
+                        Text(pin.locationName)
+                            .font(.headline)
+                        Text("\(pin.city) • \(pin.date)")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .navigationTitle(collection.name)
+        }
+    }
+}
+
 struct User: Identifiable {
     let id: UUID
     let username: String
@@ -29,6 +109,7 @@ struct Pin: Identifiable, Hashable {
     let latitude: Double
     let longitude: Double
     var reaction: PinReaction
+    
     
     // Implement Hashable conformance
     func hash(into hasher: inout Hasher) {
@@ -317,7 +398,6 @@ struct MainMapView: View {
                             }
                     }
                 }
-                .gesture(MagnificationGesture())
                 .edgesIgnoringSafeArea(.all)
                 .gesture(
                     DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -350,9 +430,9 @@ struct MainMapView: View {
                         Spacer()
 
                         Button(action: {
-                            // Open Chat View
+                            selectedTab = 4
                         }) {
-                            Image(systemName: "message")
+                            Image(systemName: "person.circle")
                                 .font(.title2)
                                 .padding()
                         }
@@ -361,6 +441,8 @@ struct MainMapView: View {
                 }
             } else if selectedTab == 4 {
                 UserProfileView()
+            } else if selectedTab == 5 {
+                PlaceholderTabView(tabIndex: selectedTab) // Future Chat Tab
             } else if selectedTab == 1 {
                 SearchView()
                     .environmentObject(pinStore)
@@ -380,7 +462,7 @@ struct MainMapView: View {
                     Spacer()
                     NavBarButton(icon: "person.2", selected: $selectedTab, index: 3)
                     Spacer()
-                    NavBarButton(icon: "person.circle", selected: $selectedTab, index: 4)
+                    NavBarButton(icon: "message", selected: $selectedTab, index: 5)
                 }
                 .padding()
                 .background(Color.black.opacity(0.9))
@@ -479,13 +561,30 @@ struct UserProfileView: View {
         id: UUID(),
         username: "mojojojo23",
         isPrivate: false,
-        followers: [],
-        following: [],
+        followers: Array(repeating: UUID(), count: 5),
+        following: Array(repeating: UUID(), count: 10),
         followRequests: [],
-        collections: [PinCollection(name: "Favorites", pins: [])],
+        collections: [
+        PinCollection(name: "San Francisco", pins: [
+            Pin(locationName: "Zuni Café", city: "San Francisco", date: "Mar 26", latitude: 37.7730, longitude: -122.4210, reaction: .lovedIt),
+            Pin(locationName: "Tartine Bakery", city: "San Francisco", date: "Mar 25", latitude: 37.7614, longitude: -122.4241, reaction: .lovedIt),
+            Pin(locationName: "House of Prime Rib", city: "San Francisco", date: "Mar 24", latitude: 37.7930, longitude: -122.4228, reaction: .wantToGo),
+            Pin(locationName: "La Taqueria", city: "San Francisco", date: "Mar 23", latitude: 37.7502, longitude: -122.4185, reaction: .wantToGo),
+            Pin(locationName: "Swan Oyster Depot", city: "San Francisco", date: "Mar 22", latitude: 37.7913, longitude: -122.4212, reaction: .lovedIt)
+        ]),
+            PinCollection(name: "Bday", pins: []),
+            PinCollection(name: "Car Tour", pins: []),
+            PinCollection(name: "Europe 25", pins: []),
+            PinCollection(name: "Psychos", pins: []),
+            PinCollection(name: "Pizza", pins: [])
+        ],
         favoriteSpots: [],
         activityFeed: []
     )
+
+    @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
+    @State private var selectedSection = "Just Added"
+    let sections = ["Just Added", "Loved", "Want to Go", "Recommendations"]
 
     @State var recentPins: [Pin] = [
         Pin(locationName: "Golden Gate Park", city: "San Francisco", date: "Mar 10", latitude: 37.7694, longitude: -122.4862, reaction: .lovedIt),
@@ -505,58 +604,117 @@ struct UserProfileView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading) {
-                Text(profileUser.username)
-                    .font(.title)
-                    .padding()
+            VStack(alignment: .leading, spacing: 16) {
+                // Profile Header
+                ZStack(alignment: .topTrailing) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: "person.crop.circle.fill")
+                            .resizable()
+                            .frame(width: 60, height: 60)
+                            .foregroundColor(.gray)
 
-                HStack {
-                    Button(action: { selectedFilter = nil }) {
-                        Text("All")
-                            .padding(6)
-                            .background(selectedFilter == nil ? Color.blue : Color.gray.opacity(0.2))
-                            .foregroundColor(selectedFilter == nil ? .white : .black)
-                            .cornerRadius(8)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("@\(profileUser.username)")
+                                .font(.headline)
+
+                            Text(bio)
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                                .lineLimit(2)
+
+                            Text("\(profileUser.followers.count) followers • \(profileUser.following.count) following")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        Spacer()
                     }
-                    // Fixed the error here: using id: \.self instead of an invalid key path.
-                    ForEach(PinReaction.allCases, id: \.self) { reaction in
-                        Button(action: { selectedFilter = reaction }) {
-                            Text(reaction.rawValue)
-                                .padding(6)
-                                .background(selectedFilter == reaction ? Color.blue : Color.gray.opacity(0.2))
-                                .foregroundColor(selectedFilter == reaction ? .white : .black)
-                                .cornerRadius(8)
+                    .padding(.horizontal)
+
+                    Button(action: {
+                        // Future editable profile logic
+                    }) {
+                        Text("Edit")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.gray.opacity(0.2))
+                            .cornerRadius(10)
+                    }
+                    .padding(.trailing)
+                }
+                
+                
+                Divider()
+ 
+                // Reaction Filter
+                
+ 
+                // Recent Pins Section
+                VStack(alignment: .leading, spacing: 8) {
+                    Menu {
+                        ForEach(sections, id: \.self) { section in
+                            Button(action: {
+                                selectedSection = section
+                            }) {
+                                Text(section)
+                            }
+                        }
+                    } label: {
+                        Text(selectedSection)
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(10)
+                            .padding(.horizontal)
+                    }
+
+                    ForEach(filteredPins) { pin in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(pin.locationName)
+                                .font(.subheadline)
+                                .bold()
+                            Text("\(pin.city) • \(pin.date)")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 4)
+                    }
+                }
+ 
+                Divider()
+ 
+ 
+ 
+                // New Collections Section
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Collections")
+                        .font(.headline)
+                        .padding(.horizontal)
+                
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                        ForEach(profileUser.collections) { collection in
+                            NavigationLink(destination: CollectionDetailView(collection: collection)) {
+                                VStack(spacing: 4) {
+                                    Circle()
+                                        .fill(Color.blue.opacity(0.2))
+                                        .frame(width: 60, height: 60)
+                                        .overlay(Text("📍"))
+                                    Text(collection.name)
+                                        .font(.caption)
+                                        .multilineTextAlignment(.center)
+                                        .frame(width: 60)
+                                }
+                            }
                         }
                     }
-                }
-                .padding(.horizontal)
-
-                ForEach(filteredPins) { pin in
-                    Text("\(pin.locationName) - \(pin.reaction.rawValue)")
-                        .padding(.horizontal)
-                        .padding(.vertical, 4)
-                }
-
-                Text("Collections")
-                    .font(.headline)
                     .padding(.horizontal)
-
-                ForEach(profileUser.collections) { collection in
-                    Text(collection.name)
-                        .font(.subheadline)
-                        .padding(.horizontal)
-                }
-
-                Text("Activity Feed")
-                    .font(.headline)
-                    .padding(.horizontal)
-
-                ForEach(profileUser.activityFeed) { pin in
-                    Text("\(pin.locationName) - \(pin.reaction.rawValue)")
-                        .font(.caption)
-                        .padding(.horizontal)
                 }
             }
+            .padding(.vertical)
         }
     }
 }
