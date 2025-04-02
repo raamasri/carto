@@ -9,33 +9,59 @@ enum PinReaction: String, CaseIterable {
     case wantToGo = "Want to Go"
 }
 
+// MARK: - Location Manager
+class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    @Published var userLocation: CLLocationCoordinate2D? = nil
+
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.requestWhenInUseAuthorization()
+        manager.startUpdatingLocation()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        userLocation = location.coordinate
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("Failed to find user's location: \(error.localizedDescription)")
+    }
+}
+
 struct CollectionMapView: View {
     let pins: [Pin]
     
-    @State private var region: MKCoordinateRegion
+    @State private var cameraPosition: MapCameraPosition
     
     init(pins: [Pin]) {
         self.pins = pins
         if let first = pins.first {
-            _region = State(initialValue: MKCoordinateRegion(
+            _cameraPosition = State(initialValue: .region(MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: first.latitude, longitude: first.longitude),
                 span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-            ))
+            )))
         } else {
-            _region = State(initialValue: MKCoordinateRegion(
+            _cameraPosition = State(initialValue: .region(MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
                 span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
-            ))
+            )))
         }
     }
     
     var body: some View {
-        Map(coordinateRegion: $region, annotationItems: pins) { pin in
-            MapMarker(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude), tint: .blue)
+        Map(position: $cameraPosition) {
+            ForEach(pins, id: \.id) { pin in
+                Marker(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
+            }
         }
         .edgesIgnoringSafeArea(.all)
         .navigationTitle("Map View")
     }
+
 }
 
 // MARK: - Collection Detail View
@@ -362,16 +388,58 @@ struct LocationDetailView: View {
 // MARK: - Main Map View with Bottom Nav and Side Menu
 
 struct MainMapView: View {
-    @State private var region = MKCoordinateRegion(
+    @State private var cameraPosition = MapCameraPosition.region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-    )
+    ))
 
     @State private var userLocation: CLLocationCoordinate2D? = nil
+    @StateObject private var locationManager = LocationManager()
     @State private var showSideMenu = false
     @State private var selectedTab = 0
     @State private var navigateToFeed = false
     @State private var selectedPin: Pin? = nil
+    
+    struct PinAnnotationView: View {
+        let pin: Pin
+        let isSelected: Bool
+        let onTap: () -> Void
+        
+        var body: some View {
+            Circle()
+                .fill(isSelected ? Color.red : Color.blue)
+                .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white, lineWidth: isSelected ? 2 : 0)
+                )
+                .shadow(radius: isSelected ? 4 : 0)
+                .scaleEffect(isSelected ? 1.3 : 1.0)
+                .animation(.easeInOut(duration: 0.2), value: isSelected)
+                .onTapGesture(perform: onTap)
+        }
+    }
+    
+    struct PinAnnotationDot: View {
+        let pin: Pin
+        let isSelected: Bool
+        let onTap: () -> Void
+    
+        var body: some View {
+            Circle()
+                .fill(isSelected ? Color.red : Color.blue)
+                .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white, lineWidth: isSelected ? 2 : 0)
+                )
+                .shadow(radius: isSelected ? 4 : 0)
+                .scaleEffect(isSelected ? 1.3 : 1.0)
+                .animation(.easeInOut(duration: 0.2), value: isSelected)
+                .onTapGesture(perform: onTap)
+        }
+    }
+    
     @EnvironmentObject var pinStore: PinStore
 
     var body: some View {
@@ -381,22 +449,8 @@ struct MainMapView: View {
                     EmptyView()
                 }
 
-                Map(coordinateRegion: $region, annotationItems: pinStore.masterPins) { pin in
-                    MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                        Circle()
-                            .fill(pin == selectedPin ? Color.red : Color.blue)
-                            .frame(width: pin == selectedPin ? 30 : 12, height: pin == selectedPin ? 30 : 12)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white, lineWidth: pin == selectedPin ? 2 : 0)
-                            )
-                            .shadow(radius: pin == selectedPin ? 4 : 0)
-                            .scaleEffect(pin == selectedPin ? 1.3 : 1.0)
-                            .animation(.easeInOut(duration: 0.2), value: selectedPin)
-                            .onTapGesture {
-                                selectedPin = pin
-                            }
-                    }
+                Map(position: $cameraPosition) {
+                    pinAnnotations
                 }
                 .edgesIgnoringSafeArea(.all)
                 .gesture(
@@ -442,7 +496,7 @@ struct MainMapView: View {
             } else if selectedTab == 4 {
                 UserProfileView()
             } else if selectedTab == 5 {
-                PlaceholderTabView(tabIndex: selectedTab) // Future Chat Tab
+                FindFriendsView()
             } else if selectedTab == 1 {
                 SearchView()
                     .environmentObject(pinStore)
@@ -451,22 +505,48 @@ struct MainMapView: View {
                     .environmentObject(pinStore)
             }
 
-            VStack {
+        VStack {
+            Spacer()
+            HStack {
                 Spacer()
-                HStack {
-                    NavBarButton(icon: "house", selected: $selectedTab, index: 0)
-                    Spacer()
-                    NavBarButton(icon: "magnifyingglass", selected: $selectedTab, index: 1)
-                    Spacer()
-                    NavBarButton(icon: "plus.circle", selected: $selectedTab, index: 2)
-                    Spacer()
-                    NavBarButton(icon: "person.2", selected: $selectedTab, index: 3)
-                    Spacer()
-                    NavBarButton(icon: "message", selected: $selectedTab, index: 5)
+                Button(action: {
+                    requestUserLocation()
+                }) {
+                    Image(systemName: "location.fill")
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                        .shadow(radius: 4)
                 }
-                .padding()
-                .background(Color.black.opacity(0.9))
+                .padding(.bottom, 100)
+                .padding(.trailing)
             }
+        }
+
+        VStack {
+            Spacer()
+            HStack {
+                NavBarButton(icon: "house", selected: $selectedTab, index: 0)
+                Spacer()
+                NavBarButton(icon: "magnifyingglass", selected: $selectedTab, index: 1)
+                Spacer()
+                NavBarButton(icon: "plus.circle", selected: $selectedTab, index: 2)
+                Spacer()
+                NavBarButton(icon: "person.2", selected: $selectedTab, index: 3)
+                Spacer()
+                NavBarButton(icon: "location.circle", selected: $selectedTab, index: 5)
+            }
+            .padding()
+            .padding(.bottom, 0)
+            .background(
+                Color.white.opacity(0.5)
+                    .background(.ultraThinMaterial)
+                    .blur(radius: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 0))
+                    .padding(.horizontal, 0)
+            )
+        }
         }
         .onAppear {
             requestUserLocation()
@@ -481,11 +561,22 @@ struct MainMapView: View {
     }
 
     func requestUserLocation() {
-        let manager = CLLocationManager()
-        manager.requestWhenInUseAuthorization()
-        if let location = manager.location?.coordinate {
+        if let location = locationManager.userLocation {
             self.userLocation = location
-            region.center = location
+            cameraPosition = .region(MKCoordinateRegion(
+                center: location,
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            ))
+        }
+    }
+    
+    private var pinAnnotations: some MapContent {
+        ForEach(pinStore.masterPins, id: \.id) { pin in
+            Annotation("Pin", coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
+                PinAnnotationDot(pin: pin, isSelected: pin == selectedPin) {
+                    selectedPin = pin
+                }
+            }
         }
     }
 }
@@ -748,3 +839,17 @@ struct ContentView: View {
             ContentView()
         }
     }
+
+struct FindFriendsView: View {
+    var body: some View {
+        VStack {
+            Spacer()
+            Text("Find Friends")
+                .font(.largeTitle)
+            Text("This is where you’ll see your friends on the map.")
+                .font(.subheadline)
+                .padding()
+            Spacer()
+        }
+    }
+}

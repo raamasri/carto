@@ -8,6 +8,8 @@ struct SignUpView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var showBuildProfile = false
+    @State private var profileImage: UIImage? = nil
+    @State private var showImagePicker = false
 
     var body: some View {
         ZStack {
@@ -15,7 +17,7 @@ struct SignUpView: View {
                 .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 20) {
-                Text("Join Cart-o")
+                Text("Join CARTO")
                     .font(.largeTitle)
                     .bold()
                     .foregroundColor(.white)
@@ -35,6 +37,19 @@ struct SignUpView: View {
                     .background(Color.white)
                     .cornerRadius(8)
 
+                Button("Choose Profile Image") {
+                    showImagePicker = true
+                }
+                .foregroundColor(.white)
+
+                if let profileImage = profileImage {
+                    Image(uiImage: profileImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 100)
+                        .clipShape(Circle())
+                }
+
                 Button("Sign Up") {
                     if !username.isEmpty && !email.isEmpty && !password.isEmpty {
                         showBuildProfile = true
@@ -49,7 +64,41 @@ struct SignUpView: View {
             }
             .padding()
         }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(image: $profileImage)
+        }
     }
 }
 
-// LoginView should be defined in LoginView.swift only.
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    @Environment(\.presentationMode) private var presentationMode
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: ImagePicker
+
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let uiImage = info[.originalImage] as? UIImage {
+                parent.image = uiImage
+            }
+
+            parent.presentationMode.wrappedValue.dismiss()
+        }
+    }
+}

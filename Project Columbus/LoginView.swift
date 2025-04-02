@@ -13,7 +13,7 @@ struct LoginView: View {
                 .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 20) {
-                Text("Log In to Cart-o")
+                Text("Log In to CARTO")
                     .font(.largeTitle)
                     .bold()
                     .foregroundColor(.white)
