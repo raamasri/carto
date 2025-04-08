@@ -19,7 +19,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.requestWhenInUseAuthorization()
-        manager.startUpdatingLocation()
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -29,6 +28,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Failed to find user's location: \(error.localizedDescription)")
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.startUpdatingLocation()
+        case .denied, .restricted:
+            print("Location access denied or restricted")
+        case .notDetermined:
+            print("Waiting for location permission")
+        @unknown default:
+            break
+        }
+    }
+    
+    func requestUserLocationManually() {
+        manager.startUpdatingLocation()
     }
 }
 
@@ -399,6 +415,7 @@ struct MainMapView: View {
     @State private var selectedTab = 0
     @State private var navigateToFeed = false
     @State private var selectedPin: Pin? = nil
+    @State private var animatePulse = false
     
     struct PinAnnotationView: View {
         let pin: Pin
@@ -451,6 +468,20 @@ struct MainMapView: View {
 
                 Map(position: $cameraPosition) {
                     pinAnnotations
+                    if let userLoc = userLocation {
+                        Annotation("Current Location", coordinate: userLoc) {
+                        Circle()
+                                .fill(Color.blue)
+                                .frame(width: 12, height: 12)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.blue.opacity(0.6), lineWidth: 2)
+                                        .scaleEffect(animatePulse ? 2.2 : 1.2)
+                                        .opacity(animatePulse ? 0.1 : 0.6)
+                                        .animation(.easeOut(duration: 1).repeatForever(autoreverses: true), value: animatePulse)
+                                )
+                        }
+                    }
                 }
                 .edgesIgnoringSafeArea(.all)
                 .gesture(
@@ -524,32 +555,34 @@ struct MainMapView: View {
             }
         }
 
-        VStack {
-            Spacer()
-            HStack {
-                NavBarButton(icon: "house", selected: $selectedTab, index: 0)
+            VStack {
                 Spacer()
-                NavBarButton(icon: "magnifyingglass", selected: $selectedTab, index: 1)
-                Spacer()
-                NavBarButton(icon: "plus.circle", selected: $selectedTab, index: 2)
-                Spacer()
-                NavBarButton(icon: "person.2", selected: $selectedTab, index: 3)
-                Spacer()
-                NavBarButton(icon: "location.circle", selected: $selectedTab, index: 5)
+                HStack {
+                    NavBarButton(icon: "house", selected: $selectedTab, index: 0)
+                    Spacer()
+                    NavBarButton(icon: "magnifyingglass", selected: $selectedTab, index: 1)
+                    Spacer()
+                    NavBarButton(icon: "plus.circle", selected: $selectedTab, index: 2)
+                    Spacer()
+                    NavBarButton(icon: "person.2", selected: $selectedTab, index: 3)
+                    Spacer()
+                    NavBarButton(icon: "location.circle", selected: $selectedTab, index: 5)
+                }
+                .padding()
+                .padding(.bottom, 10)
+                .background(
+                    Color.black.opacity(0.5)
+                        .background(.ultraThinMaterial)
+                        .blur(radius: 0)
+                        .clipShape(RoundedRectangle(cornerRadius: 0))
+                        .padding(.horizontal, 0)
+                )
             }
-            .padding()
-            .padding(.bottom, 0)
-            .background(
-                Color.white.opacity(0.5)
-                    .background(.ultraThinMaterial)
-                    .blur(radius: 20)
-                    .clipShape(RoundedRectangle(cornerRadius: 0))
-                    .padding(.horizontal, 0)
-            )
-        }
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .onAppear {
             requestUserLocation()
+            animatePulse = true
             // Add some initial pins
             if pinStore.masterPins.isEmpty {
                 pinStore.masterPins = [
@@ -558,15 +591,29 @@ struct MainMapView: View {
                 ]
             }
         }
-    }
-
-    func requestUserLocation() {
-        if let location = locationManager.userLocation {
-            self.userLocation = location
+        .onReceive(locationManager.$userLocation.compactMap { $0 }) { location in
             cameraPosition = .region(MKCoordinateRegion(
                 center: location,
                 span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
             ))
+        }
+    }
+
+    func requestUserLocation() {
+        locationManager.requestUserLocationManually()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if let location = locationManager.userLocation {
+                self.userLocation = location
+                withAnimation {
+                    cameraPosition = .region(MKCoordinateRegion(
+                        center: location,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    ))
+                }
+            } else {
+                print("User location unavailable. Possibly due to denied permissions.")
+            }
         }
     }
     

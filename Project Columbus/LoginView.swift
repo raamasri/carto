@@ -20,14 +20,20 @@ struct LoginView: View {
 
                 TextField("Username", text: $username)
                     .padding()
-                    .background(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Color(UIColor.secondarySystemBackground))
                     .cornerRadius(8)
+                    // Ensure the entire background rectangle is tappable
+                    .contentShape(Rectangle())
 
                 SecureField("Password", text: $password)
                     .padding()
-                    .background(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Color(UIColor.secondarySystemBackground))
                     .cornerRadius(8)
-
+                    // Ensure the entire background rectangle is tappable
+                    .contentShape(Rectangle())
+                
                 Button("Log In") {
                     authManager.logIn(username: username, password: password)
                     presentationMode.wrappedValue.dismiss()
