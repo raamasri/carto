@@ -1,3 +1,96 @@
+struct CreatePostView: View {
+    @State private var placeName: String = ""
+    @State private var location: String = ""
+    @State private var rating: Int = 0
+    @State private var recommendation: Bool = false
+    @State private var recommendedTo: String = "Everyone"
+    private let recommendedOptions = ["Everyone", "Family", "Friends"]
+    @State private var postContent: String = ""
+    @State private var selectedImage: Image? = nil
+    @State private var showingImagePicker: Bool = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Create a New Post")
+                    .font(.title)
+                    .padding(.bottom, 8)
+
+                Group {
+                    Text("Place Name")
+                        .font(.headline)
+                    TextField("Enter place name", text: $placeName)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+
+                Group {
+                    Text("Rating")
+                        .font(.headline)
+                    HStack {
+                        ForEach(1..<11) { star in  // Change the range to 1..<11 for 10 stars
+                            Image(systemName: star <= rating ? "star.fill" : "star")
+                                .foregroundColor(.yellow)
+                                .onTapGesture {
+                                    rating = star
+                                }
+                        }
+                    }
+                }
+
+                Group {
+                    Toggle("Recommendation", isOn: $recommendation)
+                    if recommendation {
+                        Picker("Recommended To", selection: $recommendedTo) {
+                            ForEach(recommendedOptions, id: \.self) { option in
+                                Text(option)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                    }
+                }
+
+                Group {
+                    Text("Post Content")
+                        .font(.headline)
+                    TextField("Enter your post content", text: $postContent)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+
+                Group {
+                    Button(action: {
+                        // Action to show image picker
+                        showingImagePicker = true
+                    }) {
+                        HStack {
+                            Image(systemName: "photo")
+                            Text("Select Image")
+                        }
+                    }
+                    if let image = selectedImage {
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 200)
+                    }
+                }
+
+                Button(action: {
+                    // Submit post action
+                }) {
+                    Text("Post")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .cornerRadius(10)
+                }
+            }
+            .padding()
+        }
+        // .sheet(isPresented: $showingImagePicker) { ImagePicker(selectedImage: $selectedImage) }
+    }
+}
 import SwiftUI
 import MapKit
 import Combine
@@ -8,6 +101,7 @@ import Foundation
 
 struct SettingsView: View {
     @Environment(\.presentationMode) var dismiss
+    @AppStorage("themePreference") private var themePreference: String = "Auto"
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
     
     var body: some View {
@@ -36,7 +130,7 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("Appearance")) {
-                    Picker("Theme", selection: .constant("Auto")) {
+                    Picker("Theme", selection: $themePreference) {
                         Text("Auto").tag("Auto")
                         Text("Light").tag("Light")
                         Text("Dark").tag("Dark")
@@ -359,6 +453,8 @@ struct MainMapView: View {
             } else if selectedTab == 1 {
                 SearchView()
                     .environmentObject(pinStore)
+            } else if selectedTab == 2 {
+                CreatePostView()
             } else {
                 LiveFeedView()
                     .environmentObject(pinStore)
@@ -699,17 +795,33 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var authManager = AuthManager()
+    @AppStorage("themePreference") private var themePreference: String = "Auto"
 
     var body: some View {
-        if authManager.isLoggedIn {
-            MainMapView()
-                .environmentObject(authManager)
-                .environmentObject(PinStore())
-        } else {
-            StartupView()
-                .environmentObject(authManager)
+        Group {
+            if authManager.isLoggedIn {
+                MainMapView()
+                    .environmentObject(authManager)
+                    .environmentObject(PinStore())
+            } else {
+                StartupView()
+                    .environmentObject(authManager)
+            }
+        }
+        .preferredColorScheme(colorScheme)
+    }
+
+    private var colorScheme: ColorScheme? {
+        switch themePreference {
+        case "Light":
+            return .light
+        case "Dark":
+            return .dark
+        default:
+            return nil
         }
     }
+
 }
 
     struct ContentView_Previews: PreviewProvider {

@@ -10,59 +10,57 @@ struct LiveFeedView: View {
     @State private var selectedPin: Pin? = nil
     @State private var showMap = false
     @State private var lovedPins: Set<UUID> = []
+    @State private var selectedTab = 0
+    let tabs = ["Friends", "Following", "For You"]
 
     var body: some View {
         NavigationView {
-            List(pinStore.masterPins.reversed()) { pin in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(pin.locationName)
-                        .font(.headline)
-                    Text("City: \(pin.city) • \(pin.date)")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+            VStack {
+                Picker("Tabs", selection: $selectedTab) {
+                    ForEach(0..<tabs.count, id: \.self) { index in
+                        Text(tabs[index]).tag(index)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
 
-                    Text("Posted by @mojojojo23")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                TabView(selection: $selectedTab) {
+                    // Friends Tab
+                    List(pinStore.masterPins.reversed()) { pin in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(pin.locationName)
+                                .font(.headline)
+                            Text("City: \(pin.city) • \(pin.date)")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
 
-                    HStack(spacing: 20) {
-                        Button(action: {
-                            if lovedPins.contains(pin.id) {
-                                lovedPins.remove(pin.id)
-                            } else {
-                                lovedPins.insert(pin.id)
-                            }
-                        }) {
-                            Label("Love", systemImage: lovedPins.contains(pin.id) ? "heart.fill" : "heart")
+                            Text("Posted by @mojojojo23")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            pinActions(pin: pin)
                         }
-
-                        Button(action: {
-                            print("Comment tapped for \(pin.locationName)")
-                        }) {
-                            Label("Comment", systemImage: "bubble.right")
-                        }
-
-                        Button(action: {
-                            sharePin(pin)
-                        }) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                        }
-
-                        Button(action: {
-                            print("Saved \(pin.locationName) to collection")
-                        }) {
-                            Label("Save", systemImage: "bookmark")
+                        .padding(.vertical, 4)
+                        .onTapGesture {
+                            selectedPin = pin
+                            region = MKCoordinateRegion(
+                                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                            )
+                            showMap = true
                         }
                     }
-                    .font(.footnote)
-                    .foregroundColor(.blue)
+                    .tag(0)
+
+                    // Following Tab Placeholder
+                    Text("Following content goes here")
+                        .tag(1)
+
+                    // For You Tab Placeholder
+                    Text("For You content goes here")
+                        .tag(2)
                 }
-                .padding(.vertical, 4)
-                .onTapGesture {
-                    selectedPin = pin
-                    region.center = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
-                    showMap = true
-                }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             }
             .navigationTitle("Live Feed")
             .sheet(isPresented: $showMap) {
@@ -74,6 +72,41 @@ struct LiveFeedView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func pinActions(pin: Pin) -> some View {
+        HStack(spacing: 20) {
+            Button(action: {
+                if lovedPins.contains(pin.id) {
+                    lovedPins.remove(pin.id)
+                } else {
+                    lovedPins.insert(pin.id)
+                }
+            }) {
+                Label("Love", systemImage: lovedPins.contains(pin.id) ? "heart.fill" : "heart")
+            }
+
+            Button(action: {
+                print("Comment tapped for \(pin.locationName)")
+            }) {
+                Label("Comment", systemImage: "bubble.right")
+            }
+
+            Button(action: {
+                sharePin(pin)
+            }) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+
+            Button(action: {
+                print("Saved \(pin.locationName) to collection")
+            }) {
+                Label("Save", systemImage: "bookmark")
+            }
+        }
+        .font(.footnote)
+        .foregroundColor(.blue)
     }
 
     func sharePin(_ pin: Pin) {
