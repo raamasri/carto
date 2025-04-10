@@ -161,6 +161,7 @@ struct SettingsView: View {
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var userLocation: CLLocationCoordinate2D? = nil
+    @Published var isUserManuallyMovingMap: Bool = false
 
     override init() {
         super.init()
@@ -314,6 +315,7 @@ struct IdentifiableMapItem: Identifiable {
 
 struct MainMapView: View {
     @State private var shouldTrackUser = false
+    @State private var isUserManuallyMovingMap = false
     @State private var cameraPosition = MapCameraPosition.region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -415,6 +417,10 @@ struct MainMapView: View {
                     DragGesture(minimumDistance: 5)
                         .onChanged { _ in
                             shouldTrackUser = false
+                            isUserManuallyMovingMap = true  // User has moved the map manually
+                        }
+                        .onEnded { _ in
+                            isUserManuallyMovingMap = false  // User has stopped moving the map
                         }
                 )
 
@@ -517,19 +523,21 @@ struct MainMapView: View {
                 ]
             }
         }
-        .onReceive(locationManager.$userLocation.compactMap { $0 }) { location in
-            cameraPosition = .region(MKCoordinateRegion(
-                center: location,
-                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-            ))
-        }
+.onReceive(locationManager.$userLocation.compactMap { $0 }) { location in
+    if !isUserManuallyMovingMap {
+        cameraPosition = .region(MKCoordinateRegion(
+            center: location,
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        ))
+    }
+}
     }
 
     func requestUserLocation() {
         locationManager.requestUserLocationManually()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if let location = locationManager.userLocation {
+            if let location = locationManager.userLocation, !isUserManuallyMovingMap {
                 self.userLocation = location
                 withAnimation {
                     cameraPosition = .region(MKCoordinateRegion(
@@ -538,7 +546,7 @@ struct MainMapView: View {
                     ))
                 }
             } else {
-                print("User location unavailable. Possibly due to denied permissions.")
+                print("User location unavailable or manual map movement detected.")
             }
         }
     }
