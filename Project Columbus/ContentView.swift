@@ -4,9 +4,63 @@ import Combine
 import Foundation
 // MARK: - Models and Enums
 
-enum PinReaction: String, CaseIterable {
-    case lovedIt = "Loved It"
-    case wantToGo = "Want to Go"
+
+
+struct SettingsView: View {
+    @Environment(\.presentationMode) var dismiss
+    @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Account")) {
+                    NavigationLink("Edit Profile", destination: Text("Profile Editor Placeholder"))
+                    NavigationLink("Change Password", destination: Text("Password Change Placeholder"))
+                    Toggle("Private Account", isOn: .constant(false))
+                }
+                
+                Section(header: Text("Map Preferences")) {
+                    Picker("Map Type", selection: $selectedMapType) {
+                        Text("Standard").tag("Standard")
+                        Text("Satellite").tag("Satellite")
+                        Text("Hybrid").tag("Hybrid")
+                    }
+                    Toggle("Show My Location", isOn: .constant(true))
+                    Toggle("Show Reactions", isOn: .constant(true))
+                }
+                
+                Section(header: Text("Notifications")) {
+                    Toggle("Friend Activity", isOn: .constant(true))
+                    Toggle("Nearby Pins", isOn: .constant(true))
+                    Toggle("New Followers", isOn: .constant(false))
+                }
+                
+                Section(header: Text("Appearance")) {
+                    Picker("Theme", selection: .constant("Auto")) {
+                        Text("Auto").tag("Auto")
+                        Text("Light").tag("Light")
+                        Text("Dark").tag("Dark")
+                    }
+                }
+                
+                Section(header: Text("About")) {
+                    NavigationLink("Help & Support", destination: Text("Help Placeholder"))
+                    NavigationLink("Privacy Policy", destination: Text("Privacy Placeholder"))
+                    NavigationLink("Terms of Use", destination: Text("Terms Placeholder"))
+                    Text("App Version 1.0.0")
+                        .foregroundColor(.gray)
+                }
+            }
+            .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss.wrappedValue.dismiss()
+                    }
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Location Manager
@@ -143,36 +197,7 @@ struct User: Identifiable {
     var activityFeed: [Pin] = []
 }
 
-struct Pin: Identifiable, Hashable {
-    let id = UUID()
-    let locationName: String
-    let city: String
-    let date: String
-    let latitude: Double
-    let longitude: Double
-    var reaction: PinReaction
-    
-    
-    // Implement Hashable conformance
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-    
-    // Implement Equatable conformance
-    static func == (lhs: Pin, rhs: Pin) -> Bool {
-        return lhs.id == rhs.id
-    }
-}
 
-struct PinCollection: Identifiable {
-    let id = UUID()
-    let name: String
-    var pins: [Pin]
-}
-
-class PinStore: ObservableObject {
-    @Published var masterPins: [Pin] = []
-}
 
 // MARK: - Utility Functions
 
@@ -189,217 +214,7 @@ struct IdentifiableMapItem: Identifiable {
     let mapItem: MKMapItem
 }
 
-// MARK: - Search View
 
-struct SearchView: View {
-    @State private var searchText = ""
-    @State private var searchResults: [String] = []
-    @State private var locationResults: [MKMapItem] = []
-    @State private var cancellables = Set<AnyCancellable>()
-
-    @State private var selectedMapItem: MKMapItem? = nil
-    @State private var showLocationDetail = false
-    @EnvironmentObject var pinStore: PinStore
-
-    @State private var quickAddedItemIDs: Set<String> = [] // Track added pins by coordinate string
-
-    var body: some View {
-        NavigationView {
-            VStack {
-                TextField("Search @user, #tag, or place", text: $searchText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding()
-                    .onChange(of: searchText) { newValue in
-                        performSearch(for: newValue)
-                    }
-
-                if searchText.starts(with: "@") {
-                    List(searchResults, id: \.self) { user in
-                        Text("User: \(user)")
-                    }
-                } else if searchText.starts(with: "#") {
-                    List(searchResults, id: \.self) { tag in
-                        Text("Tag: \(tag)")
-                    }
-                } else {
-                    List {
-                        ForEach(locationResults.indices, id: \.self) { index in
-                            let item = locationResults[index]
-                            let uniqueID = "\(item.placemark.coordinate.latitude),\(item.placemark.coordinate.longitude)"
-
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(item.name ?? "Unknown Place")
-                                        .font(.headline)
-                                    Text(item.placemark.title ?? "")
-                                        .font(.subheadline)
-                                        .foregroundColor(.gray)
-                                }
-                                Spacer()
-                                if quickAddedItemIDs.contains(uniqueID) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                        .transition(.opacity)
-                                } else {
-                                    Button(action: {
-                                        quickAddPin(for: item, id: uniqueID)
-                                    }) {
-                                        Image(systemName: "plus.circle")
-                                            .font(.title2)
-                                    }
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedMapItem = item
-                                showLocationDetail = true
-                            }
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-            .navigationTitle("Search")
-            .sheet(isPresented: $showLocationDetail) {
-                if let selected = selectedMapItem {
-                    NavigationView {
-                        LocationDetailView(mapItem: selected) { newPin in
-                            pinStore.masterPins.append(newPin)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    func performSearch(for query: String) {
-        if query.starts(with: "@") {
-            let users = ["@alice", "@bob", "@charlie", "@explorer123"]
-            searchResults = users.filter { $0.contains(query.lowercased()) }
-            locationResults = []
-        } else if query.starts(with: "#") {
-            let tags = ["#coffee", "#parks", "#museums", "#hiking"]
-            searchResults = tags.filter { $0.contains(query.lowercased()) }
-            locationResults = []
-        } else {
-            let request = MKLocalSearch.Request()
-            request.naturalLanguageQuery = query
-            request.region = MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
-                span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
-            )
-
-            let search = MKLocalSearch(request: request)
-            search.start { response, error in
-                if let items = response?.mapItems {
-                    self.locationResults = items
-                } else {
-                    self.locationResults = []
-                }
-                self.searchResults = []
-            }
-        }
-    }
-
-    func quickAddPin(for item: MKMapItem, id uniqueID: String) {
-        let newPin = Pin(
-            locationName: item.name ?? "Unknown Place",
-            city: item.placemark.locality ?? "Unknown City",
-            date: formattedDate(),
-            latitude: item.placemark.coordinate.latitude,
-            longitude: item.placemark.coordinate.longitude,
-            reaction: .wantToGo
-        )
-        pinStore.masterPins.append(newPin)
-        quickAddedItemIDs.insert(uniqueID)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            quickAddedItemIDs.remove(uniqueID)
-        }
-    }
-}
-
-// MARK: - Location Detail View
-
-struct LocationDetailView: View {
-    let mapItem: MKMapItem
-    let onAdd: (Pin) -> Void
-    @Environment(\.presentationMode) var presentationMode
-    @State private var added = false
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Map(coordinateRegion: .constant(MKCoordinateRegion(
-                    center: mapItem.placemark.coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
-                )), annotationItems: [IdentifiableMapItem(mapItem: mapItem)]) { item in
-                    MapMarker(coordinate: item.mapItem.placemark.coordinate, tint: .red)
-                }
-                .frame(height: 200)
-                .cornerRadius(10)
-
-                Text(mapItem.name ?? "Unknown Place")
-                    .font(.title)
-                    .bold()
-
-                if let address = mapItem.placemark.title {
-                    Text(address)
-                        .font(.subheadline)
-                }
-                if let phone = mapItem.phoneNumber {
-                    Text("Phone: \(phone)")
-                        .font(.subheadline)
-                }
-                if let url = mapItem.url {
-                    Link("Website", destination: url)
-                }
-
-                Spacer()
-
-                if added {
-                    Label("Added!", systemImage: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.headline)
-                        .transition(.opacity)
-                        .padding()
-                } else {
-                    Button(action: {
-                        let newPin = Pin(
-                            locationName: mapItem.name ?? "Unknown Place",
-                            city: mapItem.placemark.locality ?? "Unknown City",
-                            date: formattedDate(),
-                            latitude: mapItem.placemark.coordinate.latitude,
-                            longitude: mapItem.placemark.coordinate.longitude,
-                            reaction: .wantToGo
-                        )
-                        onAdd(newPin)
-                        withAnimation {
-                            added = true
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                            presentationMode.wrappedValue.dismiss()
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "plus")
-                            Text("Add to List")
-                                .bold()
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                }
-            }
-            .padding()
-        }
-        .navigationTitle("Details")
-    }
-}
 
 // MARK: - Main Map View with Bottom Nav and Side Menu
 
@@ -416,6 +231,8 @@ struct MainMapView: View {
     @State private var navigateToFeed = false
     @State private var selectedPin: Pin? = nil
     @State private var animatePulse = false
+    @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
+    @State private var showSettingsSheet = false
     
     struct PinAnnotationView: View {
         let pin: Pin
@@ -470,7 +287,7 @@ struct MainMapView: View {
                     pinAnnotations
                     if let userLoc = userLocation {
                         Annotation("Current Location", coordinate: userLoc) {
-                        Circle()
+                            Circle()
                                 .fill(Color.blue)
                                 .frame(width: 12, height: 12)
                                 .overlay(
@@ -483,6 +300,7 @@ struct MainMapView: View {
                         }
                     }
                 }
+                .mapStyle(styleForMapType(selectedMapType))
                 .edgesIgnoringSafeArea(.all)
                 .gesture(
                     DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -505,13 +323,16 @@ struct MainMapView: View {
 
                 VStack {
                     HStack {
-                        Button(action: {
-                            // Open Settings View
-                        }) {
-                            Image(systemName: "gear")
-                                .font(.title2)
-                                .padding()
-                        }
+                    Button(action: {
+                        showSettingsSheet = true
+                    }) {
+                        Image(systemName: "gear")
+                            .font(.title2)
+                            .padding()
+                    }
+                    .sheet(isPresented: $showSettingsSheet) {
+                        SettingsView()
+                    }
                         Spacer()
 
                         Button(action: {
@@ -676,6 +497,7 @@ struct SideMenuView: View {
 
 // MARK: - Navigation Bar Button
 
+
 struct NavBarButton: View {
     let icon: String
     @Binding var selected: Int
@@ -730,7 +552,7 @@ struct UserProfileView: View {
         Pin(locationName: "Eiffel Tower", city: "Paris", date: "Jan 18", latitude: 48.8584, longitude: 2.2945, reaction: .lovedIt)
     ]
 
-    @State private var selectedFilter: PinReaction? = nil
+    @State private var selectedFilter: Reaction? = nil
 
     var filteredPins: [Pin] {
         if let filter = selectedFilter {
@@ -900,3 +722,14 @@ struct FindFriendsView: View {
         }
     }
 }
+
+    func styleForMapType(_ type: String) -> MapStyle {
+        switch type {
+        case "Satellite":
+            return .imagery
+        case "Hybrid":
+            return .hybrid
+        default:
+            return .standard
+        }
+    }

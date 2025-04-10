@@ -10,6 +10,8 @@ import SwiftData
 
 @main
 struct Project_ColumbusApp: App {
+    @StateObject var pinStore = PinStore()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -26,6 +28,7 @@ struct Project_ColumbusApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(pinStore)
         }
         .modelContainer(sharedModelContainer)
     }
