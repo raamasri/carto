@@ -84,25 +84,25 @@ struct LiveFeedView: View {
                     lovedPins.insert(pin.id)
                 }
             }) {
-                Label("Love", systemImage: lovedPins.contains(pin.id) ? "heart.fill" : "heart")
+                Label("", systemImage: lovedPins.contains(pin.id) ? "heart.fill" : "heart")
             }
 
             Button(action: {
                 print("Comment tapped for \(pin.locationName)")
             }) {
-                Label("Comment", systemImage: "bubble.right")
+                Label("", systemImage: "bubble.right")
             }
 
             Button(action: {
                 sharePin(pin)
             }) {
-                Label("Share", systemImage: "square.and.arrow.up")
+                Label("", systemImage: "square.and.arrow.up")
             }
 
             Button(action: {
                 print("Saved \(pin.locationName) to collection")
             }) {
-                Label("Save", systemImage: "bookmark")
+                Label("", systemImage: "bookmark")
             }
         }
         .font(.footnote)
