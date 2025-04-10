@@ -219,6 +219,7 @@ struct IdentifiableMapItem: Identifiable {
 // MARK: - Main Map View with Bottom Nav and Side Menu
 
 struct MainMapView: View {
+    @State private var shouldTrackUser = false
     @State private var cameraPosition = MapCameraPosition.region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -316,6 +317,12 @@ struct MainMapView: View {
                             }
                         }
                 )
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 5)
+                        .onChanged { _ in
+                            shouldTrackUser = false
+                        }
+                )
 
                 if showSideMenu {
                     SideMenuView(showSideMenu: $showSideMenu)
@@ -357,24 +364,26 @@ struct MainMapView: View {
                     .environmentObject(pinStore)
             }
 
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                Button(action: {
-                    requestUserLocation()
-                }) {
-                    Image(systemName: "location.fill")
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.blue)
-                        .clipShape(Circle())
-                        .shadow(radius: 4)
+            if selectedTab == 0 {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            requestUserLocation()
+                        }) {
+                            Image(systemName: "location.fill")
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.blue)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                        }
+                        .padding(.bottom, 60)
+                        .padding(.trailing)
+                    }
                 }
-                .padding(.bottom, 100)
-                .padding(.trailing)
             }
-        }
 
             VStack {
                 Spacer()
@@ -390,7 +399,7 @@ struct MainMapView: View {
                     NavBarButton(icon: "location.circle", selected: $selectedTab, index: 5)
                 }
                 .padding()
-                .padding(.bottom, 10)
+                .padding(.bottom, 25)
                 .background(
                     Color.black.opacity(0.5)
                         .background(.ultraThinMaterial)
