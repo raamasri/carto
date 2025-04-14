@@ -314,6 +314,7 @@ struct IdentifiableMapItem: Identifiable {
 // MARK: - Main Map View with Bottom Nav and Side Menu
 
 struct MainMapView: View {
+    
     @State private var shouldTrackUser = false
     @State private var isUserManuallyMovingMap = false
     @State private var cameraPosition = MapCameraPosition.region(MKCoordinateRegion(
@@ -330,6 +331,25 @@ struct MainMapView: View {
     @State private var animatePulse = false
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
     @State private var showSettingsSheet = false
+    @State private var searchText: String = ""
+    @State private var searchResults: [MKLocalSearchCompletion] = []
+    @State private var searchCompleter = MKLocalSearchCompleter()
+    
+    func handleSearchSelection(_ completion: MKLocalSearchCompletion) {
+        let request = MKLocalSearch.Request(completion: completion)
+        let search = MKLocalSearch(request: request)
+        search.start { response, error in
+            guard let item = response?.mapItems.first else { return }
+            let coordinate = item.placemark.coordinate
+            withAnimation {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                ))
+            }
+            print("Selected POI: \(item.name ?? "Unknown") at \(coordinate)")
+        }
+    }
     
     struct PinAnnotationView: View {
         let pin: Pin
@@ -349,7 +369,7 @@ struct MainMapView: View {
                 .animation(.easeInOut(duration: 0.2), value: isSelected)
                 .onTapGesture(perform: onTap)
         }
-    }
+}
     
     struct PinAnnotationDot: View {
         let pin: Pin
@@ -428,34 +448,9 @@ struct MainMapView: View {
                     SideMenuView(showSideMenu: $showSideMenu)
                 }
 
-                VStack {
-                    HStack {
-                    Button(action: {
-                        showSettingsSheet = true
-                    }) {
-                        Image(systemName: "gear")
-                            .font(.title2)
-                            .padding()
-                    }
-                    .sheet(isPresented: $showSettingsSheet) {
-                        SettingsView()
-                    }
-                        Spacer()
-
-                        Button(action: {
-                            selectedTab = 4
-                        }) {
-                            Image(systemName: "person.circle")
-                                .font(.title2)
-                                .padding()
-                        }
-                    }
-                    Spacer()
-                }
             } else if selectedTab == 4 {
                 UserProfileView()
-            } else if selectedTab == 5 {
-                FindFriendsView()
+                
             } else if selectedTab == 1 {
                 SearchView()
                     .environmentObject(pinStore)
@@ -467,10 +462,76 @@ struct MainMapView: View {
             }
 
             if selectedTab == 0 {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.gray)
+                        TextField("Search places or friends", text: $searchText)
+                            .autocorrectionDisabled()
+                            .padding(8)
+                    }
+                    .padding(10)
+                    .background(Color(.systemBackground).opacity(0.9))
+                    .cornerRadius(10)
+                    .padding(.horizontal)
+                    .padding(.top, 50)
+
+                    if !searchResults.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(searchResults, id: \.self) { result in
+                                Button(action: {
+                                    handleSearchSelection(result)
+                                    searchText = result.title
+                                    searchResults = []
+                                }) {
+                                    VStack(alignment: .leading) {
+                                        Text(result.title).font(.headline)
+                                        if !result.subtitle.isEmpty {
+                                            Text(result.subtitle)
+                                                .font(.caption)
+                                                .foregroundColor(.gray)
+                                        }
+                                    }
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.white.opacity(0.95))
+                                }
+                            }
+                        }
+                        .background(Color.white.opacity(0.95))
+                        .cornerRadius(10)
+                        .padding(.horizontal)
+                    }
+
+                    Spacer()
+                }
+                .onChange(of: searchText) { newValue in
+                    searchCompleter.queryFragment = newValue
+                }
+            }
+
+            if selectedTab == 0 {
                 VStack {
                     Spacer()
                     HStack {
+                        Button(action: {
+                            showSettingsSheet = true
+                        }) {
+                            Image(systemName: "gearshape.fill")
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.black)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                        }
+                        .sheet(isPresented: $showSettingsSheet) {
+                            SettingsView()
+                        }
+                        .padding(.bottom, 60)
+                        .padding(.leading)
+
                         Spacer()
+
                         Button(action: {
                             requestUserLocation()
                         }) {
@@ -498,7 +559,7 @@ struct MainMapView: View {
                     Spacer()
                     NavBarButton(icon: "person.2", selected: $selectedTab, index: 3)
                     Spacer()
-                    NavBarButton(icon: "location.circle", selected: $selectedTab, index: 5)
+                    NavBarButton(icon: "person.circle", selected: $selectedTab, index: 4)
                 }
                 .padding()
                 .padding(.bottom, 25)
@@ -515,6 +576,9 @@ struct MainMapView: View {
         .onAppear {
             requestUserLocation()
             animatePulse = true
+            searchCompleter.delegate = SearchCompleterDelegate { results in
+                self.searchResults = results
+            }
             // Add some initial pins
             if pinStore.masterPins.isEmpty {
                 pinStore.masterPins = [
@@ -794,6 +858,22 @@ struct UserProfileView: View {
 
 // MARK: - Live Feed View Placeholder
 
+class SearchCompleterDelegate: NSObject, MKLocalSearchCompleterDelegate {
+    private let onUpdate: ([MKLocalSearchCompletion]) -> Void
+
+    init(onUpdate: @escaping ([MKLocalSearchCompletion]) -> Void) {
+        self.onUpdate = onUpdate
+    }
+
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        onUpdate(completer.results)
+    }
+
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        print("Search completer error: \(error.localizedDescription)")
+    }
+}
+
 
 
 
@@ -862,3 +942,4 @@ struct FindFriendsView: View {
             return .standard
         }
     }
+
