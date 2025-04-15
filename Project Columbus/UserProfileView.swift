@@ -12,7 +12,7 @@ struct UserProfileView: View {
 
     @State var profileUser = User(
         id: UUID(),
-        username: "mojojojo23",
+        username: "mojojojo",
         isPrivate: false,
         followers: Array(repeating: UUID(), count: 5),
         following: Array(repeating: UUID(), count: 10),
@@ -47,6 +47,19 @@ struct UserProfileView: View {
 
     @State private var selectedFilter: Reaction? = nil
 
+    struct StoryHighlight: Identifiable {
+        let id = UUID()
+        let imageName: String
+        let title: String
+    }
+
+    let storyHighlights: [StoryHighlight] = [
+        StoryHighlight(imageName: "story1", title: "Travel"),
+        StoryHighlight(imageName: "story2", title: "Food"),
+        StoryHighlight(imageName: "story3", title: "Friends"),
+        StoryHighlight(imageName: "story4", title: "Nature")
+    ]
+
     var filteredPins: [Pin] {
         if let filter = selectedFilter {
             return recentPins.filter { $0.reaction == filter }
@@ -56,110 +69,144 @@ struct UserProfileView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Profile Header
-                ZStack(alignment: .topTrailing) {
-                    HStack(alignment: .center, spacing: 12) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .resizable()
-                            .frame(width: 60, height: 60)
-                            .foregroundColor(.gray)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("@\(profileUser.username)")
-                                .font(.headline)
-
-                            Text(bio)
-                                .font(.subheadline)
+        VStack(spacing: 0) {
+            HStack {
+                Text("@\(profileUser.username)")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                Spacer()
+            }
+            .padding(.top, 8)
+            .padding(.horizontal)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Profile Header
+                    ZStack(alignment: .topTrailing) {
+                        HStack(alignment: .center, spacing: 12) {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
                                 .foregroundColor(.gray)
-                                .lineLimit(2)
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 80, height: 80)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                .shadow(radius: 4)
 
-                            Text("\(profileUser.followers.count) followers • \(profileUser.following.count) following")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("@\(profileUser.username)")
+                                    .font(.headline)
+
+                                Text(bio)
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                    .lineLimit(2)
+
+                                Text("\(profileUser.followers.count) followers • \(profileUser.following.count) following")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            Spacer()
                         }
-                        Spacer()
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
 
-                    Button(action: {
-                        // Future editable profile logic
-                    }) {
-                        Text("Edit")
-                            .font(.caption)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.gray.opacity(0.2))
-                            .cornerRadius(10)
-                    }
-                    .padding(.trailing)
-                }
-
-                Divider()
-
-                // Recent Pins Section
-                VStack(alignment: .leading, spacing: 8) {
-                    Menu {
-                        ForEach(sections, id: \.self) { section in
-                            Button(action: {
-                                selectedSection = section
-                            }) {
-                                Text(section)
+                    VStack(spacing: 8) {
+                        HStack(spacing: 16) {
+                            Button(action: {}) {
+                                Text("Edit Profile")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.2))
+                                    .cornerRadius(8)
+                            }
+                            Button(action: {}) {
+                                Text("Share profile")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.2))
+                                    .cornerRadius(8)
                             }
                         }
-                    } label: {
-                        Text(selectedSection)
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(10)
+                        .padding(.horizontal)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 16) {
+                                ForEach(storyHighlights) { highlight in
+                                    VStack {
+                                        Image(highlight.imageName)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 60, height: 60)
+                                            .clipShape(Circle())
+                                            .overlay(Circle().stroke(Color.pink, lineWidth: 2))
+                                        Text(highlight.title)
+                                            .font(.caption)
+                                    }
+                                }
+                            }
                             .padding(.horizontal)
-                    }
-
-                    ForEach(filteredPins) { pin in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(pin.locationName)
-                                .font(.subheadline)
-                                .bold()
-                            Text("\(pin.city) • \(pin.date)")
-                                .font(.caption)
-                                .foregroundColor(.gray)
                         }
-                        .padding(.horizontal)
-                        .padding(.bottom, 4)
+                        .padding(.vertical, 8)
                     }
-                }
 
-                Divider()
+                    Divider()
 
-                // Collections Section
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Collections")
-                        .font(.headline)
-                        .padding(.horizontal)
+                    // Posts Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Posts")
+                            .font(.headline)
+                            .padding(.horizontal)
+                        let columns = [
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ]
+                        LazyVGrid(columns: columns, spacing: 2) {
+                            ForEach(recentPins) { pin in
+                                Image("postPlaceholder")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(height: 120)
+                                    .clipped()
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
 
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
-                        ForEach(profileUser.collections) { collection in
-                            NavigationLink(destination: CollectionDetailView(collection: collection)) {
-                                VStack(spacing: 4) {
-                                    Circle()
-                                        .fill(Color.blue.opacity(0.2))
-                                        .frame(width: 60, height: 60)
-                                        .overlay(Text("📍"))
-                                    Text(collection.name)
-                                        .font(.caption)
-                                        .multilineTextAlignment(.center)
-                                        .frame(width: 60)
+                    Divider()
+
+                    // Collections Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Collections")
+                            .font(.headline)
+                            .padding(.horizontal)
+
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                            ForEach(profileUser.collections) { collection in
+                                NavigationLink(destination: CollectionDetailView(collection: collection)) {
+                                    VStack(spacing: 4) {
+                                        Circle()
+                                            .fill(Color.blue.opacity(0.2))
+                                            .frame(width: 60, height: 60)
+                                            .overlay(Text("📍"))
+                                        Text(collection.name)
+                                            .font(.caption)
+                                            .multilineTextAlignment(.center)
+                                            .frame(width: 60)
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
                 }
+                .padding(.vertical)
             }
-            .padding(.vertical)
         }
     }
 }

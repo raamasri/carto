@@ -92,6 +92,37 @@ struct CreatePostView: View {
         // .sheet(isPresented: $showingImagePicker) { ImagePicker(selectedImage: $selectedImage) }
     }
 }
+
+struct FullPOIView: View {
+    let mapItem: MKMapItem
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(mapItem.name ?? "Unknown Place")
+                    .font(.largeTitle)
+                    .bold()
+
+                if let address = mapItem.placemark.title {
+                    Text(address)
+                        .font(.body)
+                }
+
+                if let phone = mapItem.phoneNumber {
+                    Text("Phone: \(phone)")
+                }
+
+                if let url = mapItem.url {
+                    Link("Visit Website", destination: url)
+                }
+
+                Spacer()
+            }
+            .padding()
+        }
+        .navigationTitle("Location Details")
+    }
+}
 import SwiftUI
 import MapKit
 import Combine
@@ -325,6 +356,9 @@ struct MainMapView: View {
     @State private var searchResults: [MKLocalSearchCompletion] = []
     @State private var searchCompleter = MKLocalSearchCompleter()
     @State private var searchCompleterDelegateHolder: SearchCompleterDelegate? = nil
+    @State private var selectedMapItem: MKMapItem? = nil
+    @State private var showFullPOIView: Bool = false
+    @State private var showPOISheet: Bool = false
     
     func handleSearchSelection(_ completion: MKLocalSearchCompletion) {
         let request = MKLocalSearch.Request(completion: completion)
@@ -338,6 +372,8 @@ struct MainMapView: View {
                     span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                 ))
             }
+            selectedMapItem = item
+            showPOISheet = true
             print("Selected POI: \(item.name ?? "Unknown") at \(coordinate)")
         }
     }
@@ -456,49 +492,64 @@ struct MainMapView: View {
             }
 
             if selectedTab == 0 {
-                VStack(alignment: .leading, spacing: 0) {
+                ZStack(alignment: .top) {
+                    VStack(spacing: 0) {
+                        Spacer().frame(height: 70) // offset below search bar
+                        if !searchResults.isEmpty {
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    ForEach(searchResults, id: \.self) { result in
+                                        Button(action: {
+                                            handleSearchSelection(result)
+                                            searchText = result.title
+                                            searchResults = []
+                                        }) {
+                                            VStack(alignment: .leading) {
+                                                Text(result.title)
+                                                    .font(.headline)
+                                                if !result.subtitle.isEmpty {
+                                                    Text(result.subtitle)
+                                                        .font(.caption)
+                                                        .foregroundColor(.gray)
+                                                }
+                                            }
+                                            .padding()
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(Color.white.opacity(0.95))
+                                        }
+                                    }
+                                }
+                                .background(Color.white.opacity(0.95))
+                                .cornerRadius(20)
+                                .padding(.horizontal)
+                            }
+                        }
+                    }
+                    
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.gray)
                         TextField("Search places or friends", text: $searchText)
                             .autocorrectionDisabled()
                             .padding(8)
+
+                        if !searchText.isEmpty {
+                            Button(action: {
+                                searchText = ""
+                                searchResults = []
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.gray)
+                            }
+                        }
                     }
                     .padding(10)
                     .background(Color(.systemBackground).opacity(0.9))
-                    .cornerRadius(10)
+                    .cornerRadius(40)
                     .padding(.horizontal)
-                    .padding(.top, 50)
-
-                    if !searchResults.isEmpty {
-                        VStack(spacing: 0) {
-                            ForEach(searchResults, id: \.self) { result in
-                                Button(action: {
-                                    handleSearchSelection(result)
-                                    searchText = result.title
-                                    searchResults = []
-                                }) {
-                                    VStack(alignment: .leading) {
-                                        Text(result.title).font(.headline)
-                                        if !result.subtitle.isEmpty {
-                                            Text(result.subtitle)
-                                                .font(.caption)
-                                                .foregroundColor(.gray)
-                                        }
-                                    }
-                                    .padding()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color.white.opacity(0.95))
-                                }
-                            }
-                        }
-                        .background(Color.white.opacity(0.95))
-                        .cornerRadius(10)
-                        .padding(.horizontal)
-                    }
-
-                    Spacer()
+                    .padding(.top, 5)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .onChange(of: searchText) { newValue in
                     searchCompleter.queryFragment = newValue
                 }
@@ -566,6 +617,49 @@ struct MainMapView: View {
                 )
             }
             .ignoresSafeArea(.container, edges: .bottom)
+
+            if let mapItem = selectedMapItem, showPOISheet {
+                VStack {
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(mapItem.name ?? "Unknown Place")
+                            .font(.headline)
+                        if let address = mapItem.placemark.title {
+                            Text(address)
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                        }
+                        if let distance = userLocation.map({ CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)) }) {
+                            Text(String(format: "Distance: %.2f km", distance / 1000))
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                        }
+                        HStack {
+                            Button("Close") {
+                                showPOISheet = false
+                            }
+                            Spacer()
+                            Button("Show More") {
+                                showFullPOIView = true
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemBackground).opacity(0.9))
+                    .cornerRadius(16)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 60)
+                }
+                .transition(.move(edge: .bottom))
+            NavigationLink(
+                destination: FullPOIView(mapItem: selectedMapItem!),
+                isActive: $showFullPOIView
+            ) {
+                EmptyView()
+            }
+            }
         }
         .onAppear {
             requestUserLocation()

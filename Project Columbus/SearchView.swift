@@ -2,7 +2,7 @@ import SwiftUI
 import MapKit
 import Combine
 
-// MARK: - Search View
+// MARK: - List-Based Search View (Non-map results)
 
 struct SearchView: View {
     private let searchCompleter = MKLocalSearchCompleter()
@@ -14,7 +14,6 @@ struct SearchView: View {
     @State private var cancellables = Set<AnyCancellable>()
 
     @State private var selectedMapItem: MKMapItem? = nil
-    @State private var showLocationDetail = false
     @EnvironmentObject var pinStore: PinStore
 
     @State private var quickAddedItemIDs: Set<String> = [] // Track added pins by coordinate string
@@ -75,20 +74,10 @@ struct SearchView: View {
                 Spacer()
             }
             .navigationTitle("Search")
-            .sheet(isPresented: $showLocationDetail) {
-                Group {
-                    if let selected = selectedMapItem {
-                        NavigationView {
-                            LocationDetailView(mapItem: selected) { newPin in
-                                pinStore.masterPins.append(newPin)
-                            }
-                        }
-                    } else {
-                        VStack {
-                            Spacer()
-                            ProgressView("Loading location...")
-                            Spacer()
-                        }
+            .sheet(item: $selectedMapItem) { selected in
+                NavigationView {
+                    LocationDetailView(mapItem: selected) { newPin in
+                        pinStore.masterPins.append(newPin)
                     }
                 }
             }
@@ -146,8 +135,9 @@ struct SearchView: View {
         let search = MKLocalSearch(request: request)
         search.start { response, error in
             if let item = response?.mapItems.first {
-                selectedMapItem = item
-                showLocationDetail = true
+                DispatchQueue.main.async {
+                    selectedMapItem = item
+                }
             }
         }
     }
@@ -222,7 +212,7 @@ struct LocationDetailView: View {
     private var infoSection: some View {
         Group {
             if let category = mapItem.pointOfInterestCategory {
-                Label(category.rawValue.replacingOccurrences(of: "_", with: " ").capitalized, systemImage: "tag")
+                Label(category.displayName, systemImage: "tag")
             }
 
             if let phone = mapItem.phoneNumber {
@@ -247,20 +237,39 @@ struct LocationDetailView: View {
     }
 
     private var addButton: some View {
-        VStack {
-            Button(action: {
-                showCollectionSheet = true
-            }) {
-                HStack {
-                    Spacer()
-                    Label("Add to Pins", systemImage: "plus.circle.fill")
-                        .font(.title2)
-                    Spacer()
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Button(action: {
+                    showCollectionSheet = true
+                }) {
+                    HStack {
+                        Spacer()
+                        Label("Pins", systemImage: "plus.circle.fill")
+                            .font(.title2)
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
                 }
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(10)
+
+                Button(action: {
+                    let launchOptions = [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving]
+                    mapItem.openInMaps(launchOptions: launchOptions)
+                    print("Opening directions for \(mapItem.name ?? "unknown location") in Apple Maps.")
+                }) {
+                    HStack {
+                        Spacer()
+                        Image(systemName: "car.fill")
+                            .font(.title2)
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.black)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                }
             }
             .sheet(isPresented: $showCollectionSheet) {
                 collectionPickerSheet
@@ -302,6 +311,58 @@ struct LocationDetailView: View {
                 name: pinStore.collections[index].name,
                 pins: pinStore.collections[index].pins + [newPin]
             )
+        }
+    }
+}
+
+extension MKMapItem: Identifiable {
+    public var id: String { self.name ?? UUID().uuidString }
+}
+
+extension MKPointOfInterestCategory {
+    var displayName: String {
+        switch self {
+        case .airport: return "Airport"
+        case .amusementPark: return "Amusement Park"
+        case .aquarium: return "Aquarium"
+        case .atm: return "ATM"
+        case .bakery: return "Bakery"
+        case .bank: return "Bank"
+        case .beach: return "Beach"
+        case .brewery: return "Brewery"
+        case .cafe: return "Cafe"
+        case .campground: return "Campground"
+        case .carRental: return "Car Rental"
+        case .evCharger: return "EV Charger"
+        case .fireStation: return "Fire Station"
+        case .fitnessCenter: return "Fitness Center"
+        case .foodMarket: return "Food Market"
+        case .gasStation: return "Gas Station"
+        case .hospital: return "Hospital"
+        case .hotel: return "Hotel"
+        case .laundry: return "Laundry"
+        case .library: return "Library"
+        case .marina: return "Marina"
+        case .movieTheater: return "Movie Theater"
+        case .museum: return "Museum"
+        case .nationalPark: return "National Park"
+        case .nightlife: return "Nightlife"
+        case .park: return "Park"
+        case .parking: return "Parking"
+        case .pharmacy: return "Pharmacy"
+        case .police: return "Police"
+        case .postOffice: return "Post Office"
+        case .publicTransport: return "Public Transport"
+        case .restaurant: return "Restaurant"
+        case .restroom: return "Restroom"
+        case .school: return "School"
+        case .stadium: return "Stadium"
+        case .store: return "Store"
+        case .theater: return "Theater"
+        case .university: return "University"
+        case .winery: return "Winery"
+        case .zoo: return "Zoo"
+        default: return "Point of Interest"
         }
     }
 }
