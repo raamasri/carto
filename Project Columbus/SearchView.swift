@@ -298,7 +298,10 @@ struct LocationDetailView: View {
             reaction: .wantToGo
         )
         if let index = pinStore.collections.firstIndex(where: { $0.id == collection.id }) {
-            pinStore.collections[index].pins.append(newPin)
+            pinStore.collections[index] = PinCollection(
+                name: pinStore.collections[index].name,
+                pins: pinStore.collections[index].pins + [newPin]
+            )
         }
     }
 }

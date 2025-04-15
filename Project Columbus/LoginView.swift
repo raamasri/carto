@@ -3,6 +3,8 @@ import SwiftUI
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.presentationMode) var presentationMode
+    @FocusState private var usernameFocused: Bool
+    @FocusState private var passwordFocused: Bool
 
     @State private var username = ""
     @State private var password = ""
@@ -23,16 +25,31 @@ struct LoginView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color(UIColor.secondarySystemBackground))
                     .cornerRadius(8)
-                    // Ensure the entire background rectangle is tappable
                     .contentShape(Rectangle())
+                    .focused($usernameFocused)
+                    .submitLabel(.next)
+                    .onSubmit {
+                        passwordFocused = true
+                    }
+                    .onTapGesture {
+                        usernameFocused = true
+                    }
 
                 SecureField("Password", text: $password)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color(UIColor.secondarySystemBackground))
                     .cornerRadius(8)
-                    // Ensure the entire background rectangle is tappable
                     .contentShape(Rectangle())
+                    .focused($passwordFocused)
+                    .submitLabel(.go)
+                    .onSubmit {
+                        authManager.logIn(username: username, password: password)
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .onTapGesture {
+                        passwordFocused = true
+                    }
                 
                 Button("Log In") {
                     authManager.logIn(username: username, password: password)

@@ -4,6 +4,10 @@ struct SignUpView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.presentationMode) var presentationMode
 
+    @FocusState private var usernameFocused: Bool
+    @FocusState private var emailFocused: Bool
+    @FocusState private var passwordFocused: Bool
+
     @State private var username = ""
     @State private var email = ""
     @State private var password = ""
@@ -23,19 +27,51 @@ struct SignUpView: View {
                     .foregroundColor(.white)
 
                 TextField("Username", text: $username)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.white)
                     .cornerRadius(8)
+                    .contentShape(Rectangle())
+                    .focused($usernameFocused)
+                    .submitLabel(.next)
+                    .onSubmit {
+                        emailFocused = true
+                    }
+                    .onTapGesture {
+                        usernameFocused = true
+                    }
 
                 TextField("Email", text: $email)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.white)
                     .cornerRadius(8)
+                    .contentShape(Rectangle())
+                    .focused($emailFocused)
+                    .submitLabel(.next)
+                    .onSubmit {
+                        passwordFocused = true
+                    }
+                    .onTapGesture {
+                        emailFocused = true
+                    }
 
                 SecureField("Password", text: $password)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.white)
                     .cornerRadius(8)
+                    .contentShape(Rectangle())
+                    .focused($passwordFocused)
+                    .submitLabel(.go)
+                    .onSubmit {
+                        if !username.isEmpty && !email.isEmpty && !password.isEmpty {
+                            showBuildProfile = true
+                        }
+                    }
+                    .onTapGesture {
+                        passwordFocused = true
+                    }
 
                 Button("Choose Profile Image") {
                     showImagePicker = true

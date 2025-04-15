@@ -14,8 +14,8 @@ class PinStore: ObservableObject {
 
     // Named collections of pins (e.g., "Europe 25", "Pizza Tour")
     @Published var collections: [PinCollection] = [
-        PinCollection(name: "Favorites"),
-        PinCollection(name: "San Francisco"),
-        PinCollection(name: "Europe 25")
+        PinCollection(name: "Favorites", pins: []),
+        PinCollection(name: "San Francisco", pins: []),
+        PinCollection(name: "Europe 25", pins: [])
     ]
 }
