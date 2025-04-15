@@ -9,6 +9,7 @@ struct CreatePostView: View {
     @State private var selectedImage: Image? = nil
     @State private var showingImagePicker: Bool = false
     @State private var isFollowingUser: Bool = false
+    @StateObject private var locationManager = AppLocationManager()
 
     var body: some View {
         ScrollView {
