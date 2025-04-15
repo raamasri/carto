@@ -334,6 +334,7 @@ struct MainMapView: View {
     @State private var searchText: String = ""
     @State private var searchResults: [MKLocalSearchCompletion] = []
     @State private var searchCompleter = MKLocalSearchCompleter()
+    @State private var searchCompleterDelegateHolder: SearchCompleterDelegate? = nil
     
     func handleSearchSelection(_ completion: MKLocalSearchCompletion) {
         let request = MKLocalSearch.Request(completion: completion)
@@ -440,7 +441,10 @@ struct MainMapView: View {
                             isUserManuallyMovingMap = true  // User has moved the map manually
                         }
                         .onEnded { _ in
-                            isUserManuallyMovingMap = false  // User has stopped moving the map
+                            // Delay resetting to false to allow user to scroll without immediate re-centering
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                isUserManuallyMovingMap = false
+                            }
                         }
                 )
 
@@ -576,9 +580,10 @@ struct MainMapView: View {
         .onAppear {
             requestUserLocation()
             animatePulse = true
-            searchCompleter.delegate = SearchCompleterDelegate { results in
+            self.searchCompleterDelegateHolder = SearchCompleterDelegate { results in
                 self.searchResults = results
             }
+            searchCompleter.delegate = self.searchCompleterDelegateHolder
             // Add some initial pins
             if pinStore.masterPins.isEmpty {
                 pinStore.masterPins = [
@@ -587,14 +592,19 @@ struct MainMapView: View {
                 ]
             }
         }
-.onReceive(locationManager.$userLocation.compactMap { $0 }) { location in
-    if !isUserManuallyMovingMap {
-        cameraPosition = .region(MKCoordinateRegion(
-            center: location,
-            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-        ))
-    }
-}
+        .onReceive(locationManager.$userLocation.compactMap { $0 }) { location in
+            if !isUserManuallyMovingMap {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: location,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                ))
+            }
+            // Bias search results towards the user's location
+            searchCompleter.region = MKCoordinateRegion(
+                center: location,
+                span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+            )
+        }
     }
 
     func requestUserLocation() {
