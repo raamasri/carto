@@ -20,6 +20,10 @@ struct CreatePostView: View {
     @State private var selectedCompletion: MKLocalSearchCompletion? = nil
     @State private var recommendationComment: String = ""
     @State private var showPreview: Bool = false
+    @State private var selectedMapItem: MKMapItem? = nil
+    @State private var completerDelegateWrapper: SearchCompleterDelegateWrapper? = nil
+    @State private var mapRegion: MKCoordinateRegion = MKCoordinateRegion()
+    @FocusState private var isPlaceFieldFocused: Bool
 
     var isFormValid: Bool {
         !placeName.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -34,9 +38,56 @@ struct CreatePostView: View {
                 // MARK: - Place Name Section
                 Section(header: Text("Place Name")) {
                     TextField("Search for a place", text: $placeName)
+                        .focused($isPlaceFieldFocused)
                         .onChange(of: placeName) { newValue in
                             completer.queryFragment = newValue
                         }
+                    
+                    if isPlaceFieldFocused && !searchResults.isEmpty {
+                        ZStack {
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    ForEach(searchResults, id: \.self) { completion in
+                                        Button(action: {
+                                            isPlaceFieldFocused = false
+                                            selectedCompletion = completion
+                                            placeName = completion.title
+                                            searchResults = []
+                                            let request = MKLocalSearch.Request(completion: completion)
+                                            MKLocalSearch(request: request).start { response, error in
+                                                if let mapItem = response?.mapItems.first {
+                                                    DispatchQueue.main.async {
+                                                        selectedMapItem = mapItem
+                                                        mapRegion = MKCoordinateRegion(
+                                                            center: mapItem.placemark.coordinate,
+                                                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }) {
+                                            VStack(alignment: .leading) {
+                                                Text(completion.title)
+                                                    .font(.headline)
+                                                    .foregroundColor(.primary)
+                                                if !completion.subtitle.isEmpty {
+                                                    Text(completion.subtitle)
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                            .padding()
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                        Divider()
+                                    }
+                                }
+                            }
+                        }
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(8)
+                        .frame(maxWidth: .infinity)
+                    }
                     
                     // Inline button for current location
                     Button {
@@ -44,27 +95,6 @@ struct CreatePostView: View {
                     } label: {
                         Label("Use Current Location", systemImage: "location.circle")
                             .foregroundColor(.blue)
-                    }
-                    
-                    // Displaying search results in a list
-                    if !searchResults.isEmpty {
-                        ForEach(searchResults, id: \.self) { completion in
-                            VStack(alignment: .leading) {
-                                Text(completion.title)
-                                    .font(.body)
-                                if !completion.subtitle.isEmpty {
-                                    Text(completion.subtitle)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedCompletion = completion
-                                placeName = completion.title
-                                searchResults = []
-                            }
-                        }
                     }
                 }
                 
@@ -158,9 +188,12 @@ struct CreatePostView: View {
         .onAppear {
             completer.resultTypes = .address
             completer.region = locationManager.region
-            completer.delegate = SearchCompleterDelegateWrapper { completions in
+            let wrapper = SearchCompleterDelegateWrapper { completions in
                 searchResults = completions
             }
+            completerDelegateWrapper = wrapper
+            completer.delegate = wrapper
+            mapRegion = locationManager.region
         }
         .sheet(isPresented: $showingImagePicker) {
             MultiImagePicker(selectedImages: $selectedImages)
