@@ -33,6 +33,7 @@ import SwiftUI
 import MapKit
 import Combine
 import Foundation
+
 // MARK: - Models and Enums
 
 
@@ -388,8 +389,7 @@ struct MainMapView: View {
                 UserProfileView()
                 
             } else if selectedTab == 1 {
-                SearchView()
-                    .environmentObject(pinStore)
+                FindFriendsView()
             } else if selectedTab == 2 {
                 CreatePostView()
             } else {
@@ -435,7 +435,7 @@ struct MainMapView: View {
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.gray)
-                        TextField("Where will you explore next?", text: $searchText)
+                        TextField("Where will you go?", text: $searchText)
                             .autocorrectionDisabled()
                             .padding(8)
 
@@ -506,11 +506,11 @@ struct MainMapView: View {
                 HStack {
                     NavBarButton(icon: "house", selected: $selectedTab, index: 0)
                     Spacer()
-                    NavBarButton(icon: "magnifyingglass", selected: $selectedTab, index: 1)
+                    NavBarButton(icon: "person.2", selected: $selectedTab, index: 1)
                     Spacer()
                     NavBarButton(icon: "plus.circle", selected: $selectedTab, index: 2)
                     Spacer()
-                    NavBarButton(icon: "person.2", selected: $selectedTab, index: 3)
+                    NavBarButton(icon: "newspaper", selected: $selectedTab, index: 3)
                     Spacer()
                     NavBarButton(icon: "person.circle", selected: $selectedTab, index: 4)
                 }
@@ -562,7 +562,9 @@ struct MainMapView: View {
                 }
                 .transition(.move(edge: .bottom))
             NavigationLink(
-                destination: FullPOIView(mapItem: selectedMapItem!),
+                destination: LocationDetailView(mapItem: selectedMapItem!) { newPin in
+                    pinStore.masterPins.append(newPin)
+                }.environmentObject(pinStore),
                 isActive: $showFullPOIView
             ) {
                 EmptyView()

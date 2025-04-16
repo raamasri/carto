@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct SignUpView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -17,7 +18,8 @@ struct SignUpView: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            Color.clear
+                .background(.thinMaterial)
                 .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 20) {
@@ -25,12 +27,13 @@ struct SignUpView: View {
                     .font(.largeTitle)
                     .bold()
                     .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
 
                 TextField("Username", text: $username)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(Color.white)
-                    .cornerRadius(8)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(10)
                     .contentShape(Rectangle())
                     .focused($usernameFocused)
                     .submitLabel(.next)
@@ -44,8 +47,8 @@ struct SignUpView: View {
                 TextField("Email", text: $email)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(Color.white)
-                    .cornerRadius(8)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(10)
                     .contentShape(Rectangle())
                     .focused($emailFocused)
                     .submitLabel(.next)
@@ -59,7 +62,7 @@ struct SignUpView: View {
                 SecureField("Password", text: $password)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(Color.white)
+                    .background(.ultraThinMaterial)
                     .cornerRadius(8)
                     .contentShape(Rectangle())
                     .focused($passwordFocused)
@@ -76,7 +79,11 @@ struct SignUpView: View {
                 Button("Choose Profile Image") {
                     showImagePicker = true
                 }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.black)
                 .foregroundColor(.white)
+                .cornerRadius(8)
 
                 if let profileImage = profileImage {
                     Image(uiImage: profileImage)
@@ -91,14 +98,37 @@ struct SignUpView: View {
                         showBuildProfile = true
                     }
                 }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.white)
+                .foregroundColor(.black)
+                .cornerRadius(8)
                 .sheet(isPresented: $showBuildProfile) {
                     BuildProfileView()
                         .environmentObject(authManager)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.white)
+
+                SignInWithAppleButton(
+                    onRequest: { request in
+                        request.requestedScopes = [.fullName, .email]
+                    },
+                    onCompletion: { result in
+                        switch result {
+                        case .success(let authorization):
+                            // Handle successful authorization
+                            print("Apple Sign In successful: \(authorization)")
+                        case .failure(let error):
+                            // Handle error
+                            print("Apple Sign In failed: \(error.localizedDescription)")
+                        }
+                    }
+                )
+                .signInWithAppleButtonStyle(.white)
+                .frame(height: 45)
+                .cornerRadius(10)
             }
             .padding()
+            .opacity(0.95)
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $profileImage)

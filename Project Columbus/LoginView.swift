@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -8,6 +9,8 @@ struct LoginView: View {
 
     @State private var username = ""
     @State private var password = ""
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     var body: some View {
         ZStack {
@@ -19,6 +22,8 @@ struct LoginView: View {
                     .font(.largeTitle)
                     .bold()
                     .foregroundColor(.white)
+                    .padding()
+                    .multilineTextAlignment(.leading)
 
                 TextField("Username", text: $username)
                     .padding()
@@ -44,22 +49,57 @@ struct LoginView: View {
                     .focused($passwordFocused)
                     .submitLabel(.go)
                     .onSubmit {
-                        authManager.logIn(username: username, password: password)
-                        presentationMode.wrappedValue.dismiss()
+                        if username.isEmpty || password.isEmpty {
+                            errorMessage = "Please enter both username and password."
+                            showError = true
+                        } else {
+                            authManager.logIn(username: username, password: password)
+                            presentationMode.wrappedValue.dismiss()
+                        }
                     }
                     .onTapGesture {
                         passwordFocused = true
                     }
                 
                 Button("Log In") {
-                    authManager.logIn(username: username, password: password)
-                    presentationMode.wrappedValue.dismiss()
+                    if username.isEmpty || password.isEmpty {
+                        errorMessage = "Please enter both username and password."
+                        showError = true
+                    } else {
+                        authManager.logIn(username: username, password: password)
+                        presentationMode.wrappedValue.dismiss()
+                    }
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(Color.white)
                 .foregroundColor(.black)
                 .cornerRadius(8)
+
+                if showError {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                        .font(.footnote)
+                }
+
+                SignInWithAppleButton(
+                    onRequest: { request in
+                        request.requestedScopes = [.fullName, .email]
+                    },
+                    onCompletion: { result in
+                        switch result {
+                        case .success(let authorization):
+                            // Handle successful authorization
+                            print("Apple Sign In successful: \(authorization)")
+                        case .failure(let error):
+                            // Handle error
+                            print("Apple Sign In failed: \(error.localizedDescription)")
+                        }
+                    }
+                )
+                .signInWithAppleButtonStyle(.white)
+                .frame(height: 45)
+                .cornerRadius(10)
             }
             .padding()
         }

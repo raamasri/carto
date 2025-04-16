@@ -10,14 +10,24 @@ struct StartupView: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            Image("valleypic")
+                .resizable()
+                .scaledToFill()
                 .ignoresSafeArea()
+                .blur(radius: 0.5)
 
             VStack {
+                Image("AppIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 100, height: 100)
                 Image("AppLogo")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .shadow(radius: 5)
+                    .padding(.top, 60)
                     .padding(.bottom, 20)
 
                 Spacer()
@@ -25,11 +35,14 @@ struct StartupView: View {
                 Text(animatedText)
                     .font(.largeTitle)
                     .bold()
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .padding()
+                    .foregroundColor(Color.white.opacity(0.8))
+                    .foregroundStyle(.ultraThinMaterial)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 40)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .onAppear {
-                        let fullText = "WELCOME TO CARTO"
+                        let fullText = "CARTO"
                         animatedText = ""
                         for (index, character) in fullText.enumerated() {
                             DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.1) {
@@ -40,27 +53,27 @@ struct StartupView: View {
 
                 Spacer()
 
-                VStack(spacing: 12) {
+                VStack(spacing: 15) {
                     Button("Log In") {
                         showLogin.toggle()
                     }
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color.white)
-                    .foregroundColor(.black)
-                    .cornerRadius(8)
+                    .background(Color.black)
+                    .foregroundColor(.white)
+                    .cornerRadius(15)
 
-                    Button("Join Now") {
+                    Button("Sign Up") {
                         showSignup.toggle()
                     }
                     .padding()
                     .frame(maxWidth: .infinity)
                     .background(Color.white)
                     .foregroundColor(.black)
-                    .cornerRadius(8)
+                    .cornerRadius(15)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 40)
+                .padding(.horizontal, 30)
+                .padding(.bottom, 20)
             }
             .frame(maxHeight: .infinity)
             .opacity(opacity)
