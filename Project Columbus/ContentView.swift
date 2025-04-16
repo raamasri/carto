@@ -682,6 +682,11 @@ struct MainMapView: View {
             Annotation("Pin", coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
                 PinAnnotationDot(pin: pin, isSelected: pin == selectedPin) {
                     selectedPin = pin
+                    let placemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
+                    let item = MKMapItem(placemark: placemark)
+                    item.name = pin.locationName
+                    selectedMapItem = item
+                    showPOISheet = true
                 }
             }
         }
