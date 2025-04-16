@@ -218,6 +218,8 @@ struct MainMapView: View {
         let userLocation: CLLocationCoordinate2D?
         @Binding var showPOISheet: Bool
         @Binding var showFullPOIView: Bool
+        @EnvironmentObject var pinStore: PinStore
+        @State private var showAddedAlert = false
     // Removed lookAroundScene since it's no longer needed
 
     var body: some View {
@@ -270,8 +272,16 @@ struct MainMapView: View {
                 }
                 ZStack(alignment: .bottomLeading) {
                     Button("Add to List") {
-                        // Add your action here
-                        print("Add to List tapped")
+                        let newPin = Pin(
+                            locationName: mapItem.name ?? "Unknown Place",
+                            city: mapItem.placemark.locality ?? "",
+                            date: formattedDate(),
+                            latitude: mapItem.placemark.coordinate.latitude,
+                            longitude: mapItem.placemark.coordinate.longitude,
+                            reaction: .lovedIt
+                        )
+                        pinStore.addToFavorites(newPin)
+                        showAddedAlert = true
                     }
                     .padding(.leading)
                     
@@ -293,6 +303,9 @@ struct MainMapView: View {
                 .cornerRadius(16)
                 .padding(.horizontal, 4)
                 .padding(.bottom, 60)
+                .alert("Added to Favorites", isPresented: $showAddedAlert) {
+                    Button("OK", role: .cancel) { }
+                }
             }
 // Removed .task block that loaded lookAroundScene
         }
@@ -466,7 +479,7 @@ struct MainMapView: View {
                                                 handleSearchSelection(result)
                                                 searchText = ""
                                                 searchResults = []
-                                                isSearchFieldFocused = false 
+                                                isSearchFieldFocused = false
                                             }) {
                                                 VStack(alignment: .leading) {
                                                     Text(result.title)
@@ -789,17 +802,20 @@ struct ContentView: View {
     @AppStorage("themePreference") private var themePreference: String = "Auto"
 
     var body: some View {
-        Group {
-            if authManager.isLoggedIn {
-                MainMapView()
-                    .environmentObject(authManager)
-                    .environmentObject(PinStore())
-            } else {
-                StartupView()
-                    .environmentObject(authManager)
+        NavigationStack {
+            Group {
+                if authManager.isLoggedIn {
+                    MainMapView()
+                        .navigationBarHidden(true)
+                        .environmentObject(authManager)
+                        .environmentObject(PinStore())
+                } else {
+                    StartupView()
+                        .environmentObject(authManager)
+                }
             }
+            .preferredColorScheme(colorScheme)
         }
-        .preferredColorScheme(colorScheme)
     }
 
     private var colorScheme: ColorScheme? {
