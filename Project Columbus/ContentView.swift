@@ -628,12 +628,15 @@ struct MainMapView: View {
         }
         .onReceive(locationManager.$userLocation.compactMap { $0 }) { location in
             if shouldTrackUser && !isUserManuallyMovingMap {
-                cameraPosition = .region(MKCoordinateRegion(
-                    center: location,
-                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                ))
+                self.userLocation = location
+                withAnimation(.easeInOut(duration: 2.0)) {
+                    cameraPosition = .region(MKCoordinateRegion(
+                        center: location,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    ))
+                }
             }
-            // Bias search results towards the user's location
+
             searchCompleter.region = MKCoordinateRegion(
                 center: location,
                 span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
@@ -650,20 +653,6 @@ struct MainMapView: View {
 
     func requestUserLocation() {
         locationManager.requestUserLocationManually()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if let location = locationManager.userLocation, !isUserManuallyMovingMap {
-                self.userLocation = location
-                withAnimation {
-                    cameraPosition = .region(MKCoordinateRegion(
-                        center: location,
-                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                    ))
-                }
-            } else {
-                print("User location unavailable or manual map movement detected.")
-            }
-        }
     }
     
     private var pinAnnotations: some MapContent {
