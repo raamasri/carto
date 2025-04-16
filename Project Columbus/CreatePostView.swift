@@ -19,6 +19,7 @@ struct CreatePostView: View {
     @State private var completer = MKLocalSearchCompleter()
     @State private var selectedCompletion: MKLocalSearchCompletion? = nil
     @State private var recommendationComment: String = ""
+    @State private var showPreview: Bool = false
 
     var isFormValid: Bool {
         !placeName.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -138,7 +139,7 @@ struct CreatePostView: View {
                 // MARK: - Submit Button
                 Section {
                     Button(action: {
-                        // Submit post action here
+                        showPreview = true
                     }) {
                         Text("Post")
                             .fontWeight(.semibold)
@@ -163,6 +164,9 @@ struct CreatePostView: View {
         }
         .sheet(isPresented: $showingImagePicker) {
             MultiImagePicker(selectedImages: $selectedImages)
+        }
+        .sheet(isPresented: $showPreview) {
+            PostPreviewView(placeName: placeName, rating: rating, recommendation: recommendation, recommendedTo: recommendedTo, recommendationComment: recommendationComment, postContent: postContent, selectedImages: selectedImages)
         }
     }
     
@@ -251,6 +255,49 @@ struct MultiImagePicker: UIViewControllerRepresentable {
             dispatchGroup.notify(queue: .main) {
                 picker.dismiss(animated: true)
             }
+        }
+    }
+}
+
+struct PostPreviewView: View {
+    var placeName: String
+    var rating: Int
+    var recommendation: Bool
+    var recommendedTo: String
+    var recommendationComment: String
+    var postContent: String
+    var selectedImages: [UIImage]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Preview")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+
+                Text("Place: \(placeName)")
+                Text("Rating: \(rating)/10")
+                if recommendation {
+                    Text("Recommended To: \(recommendedTo)")
+                    Text("Comment: \(recommendationComment)")
+                }
+                Text("Post Content: \(postContent)")
+
+                if !selectedImages.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(selectedImages, id: \.self) { image in
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 100, height: 100)
+                                    .cornerRadius(6)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding()
         }
     }
 }

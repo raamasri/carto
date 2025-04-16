@@ -39,63 +39,6 @@ import Foundation
 
 
 
-struct SettingsView: View {
-    @Environment(\.presentationMode) var dismiss
-    @AppStorage("themePreference") private var themePreference: String = "Auto"
-    @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Account")) {
-                    NavigationLink("Edit Profile", destination: Text("Profile Editor Placeholder"))
-                    NavigationLink("Change Password", destination: Text("Password Change Placeholder"))
-                    Toggle("Private Account", isOn: .constant(false))
-                }
-                
-                Section(header: Text("Map Preferences")) {
-                    Picker("Map Type", selection: $selectedMapType) {
-                        Text("Standard").tag("Standard")
-                        Text("Satellite").tag("Satellite")
-                        Text("Hybrid").tag("Hybrid")
-                    }
-                    Toggle("Show My Location", isOn: .constant(true))
-                    Toggle("Show Reactions", isOn: .constant(true))
-                }
-                
-                Section(header: Text("Notifications")) {
-                    Toggle("Friend Activity", isOn: .constant(true))
-                    Toggle("Nearby Pins", isOn: .constant(true))
-                    Toggle("New Followers", isOn: .constant(false))
-                }
-                
-                Section(header: Text("Appearance")) {
-                    Picker("Theme", selection: $themePreference) {
-                        Text("Auto").tag("Auto")
-                        Text("Light").tag("Light")
-                        Text("Dark").tag("Dark")
-                    }
-                }
-                
-                Section(header: Text("About")) {
-                    NavigationLink("Help & Support", destination: Text("Help Placeholder"))
-                    NavigationLink("Privacy Policy", destination: Text("Privacy Placeholder"))
-                    NavigationLink("Terms of Use", destination: Text("Terms Placeholder"))
-                    Text("App Version 1.0.0")
-                        .foregroundColor(.gray)
-                }
-            }
-            .navigationTitle("Settings")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss.wrappedValue.dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
 
 // MARK: - Location Manager
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -411,19 +354,23 @@ struct MainMapView: View {
         let pin: Pin
         let isSelected: Bool
         let onTap: () -> Void
-    
+        
         var body: some View {
-            Circle()
-                .fill(isSelected ? Color.red : Color.blue)
-                .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
-                .overlay(
-                    Circle()
-                        .stroke(Color.white, lineWidth: isSelected ? 2 : 0)
-                )
-                .shadow(radius: isSelected ? 4 : 0)
-                .scaleEffect(isSelected ? 1.3 : 1.0)
-                .animation(.easeInOut(duration: 0.2), value: isSelected)
-                .onTapGesture(perform: onTap)
+            ZStack {
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: isSelected ? 34 : 24, height: isSelected ? 34 : 24)
+                    .shadow(radius: isSelected ? 4 : 2)
+                
+                Image(systemName: "mappin.circle.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: isSelected ? 28 : 20, height: isSelected ? 28 : 20)
+                    .foregroundColor(.red)
+            }
+            .scaleEffect(isSelected ? 1.3 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
+            .onTapGesture(perform: onTap)
         }
     }
     
@@ -648,9 +595,7 @@ struct MainMapView: View {
                     POIPopup(mapItem: mapItem, userLocation: userLocation, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
                 }
                 NavigationLink(
-                    destination: LocationDetailView(mapItem: mapItem) { newPin in
-                        pinStore.masterPins.append(newPin)
-                    }.environmentObject(pinStore),
+                    destination: FullPOIView(mapItem: mapItem),
                     isActive: $showFullPOIView
                 ) {
                     EmptyView()
