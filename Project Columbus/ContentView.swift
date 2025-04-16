@@ -26,6 +26,7 @@ struct FullPOIView: View {
             }
             .padding()
         }
+        
         .navigationTitle("Location Details")
     }
 }
@@ -330,12 +331,15 @@ struct MainMapView: View {
                     }
                     .padding(.leading)
                     
-                    HStack {
-                        Spacer()
-                        Button("Show More") {
+                HStack {
+                    Spacer()
+                    Button("Show More") {
+                        showPOISheet = false
+                        DispatchQueue.main.async {
                             showFullPOIView = true
                         }
                     }
+                }
                 }
                 .padding(.top, 8)
                 }
@@ -612,10 +616,12 @@ struct MainMapView: View {
             }
             .ignoresSafeArea(.container, edges: .bottom)
 
-            if let mapItem = selectedMapItem, showPOISheet {
-                POIPopup(mapItem: mapItem, userLocation: userLocation, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
+            if let mapItem = selectedMapItem {
+                if showPOISheet {
+                    POIPopup(mapItem: mapItem, userLocation: userLocation, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
+                }
                 NavigationLink(
-                    destination: LocationDetailView(mapItem: selectedMapItem!) { newPin in
+                    destination: LocationDetailView(mapItem: mapItem) { newPin in
                         pinStore.masterPins.append(newPin)
                     }.environmentObject(pinStore),
                     isActive: $showFullPOIView
@@ -657,6 +663,13 @@ struct MainMapView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
             )
         }
+        .onChange(of: selectedTab) { newTab in
+            // Dismiss the POI popup and clear search results when switching tabs
+            showPOISheet = false
+            showFullPOIView = false
+            searchResults = []
+            searchText = ""
+        }
     }
 
     func requestUserLocation() {
@@ -686,7 +699,7 @@ struct MainMapView: View {
                     let item = MKMapItem(placemark: placemark)
                     item.name = pin.locationName
                     selectedMapItem = item
-                    showPOISheet = true
+                    showFullPOIView = true  // This now shows the full POI view directly
                 }
             }
         }
@@ -832,4 +845,5 @@ struct ContentView: View {
             return .standard
         }
     }
+
 
