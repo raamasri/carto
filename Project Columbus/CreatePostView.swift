@@ -1,9 +1,3 @@
-//
-//  CreatePostView.swift
-//  Project Columbus copy
-//
-//  Created by raama srivatsan on 4/15/25.
-//
 import SwiftUI
 import CoreLocation
 import MapKit
@@ -24,6 +18,7 @@ struct CreatePostView: View {
     @State private var searchResults: [MKLocalSearchCompletion] = []
     @State private var completer = MKLocalSearchCompleter()
     @State private var selectedCompletion: MKLocalSearchCompletion? = nil
+    @State private var recommendationComment: String = ""
 
     var isFormValid: Bool {
         !placeName.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -31,74 +26,51 @@ struct CreatePostView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Create a New Post")
-                    .font(.title)
-                    .padding(.bottom, 8)
-
-                Group {
-                    Text("Place Name")
-                        .font(.headline)
+        // Wrapping the entire interface in a NavigationView (optional)
+        NavigationView {
+            // Using a Form creates a more “iOS-native” grouping style.
+            Form {
+                // MARK: - Place Name Section
+                Section(header: Text("Place Name")) {
                     TextField("Search for a place", text: $placeName)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
                         .onChange(of: placeName) { newValue in
                             completer.queryFragment = newValue
                         }
-                    Button(action: {
-                        if let currentLocation = locationManager.location {
-                            let geocoder = CLGeocoder()
-                            let location = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
-                            geocoder.reverseGeocodeLocation(location) { placemarks, error in
-                                if let placemark = placemarks?.first {
-                                    DispatchQueue.main.async {
-                                        placeName = placemark.name ?? placemark.locality ?? "Current Location"
-                                    }
-                                } else if let error = error {
-                                    print("Reverse geocoding failed: \(error.localizedDescription)")
-                                } else {
-                                    print("No placemarks found.")
-                                }
-                            }
-                        } else {
-                            print("Location is not available.")
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "location.circle")
-                            Text("Use Current Location")
-                        }
-                        .font(.subheadline)
-                        .foregroundColor(.blue)
+                    
+                    // Inline button for current location
+                    Button {
+                        useCurrentLocation()
+                    } label: {
+                        Label("Use Current Location", systemImage: "location.circle")
+                            .foregroundColor(.blue)
                     }
+                    
+                    // Displaying search results in a list
                     if !searchResults.isEmpty {
-                        List {
-                            ForEach(searchResults, id: \.self) { completion in
-                                VStack(alignment: .leading) {
-                                    Text(completion.title)
-                                        .font(.body)
-                                    if !completion.subtitle.isEmpty {
-                                        Text(completion.subtitle)
-                                            .font(.caption)
-                                            .foregroundColor(.gray)
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedCompletion = completion
-                                    placeName = completion.title
-                                    searchResults = []
+                        ForEach(searchResults, id: \.self) { completion in
+                            VStack(alignment: .leading) {
+                                Text(completion.title)
+                                    .font(.body)
+                                if !completion.subtitle.isEmpty {
+                                    Text(completion.subtitle)
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
                                 }
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedCompletion = completion
+                                placeName = completion.title
+                                searchResults = []
+                            }
                         }
-                        .frame(height: 150)
                     }
                 }
-
-                Group {
-                    Text("Rating")
-                        .font(.headline)
-                    HStack(spacing: 4) {
+                
+                // MARK: - Rating Section
+                Section(header: Text("Rating")) {
+                    HStack {
+                        // Adjust star size and spacing as desired
                         ForEach(1..<11) { star in
                             Image(systemName: star <= rating ? "star.fill" : "star")
                                 .foregroundColor(.yellow)
@@ -108,14 +80,14 @@ struct CreatePostView: View {
                                     }
                                 }
                         }
+                        Spacer()
                         Text("\(rating)/10")
-                            .font(.subheadline)
                             .foregroundColor(.gray)
-                            .padding(.leading, 8)
                     }
                 }
-
-                Group {
+                
+                // MARK: - Recommendation Section
+                Section {
                     Toggle("Recommendation", isOn: $recommendation)
                     if recommendation {
                         Picker("Recommended To", selection: $recommendedTo) {
@@ -124,53 +96,63 @@ struct CreatePostView: View {
                             }
                         }
                         .pickerStyle(SegmentedPickerStyle())
+
+                        // New TextEditor for additional recommendation comments
+                        TextEditor(text: $recommendationComment)
+                            .frame(height: 100)
+                            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray, lineWidth: 1))
+                            .padding(.top, 8)
                     }
                 }
-
-                Group {
-                    Text("Post Content")
-                        .font(.headline)
+                
+                // MARK: - Post Content Section
+                Section(header: Text("Post Content")) {
                     TextField("Enter your post content", text: $postContent)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
                 }
-
-                Group {
-                    Button(action: {
+                
+                // MARK: - Images Section
+                Section {
+                    Button {
                         showingImagePicker = true
-                    }) {
-                        HStack {
-                            Image(systemName: "photo.on.rectangle")
-                            Text("Select Images")
-                        }
+                    } label: {
+                        Label("Select Images", systemImage: "photo.on.rectangle")
                     }
+                    
+                    // Display selected images horizontally
                     if !selectedImages.isEmpty {
-                        TabView {
-                            ForEach(selectedImages, id: \.self) { uiImage in
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFit()
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(selectedImages, id: \.self) { image in
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 100, height: 100)
+                                        .cornerRadius(6)
+                                }
                             }
+                            .padding(.vertical, 4)
                         }
-                        .frame(height: 250)
-                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
                     }
                 }
-
-                Button(action: {
-                    // Submit post action
-                }) {
-                    Text("Post")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(isFormValid ? Color.blue : Color.gray)
-                        .cornerRadius(10)
+                
+                // MARK: - Submit Button
+                Section {
+                    Button(action: {
+                        // Submit post action here
+                    }) {
+                        Text("Post")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(isFormValid ? Color.blue : Color.gray)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                    .disabled(!isFormValid)
+                    .listRowBackground(Color.clear) // optional style tweak
                 }
-                .disabled(!isFormValid)
-                .opacity(isFormValid ? 1 : 0.6)
             }
-            .padding()
+            .navigationTitle("Create a New Post")
         }
         .onAppear {
             completer.resultTypes = .address
@@ -181,6 +163,27 @@ struct CreatePostView: View {
         }
         .sheet(isPresented: $showingImagePicker) {
             MultiImagePicker(selectedImages: $selectedImages)
+        }
+    }
+    
+    // Helper to use current location
+    private func useCurrentLocation() {
+        if let currentLocation = locationManager.location {
+            let geocoder = CLGeocoder()
+            let userCLLocation = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
+            geocoder.reverseGeocodeLocation(userCLLocation) { placemarks, error in
+                if let placemark = placemarks?.first {
+                    DispatchQueue.main.async {
+                        placeName = placemark.name ?? placemark.locality ?? "Current Location"
+                    }
+                } else if let error = error {
+                    print("Reverse geocoding failed: \(error.localizedDescription)")
+                } else {
+                    print("No placemarks found.")
+                }
+            }
+        } else {
+            print("Location is not available.")
         }
     }
 }

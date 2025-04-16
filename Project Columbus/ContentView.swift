@@ -366,6 +366,21 @@ struct MainMapView: View {
                     span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                 ))
             }
+            
+            // Create a new pin based on the search result.
+            let newPin = Pin(
+                locationName: item.name ?? "Unknown Place",
+                city: "", // Optionally set a city, if available
+                date: formattedDate(), // Using the existing formattedDate() function
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                reaction: .lovedIt // Default reaction
+            )
+            // Check if this pin does not already exist to avoid duplicates, then append
+            if !pinStore.masterPins.contains(where: { $0.latitude == newPin.latitude && $0.longitude == newPin.longitude }) {
+                pinStore.masterPins.append(newPin)
+            }
+            
             selectedMapItem = item
             showPOISheet = true
             print("Selected POI: \(item.name ?? "Unknown") at \(coordinate)")
@@ -425,16 +440,18 @@ struct MainMapView: View {
                     pinAnnotations
                     if let userLoc = userLocation {
                         Annotation("Current Location", coordinate: userLoc) {
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 12, height: 12)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.blue.opacity(0.6), lineWidth: 2)
-                                        .scaleEffect(animatePulse ? 2.2 : 1.2)
-                                        .opacity(animatePulse ? 0.1 : 0.6)
-                                        .animation(.easeOut(duration: 1).repeatForever(autoreverses: true), value: animatePulse)
-                                )
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue)
+                                    .frame(width: 12, height: 12)
+                                
+                                Circle()
+                                    .stroke(Color.blue.opacity(0.6), lineWidth: 2)
+                                    .frame(width: 24, height: 24)
+                                    .scaleEffect(animatePulse ? 1.5 : 1.0)
+                                    .opacity(animatePulse ? 0.1 : 0.6)
+                                    .animation(.easeOut(duration: 1).repeatForever(autoreverses: true), value: animatePulse)
+                            }
                         }
                     }
                 }
@@ -488,58 +505,60 @@ struct MainMapView: View {
                 ZStack(alignment: .top) {
                     VStack(spacing: 0) {
                         Spacer().frame(height: 70) // offset below search bar
-                        if !searchResults.isEmpty {
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    ForEach(searchResults, id: \.self) { result in
-                                        Button(action: {
-                                            handleSearchSelection(result)
-                                            searchText = ""
-                                            searchResults = []
-                                        }) {
-                                            VStack(alignment: .leading) {
-                                                Text(result.title)
-                                                    .font(.headline)
-                                                if !result.subtitle.isEmpty {
-                                                    Text(result.subtitle)
-                                                        .font(.caption)
-                                                        .foregroundColor(.gray)
+                    if !searchResults.isEmpty {
+                            ZStack {
+                                ScrollView {
+                                    VStack(spacing: 0) {
+                                        ForEach(searchResults, id: \.self) { result in
+                                            Button(action: {
+                                                handleSearchSelection(result)
+                                                searchText = ""
+                                                searchResults = []
+                                            }) {
+                                                VStack(alignment: .leading) {
+                                                    Text(result.title)
+                                                        .font(.headline)
+                                                        .foregroundColor(.white)
+                                                    if !result.subtitle.isEmpty {
+                                                        Text(result.subtitle)
+                                                            .font(.caption)
+                                                            .foregroundColor(.white.opacity(0.8))
+                                                    }
                                                 }
+                                                .padding()
+                                                .frame(maxWidth: .infinity, alignment: .leading)
                                             }
-                                            .padding()
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color.white.opacity(0.95))
                                         }
                                     }
                                 }
-                                .background(Color.white.opacity(0.95))
-                                .cornerRadius(20)
-                                .padding(.horizontal)
                             }
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(20)
+                            .padding(.horizontal)
                         }
                     }
                     
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.gray)
-                        TextField("Where will you go?", text: $searchText)
-                            .autocorrectionDisabled()
-                            .padding(8)
-
-                        if !searchText.isEmpty {
-                            Button(action: {
-                                searchText = ""
-                                searchResults = []
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.gray)
-                            }
+                    TextField("Where will you go?", text: $searchText)
+                        .autocorrectionDisabled()
+                        .padding(8)
+ 
+                    if !searchText.isEmpty || !searchResults.isEmpty {
+                        Button(action: {
+                            searchText = ""
+                            searchResults = []
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
                         }
+                    }
                     }
                     .padding(10)
                     .background(.ultraThinMaterial)
                     .blur(radius: 0.3)
-                    .cornerRadius(10)
+                    .cornerRadius(20)
                     .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                     .padding(.horizontal)
                     .padding(.top, 5)
@@ -576,6 +595,14 @@ struct MainMapView: View {
                             shouldTrackUser.toggle()
                             if shouldTrackUser {
                                 requestUserLocation()
+                                withAnimation {
+                                    if let location = locationManager.userLocation {
+                                        cameraPosition = .region(MKCoordinateRegion(
+                                            center: location,
+                                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                        ))
+                                    }
+                                }
                             }
                         }) {
                             Image(systemName: "location.fill")
@@ -845,5 +872,6 @@ struct ContentView: View {
             return .standard
         }
     }
+
 
 

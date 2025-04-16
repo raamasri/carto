@@ -42,8 +42,8 @@ struct StartupView: View {
                     .foregroundColor(Color.white.opacity(0.8))
                     .foregroundStyle(.ultraThinMaterial)
                     .multilineTextAlignment(.leading)
-                    .padding(.horizontal, 40)
-                    .padding(.top, 40)
+                    .padding(.horizontal, 50)
+                    .padding(.top, 300)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .offset(x: motion.x * 30, y: motion.y * 30)
                     .onAppear {
@@ -59,23 +59,37 @@ struct StartupView: View {
                 Spacer()
 
                 VStack(spacing: 15) {
-                    Button("Log In") {
-                        showLogin.toggle()
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.black)
-                    .foregroundColor(.white)
-                    .cornerRadius(15)
+                    ZStack {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .cornerRadius(15)
+                            .frame(height: 50)
 
-                    Button("Sign Up") {
-                        showSignup.toggle()
+                        Button(action: {
+                            showLogin.toggle()
+                        }) {
+                            Text("Log In")
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .foregroundColor(.white)
+                                .background(Color.clear)
+                                .cornerRadius(15)
+                                .bold()
+                        }
                     }
-                    .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color.white)
-                    .foregroundColor(.black)
-                    .cornerRadius(15)
+
+                    Button(action: {
+                        showSignup.toggle()
+                    }) {
+                        Text("Sign Up")
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.white)
+                            .foregroundColor(.black)
+                            .cornerRadius(15)
+                            .bold()
+                    }
                 }
                 .padding(.horizontal, 30)
                 .padding(.bottom, 20)

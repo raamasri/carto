@@ -39,6 +39,18 @@ struct LoginView: View {
                     .onTapGesture {
                         usernameFocused = true
                     }
+                    .overlay(
+                        HStack {
+                            Spacer()
+                            if !username.isEmpty {
+                                Button(action: { username = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.trailing, 10)
+                            }
+                        }
+                    )
 
                 SecureField("Password", text: $password)
                     .padding()
@@ -60,8 +72,20 @@ struct LoginView: View {
                     .onTapGesture {
                         passwordFocused = true
                     }
+                    .overlay(
+                        HStack {
+                            Spacer()
+                            if !password.isEmpty {
+                                Button(action: { password = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.trailing, 10)
+                            }
+                        }
+                    )
                 
-                Button("Log In") {
+                Button(action: {
                     if username.isEmpty || password.isEmpty {
                         errorMessage = "Please enter both username and password."
                         showError = true
@@ -69,12 +93,15 @@ struct LoginView: View {
                         authManager.logIn(username: username, password: password)
                         presentationMode.wrappedValue.dismiss()
                     }
+                }) {
+                    Text("Log In")
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.white)
+                        .foregroundColor(.black)
+                        .cornerRadius(8)
+                        .bold()
                 }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color.white)
-                .foregroundColor(.black)
-                .cornerRadius(8)
 
                 if showError {
                     Text(errorMessage)
