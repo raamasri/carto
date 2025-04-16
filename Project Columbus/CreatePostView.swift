@@ -24,6 +24,7 @@ struct CreatePostView: View {
     @State private var completerDelegateWrapper: SearchCompleterDelegateWrapper? = nil
     @State private var mapRegion: MKCoordinateRegion = MKCoordinateRegion()
     @FocusState private var isPlaceFieldFocused: Bool
+    @FocusState private var isPostContentFocused: Bool
 
     var isFormValid: Bool {
         !placeName.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -139,6 +140,7 @@ struct CreatePostView: View {
                 // MARK: - Post Content Section
                 Section(header: Text("Post Content")) {
                     TextEditor(text: $postContent)
+                        .focused($isPostContentFocused)
                         .fixedSize(horizontal: false, vertical: true)
                         .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray, lineWidth: 1))
                         .padding(.vertical, 4)
