@@ -13,7 +13,17 @@ struct LocationDetailView: View {
     let onAddPin: (Pin) -> Void
 
     @State private var showCollectionSheet = false
+    @State private var region: MKCoordinateRegion
     @EnvironmentObject var pinStore: PinStore
+
+    init(mapItem: MKMapItem, onAddPin: @escaping (Pin) -> Void) {
+        self.mapItem = mapItem
+        self.onAddPin = onAddPin
+        _region = State(initialValue: MKCoordinateRegion(
+            center: mapItem.placemark.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        ))
+    }
 
     var body: some View {
         ScrollView {
@@ -26,6 +36,9 @@ struct LocationDetailView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
             titleSection
+            Map(coordinateRegion: $region)
+                .frame(height: 250)
+                .cornerRadius(12)
             LookAroundPreview(coordinate: mapItem.placemark.coordinate)
                 .frame(height: 250)
                 .cornerRadius(12)

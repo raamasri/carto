@@ -288,10 +288,7 @@ struct MainMapView: View {
                 HStack {
                     Spacer()
                     Button("Show More") {
-                        showPOISheet = false
-                        DispatchQueue.main.async {
-                            showFullPOIView = true
-                        }
+                        showFullPOIView = true
                     }
                 }
                 }
@@ -633,7 +630,7 @@ struct MainMapView: View {
                     POIPopup(mapItem: mapItem, userLocation: userLocation, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
                 }
                 NavigationLink(
-                    destination: FullPOIView(mapItem: mapItem),
+                    destination: LocationDetailView(mapItem: mapItem, onAddPin: { _ in }),
                     isActive: $showFullPOIView
                 ) {
                     EmptyView()
@@ -682,6 +679,11 @@ struct MainMapView: View {
             showFullPOIView = false
             searchResults = []
             searchText = ""
+        }
+        .onChange(of: showFullPOIView) { newValue in
+            if !newValue {
+                showPOISheet = true
+            }
         }
     }
 
