@@ -93,7 +93,7 @@ struct StartupView: View {
                 }
                 .padding(.horizontal, 30)
                 .padding(.bottom, 20)
-                .offset(x: motion.x * -30, y: motion.y * -30)
+                .offset(x: motion.x * -10, y: motion.y * -10)
             }
             .frame(maxHeight: .infinity)
             .opacity(opacity)
