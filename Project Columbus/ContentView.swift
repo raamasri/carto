@@ -304,8 +304,12 @@ struct MainMapView: View {
             guard let item = response?.mapItems.first else { return }
             let coordinate = item.placemark.coordinate
             withAnimation {
+                let shiftedCoordinate = CLLocationCoordinate2D(
+                    latitude: coordinate.latitude - 0.0045,
+                    longitude: coordinate.longitude
+                )
                 cameraPosition = .region(MKCoordinateRegion(
-                    center: coordinate,
+                    center: shiftedCoordinate,
                     span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                 ))
             }

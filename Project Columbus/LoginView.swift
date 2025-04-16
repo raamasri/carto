@@ -18,14 +18,16 @@ struct LoginView: View {
                 .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 20) {
-                Text("Log In to CARTO")
-                    .font(.largeTitle)
-                    .bold()
-                    .foregroundColor(.white)
-                    .padding()
-                    .multilineTextAlignment(.leading)
+                HStack {
+                    Text("Welcome Back, Cartographer")
+                        .font(.largeTitle)
+                        .bold()
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding()
 
-                TextField("Username", text: $username)
+                TextField("@usrname", text: $username)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color(UIColor.secondarySystemBackground))
@@ -52,7 +54,7 @@ struct LoginView: View {
                         }
                     )
 
-                SecureField("Password", text: $password)
+                SecureField("password", text: $password)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color(UIColor.secondarySystemBackground))

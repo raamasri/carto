@@ -25,13 +25,15 @@ struct SignUpView: View {
                 .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 20) {
-                Text("Join CARTO")
-                    .font(.largeTitle)
-                    .bold()
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.leading)
+                HStack {
+                    Text("Welcome, Cartographer")
+                        .font(.largeTitle)
+                        .bold()
+                        .foregroundColor(.white)
+                    Spacer()
+                }
 
-                TextField("Username", text: $username)
+                TextField("Desired Username (@urmom)", text: $username)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(.ultraThinMaterial)
@@ -119,7 +121,7 @@ struct SignUpView: View {
                         }
                     )
 
-                SecureField("Password", text: $password)
+                SecureField("password", text: $password)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(.ultraThinMaterial)

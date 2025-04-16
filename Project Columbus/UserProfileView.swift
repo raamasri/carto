@@ -6,10 +6,11 @@
 //
 
 import SwiftUI
+import MapKit
 
 struct UserProfileView: View {
     let currentUserID = UUID()
-
+    
     @State var profileUser = User(
         id: UUID(),
         username: "mojojojo",
@@ -34,40 +35,23 @@ struct UserProfileView: View {
         favoriteSpots: [],
         activityFeed: []
     )
-
+    
     @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
     @State private var selectedSection = "Just Added"
     let sections = ["Just Added", "Loved", "Want to Go", "Recommendations"]
-
+    
     @State var recentPins: [Pin] = [
         Pin(locationName: "Golden Gate Park", city: "San Francisco", date: "Mar 10", latitude: 37.7694, longitude: -122.4862, reaction: .lovedIt),
         Pin(locationName: "Central Park", city: "New York", date: "Feb 22", latitude: 40.7851, longitude: -73.9683, reaction: .wantToGo),
         Pin(locationName: "Eiffel Tower", city: "Paris", date: "Jan 18", latitude: 48.8584, longitude: 2.2945, reaction: .lovedIt)
     ]
-
+    
     @State private var selectedFilter: Reaction? = nil
-
-    struct StoryHighlight: Identifiable {
-        let id = UUID()
-        let imageName: String
-        let title: String
-    }
-
-    let storyHighlights: [StoryHighlight] = [
-        StoryHighlight(imageName: "story1", title: "Travel"),
-        StoryHighlight(imageName: "story2", title: "Food"),
-        StoryHighlight(imageName: "story3", title: "Friends"),
-        StoryHighlight(imageName: "story4", title: "Nature")
-    ]
-
-    var filteredPins: [Pin] {
-        if let filter = selectedFilter {
-            return recentPins.filter { $0.reaction == filter }
-        } else {
-            return recentPins
-        }
-    }
-
+    @State private var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+    )
+    
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -92,25 +76,27 @@ struct UserProfileView: View {
                                 .clipShape(Circle())
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 .shadow(radius: 4)
-
+                            
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("@\(profileUser.username)")
                                     .font(.headline)
-
+                                
                                 Text(bio)
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
                                     .lineLimit(2)
-
+                                
                                 Text("\(profileUser.followers.count) followers • \(profileUser.following.count) following")
                                     .font(.caption)
                                     .foregroundColor(.gray)
                             }
                             Spacer()
                         }
+                        .padding(.top, 8)
+                        .padding(.bottom, 8)
                         .padding(.horizontal)
                     }
-
+                    
                     VStack(spacing: 8) {
                         HStack(spacing: 16) {
                             Button(action: {}) {
@@ -133,80 +119,36 @@ struct UserProfileView: View {
                             }
                         }
                         .padding(.horizontal)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 16) {
-                                ForEach(storyHighlights) { highlight in
-                                    VStack {
-                                        Image(highlight.imageName)
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 60, height: 60)
-                                            .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color.pink, lineWidth: 2))
-                                        Text(highlight.title)
-                                            .font(.caption)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                        .padding(.vertical, 8)
-                    }
-
-                    Divider()
-
-                    // Posts Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Posts")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        let columns = [
-                            GridItem(.flexible()),
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ]
-                        LazyVGrid(columns: columns, spacing: 2) {
-                            ForEach(recentPins) { pin in
-                                Image("postPlaceholder")
+                        
+                        // Map Section
+                        Map(
+                            coordinateRegion: $region,
+                            annotationItems: recentPins
+                        ) { pin in
+                            MapAnnotation(
+                                coordinate: CLLocationCoordinate2D(
+                                    latitude: pin.latitude,
+                                    longitude: pin.longitude
+                                )
+                            ) {
+                                Image(systemName: "mappin.circle.fill")
                                     .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(height: 120)
-                                    .clipped()
+                                    .frame(width: 30, height: 30)
+                                    .foregroundColor(.blue)
+                                    .shadow(radius: 3)
                             }
                         }
-                        .padding(.horizontal, 4)
-                    }
-
-                    Divider()
-
-                    // Collections Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Collections")
-                            .font(.headline)
-                            .padding(.horizontal)
-
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
-                            ForEach(profileUser.collections) { collection in
-                                NavigationLink(destination: CollectionDetailView(collection: collection)) {
-                                    VStack(spacing: 4) {
-                                        Circle()
-                                            .fill(Color.blue.opacity(0.2))
-                                            .frame(width: 60, height: 60)
-                                            .overlay(Text("📍"))
-                                        Text(collection.name)
-                                            .font(.caption)
-                                            .multilineTextAlignment(.center)
-                                            .frame(width: 60)
-                                    }
-                                }
-                            }
-                        }
+                        .frame(height: 300)
+                        .cornerRadius(10)
                         .padding(.horizontal)
                     }
+                    .padding(.top, 12)
+                    .padding(.vertical)
+                    .padding(.bottom, 8)
                 }
-                .padding(.vertical)
             }
+            .padding(.bottom, 16)
         }
+        .padding(.top, 12)
     }
 }
