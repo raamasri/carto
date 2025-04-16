@@ -27,7 +27,7 @@ struct LoginView: View {
                 }
                 .padding()
 
-                TextField("@usrname", text: $username)
+                TextField("@cartographer", text: $username)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color(UIColor.secondarySystemBackground))

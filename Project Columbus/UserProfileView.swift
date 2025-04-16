@@ -13,7 +13,7 @@ struct UserProfileView: View {
     
     @State var profileUser = User(
         id: UUID(),
-        username: "mojojojo",
+        username: "cartographer",
         isPrivate: false,
         followers: Array(repeating: UUID(), count: 5),
         following: Array(repeating: UUID(), count: 10),

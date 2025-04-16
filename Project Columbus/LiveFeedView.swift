@@ -151,7 +151,7 @@ struct PinRowView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(pin.locationName)
                         .font(.headline)
-                    Text("Posted by @mojojojo")
+                    Text("Posted by @cartographer")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
