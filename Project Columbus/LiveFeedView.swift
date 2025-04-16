@@ -15,58 +15,61 @@ struct LiveFeedView: View {
 
     var body: some View {
         NavigationView {
-            VStack {
-                Picker("Tabs", selection: $selectedTab) {
-                    ForEach(0..<tabs.count, id: \.self) { index in
-                        Text(tabs[index]).tag(index)
-                    }
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding()
-
-                TabView(selection: $selectedTab) {
-                    // Friends Tab
-                    List(pinStore.masterPins.reversed()) { pin in
-                        PinRowView(
-                            pin: pin,
-                            isLoved: lovedPins.contains(pin.id),
-                            toggleLove: {
-                                if lovedPins.contains(pin.id) {
-                                    lovedPins.remove(pin.id)
-                                } else {
-                                    lovedPins.insert(pin.id)
-                                }
-                            },
-                            share: {
-                                sharePin(pin)
-                            }
-                        )
-                        .onTapGesture {
-                            selectedPin = pin
-                            region = MKCoordinateRegion(
-                                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
-                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                            )
-
-                            // Slight delay to allow region update to take effect
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                showMap = true
-                            }
+            ZStack {
+                VStack {
+                    Picker("Tabs", selection: $selectedTab) {
+                        ForEach(0..<tabs.count, id: \.self) { index in
+                            Text(tabs[index]).tag(index)
                         }
                     }
-                    .tag(0)
+                    .pickerStyle(SegmentedPickerStyle())
+                    .padding()
 
-                    // Following Tab Placeholder
-                    Text("Following content goes here")
-                        .tag(1)
+                    TabView(selection: $selectedTab) {
+                        // Friends Tab
+                        List(pinStore.masterPins.reversed()) { pin in
+                            PinRowView(
+                                pin: pin,
+                                isLoved: lovedPins.contains(pin.id),
+                                toggleLove: {
+                                    if lovedPins.contains(pin.id) {
+                                        lovedPins.remove(pin.id)
+                                    } else {
+                                        lovedPins.insert(pin.id)
+                                    }
+                                },
+                                share: {
+                                    sharePin(pin)
+                                }
+                            )
+                            .onTapGesture {
+                                selectedPin = pin
+                                region = MKCoordinateRegion(
+                                    center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+                                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                )
 
-                    // For You Tab Placeholder
-                    Text("For You content goes here")
-                        .tag(2)
+                                // Slight delay to allow region update to take effect
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    showMap = true
+                                }
+                            }
+                        }
+                        .tag(0)
+
+                        // Following Tab Placeholder
+                        Text("Following content goes here")
+                            .tag(1)
+
+                        // For You Tab Placeholder
+                        Text("For You content goes here")
+                            .tag(2)
+                    }
+                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 }
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             }
             .navigationTitle("Live Feed")
+            .navigationBarTitleDisplayMode(.large)
             .sheet(isPresented: $showMap) {
                 if let pin = selectedPin {
                     ZStack(alignment: .topTrailing) {

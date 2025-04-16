@@ -240,7 +240,8 @@ struct IdentifiableMapItem: Identifiable {
 
 
 // MARK: - Main Map View with Bottom Nav and Side Menu
-
+import SwiftUI
+import MapKit
 struct MainMapView: View {
     
     @State private var shouldTrackUser = false
@@ -266,6 +267,88 @@ struct MainMapView: View {
     @State private var selectedMapItem: MKMapItem? = nil
     @State private var showFullPOIView: Bool = false
     @State private var showPOISheet: Bool = false
+
+    struct POIPopup: View {
+        let mapItem: MKMapItem
+        let userLocation: CLLocationCoordinate2D?
+        @Binding var showPOISheet: Bool
+        @Binding var showFullPOIView: Bool
+    // Removed lookAroundScene since it's no longer needed
+
+    var body: some View {
+        VStack {
+            Spacer()
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    Text(mapItem.name ?? "Unknown Place")
+                        .font(.title.bold())
+                        .lineLimit(1)
+                        .padding(.trailing, 100)
+
+                    HStack(spacing: 10) {
+                        Button(action: {
+                            let placemark = mapItem.placemark
+                            let mapItem = MKMapItem(placemark: placemark)
+                            mapItem.name = placemark.name
+                            mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+                        }) {
+                            Image(systemName: "arrow.turn.up.right")
+                                .foregroundColor(.white)
+                                .padding(10)
+                                .background(Color.blue)
+                                .clipShape(Circle())
+                        }
+
+                        Button(action: {
+                            showPOISheet = false
+                        }) {
+                            Image(systemName: "xmark")
+                                .foregroundColor(.white)
+                                .padding(10)
+                                .background(Color.gray)
+                                .clipShape(Circle())
+                        }
+                    }
+                }
+                if let address = mapItem.placemark.title {
+                    Text(address)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                LookAroundPreview(coordinate: mapItem.placemark.coordinate)
+                    .frame(height: 200)
+                    .cornerRadius(12)
+                if let distance = userLocation.map({ CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)) }) {
+                    Text(String(format: "Distance: %.2f km", distance / 1000))
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                ZStack(alignment: .bottomLeading) {
+                    Button("Add to List") {
+                        // Add your action here
+                        print("Add to List tapped")
+                    }
+                    .padding(.leading)
+                    
+                    HStack {
+                        Spacer()
+                        Button("Show More") {
+                            showFullPOIView = true
+                        }
+                    }
+                }
+                .padding(.top, 8)
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color(.systemBackground).opacity(0.9))
+                .cornerRadius(16)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 60)
+            }
+// Removed .task block that loaded lookAroundScene
+        }
+    }
     
     func handleSearchSelection(_ completion: MKLocalSearchCompletion) {
         let request = MKLocalSearch.Request(completion: completion)
@@ -407,7 +490,7 @@ struct MainMapView: View {
                                     ForEach(searchResults, id: \.self) { result in
                                         Button(action: {
                                             handleSearchSelection(result)
-                                            searchText = result.title
+                                            searchText = ""
                                             searchResults = []
                                         }) {
                                             VStack(alignment: .leading) {
@@ -486,10 +569,13 @@ struct MainMapView: View {
                         Spacer()
 
                         Button(action: {
-                            requestUserLocation()
+                            shouldTrackUser.toggle()
+                            if shouldTrackUser {
+                                requestUserLocation()
+                            }
                         }) {
                             Image(systemName: "location.fill")
-                                .foregroundColor(.blue)
+                                .foregroundColor(shouldTrackUser ? .blue : .gray)
                                 .padding()
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
@@ -527,48 +613,15 @@ struct MainMapView: View {
             .ignoresSafeArea(.container, edges: .bottom)
 
             if let mapItem = selectedMapItem, showPOISheet {
-                VStack {
-                    Spacer()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(mapItem.name ?? "Unknown Place")
-                            .font(.headline)
-                        if let address = mapItem.placemark.title {
-                            Text(address)
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                        }
-                        if let distance = userLocation.map({ CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)) }) {
-                            Text(String(format: "Distance: %.2f km", distance / 1000))
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                        }
-                        HStack {
-                            Button("Close") {
-                                showPOISheet = false
-                            }
-                            Spacer()
-                            Button("Show More") {
-                                showFullPOIView = true
-                            }
-                        }
-                        .padding(.top, 8)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color(.systemBackground).opacity(0.9))
-                    .cornerRadius(16)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 60)
+                POIPopup(mapItem: mapItem, userLocation: userLocation, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
+                NavigationLink(
+                    destination: LocationDetailView(mapItem: selectedMapItem!) { newPin in
+                        pinStore.masterPins.append(newPin)
+                    }.environmentObject(pinStore),
+                    isActive: $showFullPOIView
+                ) {
+                    EmptyView()
                 }
-                .transition(.move(edge: .bottom))
-            NavigationLink(
-                destination: LocationDetailView(mapItem: selectedMapItem!) { newPin in
-                    pinStore.masterPins.append(newPin)
-                }.environmentObject(pinStore),
-                isActive: $showFullPOIView
-            ) {
-                EmptyView()
-            }
             }
         }
         .onAppear {
@@ -592,7 +645,7 @@ struct MainMapView: View {
             }
         }
         .onReceive(locationManager.$userLocation.compactMap { $0 }) { location in
-            if !isUserManuallyMovingMap {
+            if shouldTrackUser && !isUserManuallyMovingMap {
                 cameraPosition = .region(MKCoordinateRegion(
                     center: location,
                     span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -763,20 +816,6 @@ struct ContentView: View {
             ContentView()
         }
     }
-
-struct FindFriendsView: View {
-    var body: some View {
-        VStack {
-            Spacer()
-            Text("Find Friends")
-                .font(.largeTitle)
-            Text("This is where you’ll see your friends on the map.")
-                .font(.subheadline)
-                .padding()
-            Spacer()
-        }
-    }
-}
 
     func styleForMapType(_ type: String) -> MapStyle {
         switch type {

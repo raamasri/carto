@@ -1,7 +1,24 @@
 import SwiftUI
+import CoreMotion
+
+class MotionManager: ObservableObject {
+    private var motionManager = CMMotionManager()
+    @Published var x = 0.0
+    @Published var y = 0.0
+
+    init() {
+        motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
+        motionManager.startDeviceMotionUpdates(to: .main) { (data, error) in
+            guard let data = data else { return }
+            self.x = data.attitude.roll
+            self.y = data.attitude.pitch
+        }
+    }
+}
 
 struct StartupView: View {
     @EnvironmentObject var authManager: AuthManager
+    @StateObject private var motion = MotionManager()
 
     @State private var showLogin = false
     @State private var showSignup = false
@@ -17,21 +34,8 @@ struct StartupView: View {
                 .blur(radius: 0.5)
 
             VStack {
-                Image("AppIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 100, height: 100)
-                Image("AppLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 100, height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .shadow(radius: 5)
-                    .padding(.top, 60)
-                    .padding(.bottom, 20)
-
+                
                 Spacer()
-
                 Text(animatedText)
                     .font(.largeTitle)
                     .bold()
@@ -41,6 +45,7 @@ struct StartupView: View {
                     .padding(.horizontal, 40)
                     .padding(.top, 40)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .offset(x: motion.x * 30, y: motion.y * 30)
                     .onAppear {
                         let fullText = "CARTO"
                         animatedText = ""
@@ -74,6 +79,7 @@ struct StartupView: View {
                 }
                 .padding(.horizontal, 30)
                 .padding(.bottom, 20)
+                .offset(x: motion.x * -30, y: motion.y * -30)
             }
             .frame(maxHeight: .infinity)
             .opacity(opacity)
