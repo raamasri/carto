@@ -12,67 +12,81 @@ struct LiveFeedView: View {
     @State private var lovedPins: Set<UUID> = []
     @State private var selectedTab = 0
     @State private var showDetail = false
+    @State private var showVideoFeed = false
     let tabs = ["Friends", "Following", "For You"]
 
     var body: some View {
         NavigationView {
-            ZStack {
-                VStack {
-                    Picker("Tabs", selection: $selectedTab) {
-                        ForEach(0..<tabs.count, id: \.self) { index in
-                            Text(tabs[index]).tag(index)
-                        }
+            VStack(spacing: 0) {
+                Picker("Tabs", selection: $selectedTab) {
+                    ForEach(0..<tabs.count, id: \.self) { index in
+                        Text(tabs[index]).tag(index)
                     }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .padding()
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
 
-                    TabView(selection: $selectedTab) {
-                        // Friends Tab
-                        List(pinStore.masterPins.reversed()) { pin in
-                            PinRowView(
-                                pin: pin,
-                                isLoved: lovedPins.contains(pin.id),
-                                toggleLove: {
-                                    if lovedPins.contains(pin.id) {
-                                        lovedPins.remove(pin.id)
-                                    } else {
-                                        lovedPins.insert(pin.id)
-                                    }
-                                },
-                                share: {
-                                    sharePin(pin)
-                                },
-                                selectedPin: $selectedPin,
-                                showDetail: $showDetail
-                            )
-                            .onTapGesture {
-                                selectedPin = pin
-                                region = MKCoordinateRegion(
-                                    center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
-                                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                                )
-
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    showMap = true
-                                    showDetail = true // ← ADD THIS
+                TabView(selection: $selectedTab) {
+                    // Friends Tab
+                    List(pinStore.masterPins.reversed()) { pin in
+                        PinRowView(
+                            pin: pin,
+                            isLoved: lovedPins.contains(pin.id),
+                            toggleLove: {
+                                if lovedPins.contains(pin.id) {
+                                    lovedPins.remove(pin.id)
+                                } else {
+                                    lovedPins.insert(pin.id)
                                 }
+                            },
+                            share: {
+                                sharePin(pin)
+                            },
+                            selectedPin: $selectedPin,
+                            showDetail: $showDetail
+                        )
+                        .onTapGesture {
+                            selectedPin = pin
+                            region = MKCoordinateRegion(
+                                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                            )
+
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showMap = true
+                                showDetail = true // ← ADD THIS
                             }
                         }
-                        .tag(0)
-
-                        // Following Tab Placeholder
-                        Text("Following content goes here")
-                            .tag(1)
-
-                        // For You Tab Placeholder
-                        Text("For You content goes here")
-                            .tag(2)
                     }
-                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                    .tag(0)
+
+                    // Following Tab Placeholder
+                    Text("Following content goes here")
+                        .tag(1)
+
+                    // For You Tab Placeholder
+                    Text("For You content goes here")
+                        .tag(2)
                 }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             }
             .navigationTitle("Live Feed")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showVideoFeed = true
+                    }) {
+                        Image(systemName: "play.rectangle.fill")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(Circle().fill(Color.accentColor))
+                            .shadow(radius: 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
             .sheet(isPresented: $showMap) {
                 if let pin = selectedPin {
                     ZStack(alignment: .topTrailing) {
@@ -101,6 +115,9 @@ struct LiveFeedView: View {
                         onAddPin: { _ in }
                     )
                 }
+            }
+            .sheet(isPresented: $showVideoFeed) {
+                VideoFeedView()
             }
         }
     }
@@ -208,3 +225,4 @@ struct POIView: View {
         .navigationTitle(pin.locationName)
     }
 }
+

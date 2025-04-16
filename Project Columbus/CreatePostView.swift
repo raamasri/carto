@@ -138,7 +138,10 @@ struct CreatePostView: View {
                 
                 // MARK: - Post Content Section
                 Section(header: Text("Post Content")) {
-                    TextField("Enter your post content", text: $postContent)
+                    TextEditor(text: $postContent)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray, lineWidth: 1))
+                        .padding(.vertical, 4)
                 }
                 
                 // MARK: - Images Section
@@ -146,7 +149,18 @@ struct CreatePostView: View {
                     Button {
                         showingImagePicker = true
                     } label: {
-                        Label("Select Images", systemImage: "photo.on.rectangle")
+                        HStack {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.title2)
+                            Text("Select Images")
+                                .fontWeight(.semibold)
+                                .font(.body)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.blue.opacity(0.2))
+                        .foregroundColor(.blue)
+                        .cornerRadius(10)
                     }
                     
                     // Display selected images horizontally
@@ -186,7 +200,7 @@ struct CreatePostView: View {
             .navigationTitle("Create a New Post")
         }
         .onAppear {
-            completer.resultTypes = .address
+            completer.resultTypes = [.address, .pointOfInterest]
             completer.region = locationManager.region
             let wrapper = SearchCompleterDelegateWrapper { completions in
                 searchResults = completions
