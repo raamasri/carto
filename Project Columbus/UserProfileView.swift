@@ -40,11 +40,7 @@ struct UserProfileView: View {
     @State private var selectedSection = "Just Added"
     let sections = ["Just Added", "Loved", "Want to Go", "Recommendations"]
     
-    @State var recentPins: [Pin] = [
-        Pin(locationName: "Golden Gate Park", city: "San Francisco", date: "Mar 10", latitude: 37.7694, longitude: -122.4862, reaction: .lovedIt),
-        Pin(locationName: "Central Park", city: "New York", date: "Feb 22", latitude: 40.7851, longitude: -73.9683, reaction: .wantToGo),
-        Pin(locationName: "Eiffel Tower", city: "Paris", date: "Jan 18", latitude: 48.8584, longitude: 2.2945, reaction: .lovedIt)
-    ]
+    @EnvironmentObject var pinStore: PinStore
     
     @State private var selectedFilter: Reaction? = nil
     @State private var region = MKCoordinateRegion(
@@ -53,16 +49,15 @@ struct UserProfileView: View {
     )
     
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 16) {
             HStack {
                 Text("@\(profileUser.username)")
-                    .font(.largeTitle)
+                    .font(.title)
                     .fontWeight(.bold)
                 Spacer()
             }
-            .padding(.top, 8)
             .padding(.horizontal)
-            Divider()
+            .padding(.top, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     // Profile Header
@@ -92,8 +87,7 @@ struct UserProfileView: View {
                             }
                             Spacer()
                         }
-                        .padding(.top, 8)
-                        .padding(.bottom, 8)
+                        .padding(.vertical, 4)
                         .padding(.horizontal)
                     }
                     
@@ -123,7 +117,7 @@ struct UserProfileView: View {
                         // Map Section
                         Map(
                             coordinateRegion: $region,
-                            annotationItems: recentPins
+                            annotationItems: pinStore.masterPins
                         ) { pin in
                             MapAnnotation(
                                 coordinate: CLLocationCoordinate2D(
@@ -138,17 +132,16 @@ struct UserProfileView: View {
                                     .shadow(radius: 3)
                             }
                         }
-                        .frame(height: 300)
+                        .frame(height: 470)
                         .cornerRadius(10)
                         .padding(.horizontal)
+                        .padding(.top, 16)
                     }
-                    .padding(.top, 12)
-                    .padding(.vertical)
-                    .padding(.bottom, 8)
+                    .padding(.vertical, 4)
                 }
             }
-            .padding(.bottom, 16)
+            .padding(.bottom, 4)
         }
-        .padding(.top, 12)
+        .padding(.top, 4)
     }
 }
