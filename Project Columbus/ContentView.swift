@@ -211,6 +211,7 @@ struct MainMapView: View {
     @State private var selectedMapItem: MKMapItem? = nil
     @State private var showFullPOIView: Bool = false
     @State private var showPOISheet: Bool = false
+    @FocusState private var isSearchFieldFocused: Bool
 
     struct POIPopup: View {
         let mapItem: MKMapItem
@@ -465,6 +466,7 @@ struct MainMapView: View {
                                                 handleSearchSelection(result)
                                                 searchText = ""
                                                 searchResults = []
+                                                isSearchFieldFocused = false 
                                             }) {
                                                 VStack(alignment: .leading) {
                                                     Text(result.title)
@@ -494,6 +496,7 @@ struct MainMapView: View {
                             .foregroundColor(.gray)
                     TextField("People, Places, Memories, Ideas", text: $searchText)
                         .autocorrectionDisabled()
+                        .focused($isSearchFieldFocused)
                         .padding(8)
  
                     if !searchText.isEmpty || !searchResults.isEmpty {
