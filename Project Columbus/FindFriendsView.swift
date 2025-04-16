@@ -16,6 +16,66 @@ struct Friend: Identifiable {
     let history: [CLLocationCoordinate2D]
 }
 
+/// A small triangular tail for the pin.
+struct PinTail: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))           // tip at bottom‑center
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))        // top‑right
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))        // top‑left
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// A map‑pin style annotation that shows the friend’s profile image in a circular pod
+/// with a small tail underneath so it looks like a real map pin.
+struct FriendPinView: View {
+    let imageName: String            // system symbol or asset name
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Circular profile image
+            Image(systemName: imageName)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.white, lineWidth: 3)
+                )
+                .background(
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.blue, Color.purple]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 50, height: 50)
+                )
+                .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+            
+            // Pin tail
+            PinTail()
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.blue, Color.purple]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 14, height: 10)
+                .offset(y: -2)
+        }
+        // Align annotation so that the tip of the tail is placed exactly
+        // at the coordinate point.
+        .offset(y: -20)
+    }
+}
+
 struct FriendHistoryView: View {
     let friend: Friend
     @State private var cameraPosition: MapCameraPosition
@@ -34,10 +94,7 @@ struct FriendHistoryView: View {
                 .stroke(Color.white, lineWidth: 4)
 
             Annotation(friend.name, coordinate: friend.location) {
-                Image(systemName: friend.imageName)
-                    .resizable()
-                    .frame(width: 30, height: 30)
-                    .foregroundColor(.gray)
+                FriendPinView(imageName: friend.imageName)
             }
         }
         .ignoresSafeArea()
@@ -103,6 +160,8 @@ struct FindFriendsView: View {
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
+    @State private var selectedFriend: Friend?
+    @State private var showChat = false
 
     let friends = [
         Friend(name: "Alice",
@@ -135,53 +194,61 @@ struct FindFriendsView: View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 Map(coordinateRegion: $region, annotationItems: friends) { friend in
-                    MapAnnotation(coordinate: friend.location) {
-                        VStack {
-                            Image(systemName: friend.imageName)
-                                .resizable()
-                                .frame(width: 30, height: 30)
-                                .foregroundColor(.gray)
-                            Text(friend.name)
-                                .font(.caption)
-                        }
+                MapAnnotation(coordinate: friend.location) {
+                        FriendPinView(imageName: friend.imageName)
                     }
                 }
                 .ignoresSafeArea()
 
                 VStack {
                     Spacer()
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            ForEach(friends) { friend in
-                                NavigationLink(destination: FriendHistoryView(friend: friend)) {
-                                    HStack {
-                                        Image(systemName: friend.imageName)
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 50, height: 50)
-                                            .clipShape(Circle())
-                                            .background(Circle().fill(Color.gray.opacity(0.2)))
-                                            .padding(.trailing, 8)
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(friend.name)
-                                                .font(.headline)
-                                                .foregroundColor(.primary)
-                                            Text("San Francisco • Now")
-                                                .font(.subheadline)
-                                                .foregroundColor(.gray)
-                                        }
-                                        Spacer()
+                    List {
+                        ForEach(friends) { friend in
+                            NavigationLink(destination: FriendHistoryView(friend: friend)) {
+                                HStack {
+                                    Image(systemName: friend.imageName)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 50, height: 50)
+                                        .clipShape(Circle())
+                                        .background(Circle().fill(Color.gray.opacity(0.2)))
+                                        .padding(.trailing, 8)
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(friend.name)
+                                            .font(.headline)
+                                            .foregroundColor(.primary)
+                                        Text("San Francisco • Now")
+                                            .font(.subheadline)
+                                            .foregroundColor(.gray)
                                     }
-                                    .padding()
-                                    .background(.ultraThinMaterial)
-                                    .cornerRadius(12)
-                                    .shadow(radius: 4)
+                                    Spacer()
                                 }
+                                .padding()
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(12)
+                                .shadow(radius: 4)
                             }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    selectedFriend = friend
+                                    showChat = true
+                                } label: {
+                                    Label("Message", systemImage: "paperplane.fill")
+                                }
+                                .tint(.blue)
+                            }
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                         }
-                        .padding()
                     }
+                    .listStyle(.plain)
                     .frame(maxHeight: UIScreen.main.bounds.height / 3)
+                }
+            } // end ZStack
+            .sheet(isPresented: $showChat) {
+                if let friend = selectedFriend {
+                    FriendHistoryView(friend: friend)
                 }
             }
         }
