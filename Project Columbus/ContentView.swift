@@ -1,98 +1,3 @@
-struct CreatePostView: View {
-    @State private var placeName: String = ""
-    @State private var location: String = ""
-    @State private var rating: Int = 0
-    @State private var recommendation: Bool = false
-    @State private var recommendedTo: String = "Everyone"
-    private let recommendedOptions = ["Everyone", "Family", "Friends"]
-    @State private var postContent: String = ""
-    @State private var selectedImage: Image? = nil
-    @State private var showingImagePicker: Bool = false
-    @State private var isFollowingUser: Bool = false
-    @StateObject private var locationManager = AppLocationManager()
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Create a New Post")
-                    .font(.title)
-                    .padding(.bottom, 8)
-
-                Group {
-                    Text("Place Name")
-                        .font(.headline)
-                    TextField("Enter place name", text: $placeName)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                }
-
-                Group {
-                    Text("Rating")
-                        .font(.headline)
-                    HStack {
-                        ForEach(1..<11) { star in  // Change the range to 1..<11 for 10 stars
-                            Image(systemName: star <= rating ? "star.fill" : "star")
-                                .foregroundColor(.yellow)
-                                .onTapGesture {
-                                    rating = star
-                                }
-                        }
-                    }
-                }
-
-                Group {
-                    Toggle("Recommendation", isOn: $recommendation)
-                    if recommendation {
-                        Picker("Recommended To", selection: $recommendedTo) {
-                            ForEach(recommendedOptions, id: \.self) { option in
-                                Text(option)
-                            }
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                    }
-                }
-
-                Group {
-                    Text("Post Content")
-                        .font(.headline)
-                    TextField("Enter your post content", text: $postContent)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                }
-
-                Group {
-                    Button(action: {
-                        // Action to show image picker
-                        showingImagePicker = true
-                    }) {
-                        HStack {
-                            Image(systemName: "photo")
-                            Text("Select Image")
-                        }
-                    }
-                    if let image = selectedImage {
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 200)
-                    }
-                }
-
-                Button(action: {
-                    // Submit post action
-                }) {
-                    Text("Post")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(10)
-                }
-            }
-            .padding()
-        }
-        // .sheet(isPresented: $showingImagePicker) { ImagePicker(selectedImage: $selectedImage) }
-    }
-}
 
 struct FullPOIView: View {
     let mapItem: MKMapItem
@@ -530,7 +435,7 @@ struct MainMapView: View {
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.gray)
-                        TextField("Search places or friends", text: $searchText)
+                        TextField("Where will you explore next?", text: $searchText)
                             .autocorrectionDisabled()
                             .padding(8)
 
@@ -545,8 +450,10 @@ struct MainMapView: View {
                         }
                     }
                     .padding(10)
-                    .background(Color(.systemBackground).opacity(0.9))
-                    .cornerRadius(40)
+                    .background(.ultraThinMaterial)
+                    .blur(radius: 0.3)
+                    .cornerRadius(10)
+                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                     .padding(.horizontal)
                     .padding(.top, 5)
                 }
@@ -564,9 +471,9 @@ struct MainMapView: View {
                             showSettingsSheet = true
                         }) {
                             Image(systemName: "gearshape.fill")
-                                .foregroundColor(.white)
+                                .foregroundColor(.gray)
                                 .padding()
-                                .background(Color.black)
+                                .background(.ultraThinMaterial)
                                 .clipShape(Circle())
                                 .shadow(radius: 4)
                         }
@@ -582,9 +489,9 @@ struct MainMapView: View {
                             requestUserLocation()
                         }) {
                             Image(systemName: "location.fill")
-                                .foregroundColor(.white)
+                                .foregroundColor(.blue)
                                 .padding()
-                                .background(Color.blue)
+                                .background(.ultraThinMaterial)
                                 .clipShape(Circle())
                                 .shadow(radius: 4)
                         }
@@ -610,9 +517,9 @@ struct MainMapView: View {
                 .padding()
                 .padding(.bottom, 25)
                 .background(
-                    Color.black.opacity(0.5)
+                    Color.black.opacity(0.2)
                         .background(.ultraThinMaterial)
-                        .blur(radius: 0)
+                        .blur(radius: 0.3)
                         .clipShape(RoundedRectangle(cornerRadius: 0))
                         .padding(.horizontal, 0)
                 )
@@ -672,8 +579,13 @@ struct MainMapView: View {
             // Add some initial pins
             if pinStore.masterPins.isEmpty {
                 pinStore.masterPins = [
-                    Pin(locationName: "Coffee Shop", city: "San Francisco", date: "Mar 10", latitude: 37.7750, longitude: -122.4183, reaction: .lovedIt),
-                    Pin(locationName: "Park Bench", city: "San Francisco", date: "Mar 11", latitude: 37.7740, longitude: -122.4200, reaction: .wantToGo)
+                    Pin(locationName: "Blue Bottle Coffee", city: "San Francisco", date: "Apr 15", latitude: 37.7764, longitude: -122.4231, reaction: .lovedIt, ),
+                    Pin(locationName: "Tartine Bakery", city: "San Francisco", date: "Apr 14", latitude: 37.7616, longitude: -122.4241, reaction: .lovedIt, ),
+                    Pin(locationName: "The Mill", city: "San Francisco", date: "Apr 13", latitude: 37.7763, longitude: -122.4375, reaction: .lovedIt, ),
+                    Pin(locationName: "Bi-Rite Creamery", city: "San Francisco", date: "Apr 12", latitude: 37.7615, longitude: -122.4258, reaction: .lovedIt, ),
+                    Pin(locationName: "Dolores Park", city: "San Francisco", date: "Apr 11", latitude: 37.7596, longitude: -122.4269, reaction: .wantToGo, ),
+                    Pin(locationName: "City Lights Booksellers", city: "San    Francisco", date: "Apr 10", latitude: 37.7975, longitude: -122.4060, reaction: .lovedIt, ),
+                    Pin(locationName: "Ferry Building Marketplace", city: "San Francisco", date: "Apr 09", latitude: 37.7955, longitude: -122.3937, reaction: .lovedIt, )
                 ]
             }
         }

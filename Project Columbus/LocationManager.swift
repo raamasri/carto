@@ -6,9 +6,11 @@
 //
 import CoreLocation
 import Combine
+import MapKit
 
 class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
+    @Published var location: CLLocationCoordinate2D? = nil
 
     override init() {
         super.init()
@@ -28,5 +30,18 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
         @unknown default:
             break
         }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let newLocation = locations.last {
+            self.location = newLocation.coordinate
+        }
+    }
+
+    var region: MKCoordinateRegion {
+        MKCoordinateRegion(
+            center: location ?? CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        )
     }
 }

@@ -27,27 +27,31 @@ struct LiveFeedView: View {
                 TabView(selection: $selectedTab) {
                     // Friends Tab
                     List(pinStore.masterPins.reversed()) { pin in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(pin.locationName)
-                                .font(.headline)
-                            Text("City: \(pin.city) • \(pin.date)")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-
-                            Text("Posted by @mojojojo23")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-
-                            pinActions(pin: pin)
-                        }
-                        .padding(.vertical, 4)
+                        PinRowView(
+                            pin: pin,
+                            isLoved: lovedPins.contains(pin.id),
+                            toggleLove: {
+                                if lovedPins.contains(pin.id) {
+                                    lovedPins.remove(pin.id)
+                                } else {
+                                    lovedPins.insert(pin.id)
+                                }
+                            },
+                            share: {
+                                sharePin(pin)
+                            }
+                        )
                         .onTapGesture {
                             selectedPin = pin
                             region = MKCoordinateRegion(
                                 center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
                                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                             )
-                            showMap = true
+
+                            // Slight delay to allow region update to take effect
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showMap = true
+                            }
                         }
                     }
                     .tag(0)
@@ -65,48 +69,24 @@ struct LiveFeedView: View {
             .navigationTitle("Live Feed")
             .sheet(isPresented: $showMap) {
                 if let pin = selectedPin {
-                    Map(coordinateRegion: $region, annotationItems: [pin]) { pin in
-                        MapMarker(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude), tint: .red)
+                    ZStack(alignment: .topTrailing) {
+                        Map(coordinateRegion: $region, annotationItems: [pin]) { pin in
+                            MapMarker(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude), tint: .red)
+                        }
+                        .edgesIgnoringSafeArea(.all)
+
+                        Button(action: {
+                            showMap = false
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.gray)
+                                .padding()
+                        }
                     }
-                    .edgesIgnoringSafeArea(.all)
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private func pinActions(pin: Pin) -> some View {
-        HStack(spacing: 20) {
-            Button(action: {
-                if lovedPins.contains(pin.id) {
-                    lovedPins.remove(pin.id)
-                } else {
-                    lovedPins.insert(pin.id)
-                }
-            }) {
-                Label("", systemImage: lovedPins.contains(pin.id) ? "heart.fill" : "heart")
-            }
-
-            Button(action: {
-                print("Comment tapped for \(pin.locationName)")
-            }) {
-                Label("", systemImage: "bubble.right")
-            }
-
-            Button(action: {
-                sharePin(pin)
-            }) {
-                Label("", systemImage: "square.and.arrow.up")
-            }
-
-            Button(action: {
-                print("Saved \(pin.locationName) to collection")
-            }) {
-                Label("", systemImage: "bookmark")
-            }
-        }
-        .font(.footnote)
-        .foregroundColor(.blue)
     }
 
     func sharePin(_ pin: Pin) {
@@ -117,5 +97,90 @@ struct LiveFeedView: View {
            let rootVC = scene.windows.first?.rootViewController {
             rootVC.present(activityVC, animated: true, completion: nil)
         }
+    }
+}
+
+struct PinRowView: View {
+    let pin: Pin
+    let isLoved: Bool
+    let toggleLove: () -> Void
+    let share: () -> Void
+
+    var body: some View {
+        
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(pin.locationName)
+                    .font(.headline)
+                Text("Posted by @mojojojo23")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 20) {
+                    Button(action: toggleLove) {
+                        Label("", systemImage: isLoved ? "heart.fill" : "heart")
+                    }
+                    Button(action: {
+                        print("Comment tapped for \(pin.locationName)")
+                    }) {
+                        Label("", systemImage: "bubble.right")
+                    }
+                    Button(action: share) {
+                        Label("", systemImage: "square.and.arrow.up")
+                    }
+                    Button(action: {
+                        print("Saved \(pin.locationName) to collection")
+                    }) {
+                        Label("", systemImage: "bookmark")
+                    }
+                }
+                .font(.footnote)
+                .foregroundColor(.blue)
+            }
+            .padding(.leading, 4) // Added padding to the leading edge
+
+            Spacer()
+
+            NavigationLink(destination: POIView(pin: pin)) {
+                Map(coordinateRegion: .constant(MKCoordinateRegion(
+                    center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+                    span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
+                )), interactionModes: [])
+                    .frame(width: 100, height: 80)
+                    .cornerRadius(8)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 12) // Updated horizontal padding
+        .padding(.vertical, 4)
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+    }
+}
+
+struct POIView: View {
+    let pin: Pin
+    @State private var region: MKCoordinateRegion
+
+    init(pin: Pin) {
+        self.pin = pin
+        _region = State(initialValue: MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        ))
+    }
+
+    var body: some View {
+        VStack {
+            Map(coordinateRegion: $region, annotationItems: [pin]) { pin in
+                MapMarker(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude), tint: .red)
+            }
+            .edgesIgnoringSafeArea(.all)
+
+            Text(pin.locationName)
+                .font(.headline)
+                .padding()
+            // Additional POI details can be added here
+        }
+        .navigationTitle(pin.locationName)
     }
 }
