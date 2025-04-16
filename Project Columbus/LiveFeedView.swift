@@ -11,6 +11,7 @@ struct LiveFeedView: View {
     @State private var showMap = false
     @State private var lovedPins: Set<UUID> = []
     @State private var selectedTab = 0
+    @State private var showDetail = false
     let tabs = ["Friends", "Following", "For You"]
 
     var body: some View {
@@ -40,7 +41,9 @@ struct LiveFeedView: View {
                                 },
                                 share: {
                                     sharePin(pin)
-                                }
+                                },
+                                selectedPin: $selectedPin,
+                                showDetail: $showDetail
                             )
                             .onTapGesture {
                                 selectedPin = pin
@@ -49,9 +52,9 @@ struct LiveFeedView: View {
                                     span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                                 )
 
-                                // Slight delay to allow region update to take effect
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                     showMap = true
+                                    showDetail = true // ← ADD THIS
                                 }
                             }
                         }
@@ -89,6 +92,16 @@ struct LiveFeedView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showDetail) {
+                if let pin = selectedPin {
+                    LocationDetailView(
+                        mapItem: MKMapItem(placemark: MKPlacemark(
+                            coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+                        )),
+                        onAddPin: { _ in }
+                    )
+                }
+            }
         }
     }
 
@@ -108,39 +121,47 @@ struct PinRowView: View {
     let isLoved: Bool
     let toggleLove: () -> Void
     let share: () -> Void
+    @Binding var selectedPin: Pin?
+    @Binding var showDetail: Bool
 
     var body: some View {
         
         HStack {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(pin.locationName)
-                    .font(.headline)
-                Text("Posted by @mojojojo23")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            Button(action: {
+                selectedPin = pin
+                showDetail = true
+            }) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(pin.locationName)
+                        .font(.headline)
+                    Text("Posted by @mojojojo")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
 
-                HStack(spacing: 20) {
-                    Button(action: toggleLove) {
-                        Label("", systemImage: isLoved ? "heart.fill" : "heart")
+                    HStack(spacing: 20) {
+                        Button(action: toggleLove) {
+                            Label("", systemImage: isLoved ? "heart.fill" : "heart")
+                        }
+                        Button(action: {
+                            print("Comment tapped for \(pin.locationName)")
+                        }) {
+                            Label("", systemImage: "bubble.right")
+                        }
+                        Button(action: share) {
+                            Label("", systemImage: "square.and.arrow.up")
+                        }
+                        Button(action: {
+                            print("Saved \(pin.locationName) to collection")
+                        }) {
+                            Label("", systemImage: "bookmark")
+                        }
                     }
-                    Button(action: {
-                        print("Comment tapped for \(pin.locationName)")
-                    }) {
-                        Label("", systemImage: "bubble.right")
-                    }
-                    Button(action: share) {
-                        Label("", systemImage: "square.and.arrow.up")
-                    }
-                    Button(action: {
-                        print("Saved \(pin.locationName) to collection")
-                    }) {
-                        Label("", systemImage: "bookmark")
-                    }
+                    .font(.footnote)
+                    .foregroundColor(.blue)
                 }
-                .font(.footnote)
-                .foregroundColor(.blue)
+                .padding(.top, 6) // Added padding for vertical balance
+                .padding(.leading, 4) // Added padding to the leading edge
             }
-            .padding(.leading, 4) // Added padding to the leading edge
 
             Spacer()
 
@@ -154,9 +175,9 @@ struct PinRowView: View {
             }
             .buttonStyle(PlainButtonStyle())
         }
-        .padding(.horizontal, 12) // Updated horizontal padding
-        .padding(.vertical, 4)
-        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .padding(.horizontal, 16) // Updated horizontal padding
+        .padding(.vertical, 8) // Updated vertical padding
+        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)) // Updated list row insets
     }
 }
 
