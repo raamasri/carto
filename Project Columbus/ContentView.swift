@@ -572,7 +572,25 @@ struct MainMapView: View {
             VStack {
                 Spacer()
                 HStack {
-                    NavBarButton(icon: "house", selected: $selectedTab, index: 0)
+                    Button(action: {
+                        selectedTab = 0
+                        let allPins = pinStore.masterPins
+                        if !allPins.isEmpty {
+                            let averageLatitude = allPins.map { $0.latitude }.reduce(0, +) / Double(allPins.count)
+                            let averageLongitude = allPins.map { $0.longitude }.reduce(0, +) / Double(allPins.count)
+                            let center = CLLocationCoordinate2D(latitude: averageLatitude, longitude: averageLongitude)
+                            withAnimation {
+                                cameraPosition = .region(MKCoordinateRegion(
+                                    center: center,
+                                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                                ))
+                            }
+                        }
+                    }) {
+                        Image(systemName: "house")
+                            .font(.title2)
+                            .foregroundColor(selectedTab == 0 ? .blue : .gray)
+                    }
                     Spacer()
                     NavBarButton(icon: "person.2", selected: $selectedTab, index: 1)
                     Spacer()
