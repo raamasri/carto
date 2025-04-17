@@ -54,6 +54,8 @@ struct UserProfileView: View {
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var selectedUIImage: UIImage? = nil
     @State private var profileImage: Image? = nil
+    @State private var isEditingProfile = false
+    @State private var tempBio = ""
     
     var body: some View {
         VStack(spacing: 16) {
@@ -116,7 +118,10 @@ struct UserProfileView: View {
                     
                     VStack(spacing: 8) {
                         HStack(spacing: 16) {
-                            Button(action: {}) {
+                            Button(action: {
+                                tempBio = bio          // preload current bio
+                                isEditingProfile = true
+                            }) {
                                 Text("Edit Profile")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
@@ -195,6 +200,16 @@ struct UserProfileView: View {
                 profileImage = Image(uiImage: cropped)
                 selectedUIImage = nil          // dismiss after cropping
             }
+        }
+        .sheet(isPresented: $isEditingProfile) {
+            EditProfileSheet(bio: $tempBio,
+                             onSave: {
+                                 bio = tempBio
+                                 isEditingProfile = false
+                             },
+                             onCancel: {
+                                 isEditingProfile = false
+                             })
         }
     }
 }
@@ -280,6 +295,33 @@ struct CircleCropperView: View {
             let rect = CGRect(origin: .zero, size: square.size)
             UIBezierPath(ovalIn: rect).addClip()
             square.draw(in: rect)
+        }
+    }
+}
+
+struct EditProfileSheet: View {
+    @Binding var bio: String
+    var onSave: () -> Void
+    var onCancel: () -> Void
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Bio")) {
+                    TextEditor(text: $bio)
+                        .frame(minHeight: 120)
+                }
+            }
+            .navigationTitle("Edit Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { onCancel() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { onSave() }
+                }
+            }
         }
     }
 }
