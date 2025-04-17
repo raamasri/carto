@@ -219,7 +219,9 @@ struct MainMapView: View {
         @Binding var showPOISheet: Bool
         @Binding var showFullPOIView: Bool
         @EnvironmentObject var pinStore: PinStore
-        @State private var showAddedAlert = false
+    @State private var showAddedAlert = false
+    @State private var showListDialog = false
+    private let defaultLists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
     // Removed lookAroundScene since it's no longer needed
 
     var body: some View {
@@ -272,25 +274,33 @@ struct MainMapView: View {
                 }
                 ZStack(alignment: .bottomLeading) {
                     Button("Add to List") {
-                        let newPin = Pin(
-                            locationName: mapItem.name ?? "Unknown Place",
-                            city: mapItem.placemark.locality ?? "",
-                            date: formattedDate(),
-                            latitude: mapItem.placemark.coordinate.latitude,
-                            longitude: mapItem.placemark.coordinate.longitude,
-                            reaction: .lovedIt
-                        )
-                        pinStore.addToFavorites(newPin)
-                        showAddedAlert = true
+                        showListDialog = true
                     }
                     .padding(.leading)
-                    
-                HStack {
-                    Spacer()
-                    Button("Show More") {
-                        showFullPOIView = true
+                    .confirmationDialog("Choose a list", isPresented: $showListDialog, titleVisibility: .visible) {
+                        ForEach(defaultLists, id: \.self) { list in
+                            Button(list) {
+                                let newPin = Pin(
+                                    locationName: mapItem.name ?? "Unknown Place",
+                                    city: mapItem.placemark.locality ?? "",
+                                    date: formattedDate(),
+                                    latitude: mapItem.placemark.coordinate.latitude,
+                                    longitude: mapItem.placemark.coordinate.longitude,
+                                    reaction: .lovedIt
+                                )
+                                pinStore.addPin(newPin, to: list)
+                                showAddedAlert = true
+                            }
+                        }
+                        Button("Cancel", role: .cancel) { }
                     }
-                }
+
+                    HStack {
+                        Spacer()
+                        Button("Show More") {
+                            showFullPOIView = true
+                        }
+                    }
                 }
                 .padding(.top, 8)
                 }
@@ -300,7 +310,7 @@ struct MainMapView: View {
                 .cornerRadius(16)
                 .padding(.horizontal, 4)
                 .padding(.bottom, 60)
-                .alert("Added to Favorites", isPresented: $showAddedAlert) {
+                .alert("Added to List", isPresented: $showAddedAlert) {
                     Button("OK", role: .cancel) { }
                 }
             }

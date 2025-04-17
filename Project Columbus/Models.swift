@@ -28,7 +28,7 @@ struct Pin: Identifiable, Equatable {
 struct PinCollection: Identifiable {
     let id = UUID()
     let name: String
-    let pins: [Pin]
+    var pins: [Pin]
 }
 
 // MARK: - User Model
