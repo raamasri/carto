@@ -45,7 +45,7 @@ struct StartupView: View {
                     .padding(.horizontal, 50)
                     .padding(.top, 300)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .offset(x: motion.x * 30, y: motion.y * 30)
+                    .offset(x: motion.x * 30, y: motion.y * 60)
                     .onAppear {
                         let fullText = "CARTO"
                         animatedText = ""

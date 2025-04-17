@@ -7,6 +7,8 @@
 
 import SwiftUI
 import MapKit
+import PhotosUI
+import UIKit
 
 struct UserProfileView: View {
     let currentUserID = UUID()
@@ -47,6 +49,11 @@ struct UserProfileView: View {
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
+    @State private var showChangePicturePrompt = false
+    @State private var isShowingPhotoPicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var selectedUIImage: UIImage? = nil
+    @State private var profileImage: Image? = nil
     
     var body: some View {
         VStack(spacing: 16) {
@@ -63,6 +70,18 @@ struct UserProfileView: View {
                     // Profile Header
                     ZStack(alignment: .topTrailing) {
                         HStack(alignment: .center, spacing: 12) {
+                        if let profileImage {
+                            profileImage
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 80, height: 80)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                .shadow(radius: 4)
+                                .onTapGesture {
+                                    showChangePicturePrompt = true
+                                }
+                        } else {
                             Image(systemName: "person.circle.fill")
                                 .resizable()
                                 .foregroundColor(.gray)
@@ -71,6 +90,10 @@ struct UserProfileView: View {
                                 .clipShape(Circle())
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 .shadow(radius: 4)
+                                .onTapGesture {
+                                    showChangePicturePrompt = true
+                                }
+                        }
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("@\(profileUser.username)")
@@ -143,5 +166,120 @@ struct UserProfileView: View {
             .padding(.bottom, 4)
         }
         .padding(.top, 4)
+        .confirmationDialog(
+            "Change profile picture?",
+            isPresented: $showChangePicturePrompt,
+            titleVisibility: .visible
+        ) {
+            Button("Change Profile Picture") {
+                isShowingPhotoPicker = true
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .photosPicker(
+            isPresented: $isShowingPhotoPicker,
+            selection: $selectedPhotoItem,
+            matching: .images,
+            photoLibrary: .shared())
+        .onChange(of: selectedPhotoItem) { newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    selectedUIImage = uiImage
+                }
+            }
+        }
+        .sheet(item: $selectedUIImage) { uiImage in
+            CircleCropperView(image: uiImage) { cropped in
+                profileImage = Image(uiImage: cropped)
+                selectedUIImage = nil          // dismiss after cropping
+            }
+        }
+    }
+}
+
+// Allow UIImage to be used with .sheet(item:)
+extension UIImage: Identifiable {
+    public var id: UUID {
+        // use the object identifier so the same image isn't re‑presented repeatedly
+        UUID()
+    }
+}
+
+struct CircleCropperView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage
+    @State private var scale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    
+    var onCrop: (UIImage) -> Void
+    
+    init(image: UIImage, onCrop: @escaping (UIImage) -> Void) {
+        _image = State(initialValue: image)
+        self.onCrop = onCrop
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack {
+                GeometryReader { geo in
+                    ZStack {
+                        Color.black.opacity(0.85).ignoresSafeArea()
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .scaleEffect(scale)
+                            .offset(offset)
+                            .gesture(
+                                MagnificationGesture()
+                                    .onChanged { value in
+                                        let delta = value / scale
+                                        scale *= delta
+                                    }
+                                    .simultaneously(with:
+                                        DragGesture().onChanged { value in
+                                            offset = value.translation
+                                        }
+                                    )
+                            )
+                            .clipShape(Circle())
+                            .frame(
+                                width: min(geo.size.width, geo.size.height) * 0.8,
+                                height: min(geo.size.width, geo.size.height) * 0.8
+                            )
+                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    }
+                }
+                .frame(
+                    height: min(UIScreen.main.bounds.width, UIScreen.main.bounds.height) * 0.8
+                )
+            }
+            .toolbar {
+                ToolbarItem(placement: .bottomBar) {
+                    Button("Done") {
+                        let cropped = cropToCircle()
+                        onCrop(cropped)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func cropToCircle() -> UIImage {
+        let side = min(image.size.width, image.size.height)
+        let origin = CGPoint(x: (image.size.width - side) / 2,
+                             y: (image.size.height - side) / 2)
+        let cropRect = CGRect(origin: origin, size: CGSize(width: side, height: side))
+        guard let cgCropped = image.cgImage?.cropping(to: cropRect) else { return image }
+        let square = UIImage(cgImage: cgCropped)
+        
+        let renderer = UIGraphicsImageRenderer(size: square.size)
+        return renderer.image { ctx in
+            let rect = CGRect(origin: .zero, size: square.size)
+            UIBezierPath(ovalIn: rect).addClip()
+            square.draw(in: rect)
+        }
     }
 }
