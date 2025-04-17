@@ -17,6 +17,7 @@ struct SignUpView: View {
     @State private var showBuildProfile = false
     @State private var profileImage: UIImage? = nil
     @State private var showImagePicker = false
+    @State private var fadeOut = false
 
     var body: some View {
         ZStack {
@@ -131,7 +132,12 @@ struct SignUpView: View {
                     .submitLabel(.go)
                     .onSubmit {
                         if !username.isEmpty && !email.isEmpty && !phone.isEmpty && !password.isEmpty {
-                            showBuildProfile = true
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                fadeOut = true
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                showBuildProfile = true
+                            }
                         }
                     }
                     .onTapGesture {
@@ -156,8 +162,8 @@ struct SignUpView: View {
                     Text("Choose Profile Image")
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Color.black)
-                        .foregroundColor(.white)
+                        .background(Color.white)
+                        .foregroundColor(.black)
                         .cornerRadius(8)
                         .bold()
                 }
@@ -172,7 +178,12 @@ struct SignUpView: View {
 
                 Button(action: {
                     if !username.isEmpty && !email.isEmpty && !phone.isEmpty && !password.isEmpty {
-                        showBuildProfile = true
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            fadeOut = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            showBuildProfile = true
+                        }
                     }
                 }) {
                     Text("Sign Up")
@@ -208,7 +219,7 @@ struct SignUpView: View {
                 .cornerRadius(10)
             }
             .padding()
-            .opacity(0.95)
+            .opacity(fadeOut ? 0 : 1)
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $profileImage)

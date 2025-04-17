@@ -36,7 +36,12 @@ import Combine
 import Foundation
 
 // MARK: - Models and Enums
-
+// MARK: - Global Spacing & Radius Constants
+struct AppSpacing {
+    static let horizontal: CGFloat = 16
+    static let vertical: CGFloat = 12
+    static let cornerRadius: CGFloat = 12
+}
 
 
 
@@ -266,7 +271,7 @@ struct MainMapView: View {
                 }
                 LookAroundPreview(coordinate: mapItem.placemark.coordinate)
                     .frame(height: 200)
-                    .cornerRadius(12)
+                    .cornerRadius(AppSpacing.cornerRadius)
                 if let distance = userLocation.map({ CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)) }) {
                     Text(String(format: "Distance: %.2f km", distance / 1000))
                         .font(.subheadline)
@@ -307,7 +312,7 @@ struct MainMapView: View {
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(Color(.systemBackground).opacity(0.9))
-                .cornerRadius(16)
+                .cornerRadius(AppSpacing.cornerRadius)
                 .padding(.horizontal, 4)
                 .padding(.bottom, 60)
                 .alert("Added to List", isPresented: $showAddedAlert) {
@@ -529,13 +534,13 @@ struct MainMapView: View {
                         }
                     }
                     }
-                    .padding(10)
+                    .padding(AppSpacing.vertical)
                     .background(.ultraThinMaterial)
                     .blur(radius: 0.3)
-                    .cornerRadius(20)
+                    .cornerRadius(AppSpacing.cornerRadius)
                     .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                    .padding(.horizontal)
-                    .padding(.top, 5)
+                    .padding(.horizontal, AppSpacing.horizontal)
+                    .padding(.top, AppSpacing.vertical)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .onChange(of: searchText) { newValue in

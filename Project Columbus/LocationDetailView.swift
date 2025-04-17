@@ -12,7 +12,8 @@ struct LocationDetailView: View {
     let mapItem: MKMapItem
     let onAddPin: (Pin) -> Void
 
-    @State private var showCollectionSheet = false
+    @State private var showListDialog = false
+    private let defaultLists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
     @State private var region: MKCoordinateRegion
     @EnvironmentObject var pinStore: PinStore
 
@@ -86,7 +87,7 @@ struct LocationDetailView: View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 Button(action: {
-                    showCollectionSheet = true
+                    showListDialog = true
                 }) {
                     HStack {
                         Spacer()
@@ -117,48 +118,26 @@ struct LocationDetailView: View {
                     .cornerRadius(10)
                 }
             }
-            .sheet(isPresented: $showCollectionSheet) {
-                collectionPickerSheet
-            }
-        }
-    }
-
-    private var collectionPickerSheet: some View {
-        NavigationView {
-            collectionList
-                .navigationTitle("Select a Collection")
-        }
-    }
-
-    private var collectionList: some View {
-        List {
-            ForEach(pinStore.collections) { collection in
-                Button(action: {
-                    addPin(to: collection)
-                    showCollectionSheet = false
-                }) {
-                    Text("Add to \(collection.name)")
+            .confirmationDialog("Choose a list", isPresented: $showListDialog, titleVisibility: .visible) {
+                ForEach(defaultLists, id: \.self) { list in
+                    Button(list) {
+                        let newPin = Pin(
+                            locationName: mapItem.name ?? "Unknown Place",
+                            city: mapItem.placemark.locality ?? "Unknown City",
+                            date: formattedDate(),
+                            latitude: mapItem.placemark.coordinate.latitude,
+                            longitude: mapItem.placemark.coordinate.longitude,
+                            reaction: .wantToGo
+                        )
+                        pinStore.addPin(newPin, to: list)
+                    }
                 }
+                Button("Cancel", role: .cancel) {}
             }
         }
     }
 
-    private func addPin(to collection: PinCollection) {
-        let newPin = Pin(
-            locationName: mapItem.name ?? "Unknown Place",
-            city: mapItem.placemark.locality ?? "Unknown City",
-            date: formattedDate(),
-            latitude: mapItem.placemark.coordinate.latitude,
-            longitude: mapItem.placemark.coordinate.longitude,
-            reaction: .wantToGo
-        )
-        if let index = pinStore.collections.firstIndex(where: { $0.id == collection.id }) {
-            pinStore.collections[index] = PinCollection(
-                name: pinStore.collections[index].name,
-                pins: pinStore.collections[index].pins + [newPin]
-            )
-        }
-    }
+// Removed unused collectionPickerSheet, collectionList, and addPin(to:) as they are no longer needed.
 }
 
 struct LookAroundPreview: UIViewControllerRepresentable {

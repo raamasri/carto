@@ -10,10 +10,10 @@ struct LiveFeedView: View {
     @State private var selectedPin: Pin? = nil
     @State private var showMap = false
     @State private var lovedPins: Set<UUID> = []
-    @State private var selectedTab = 0
+    @State private var selectedTab = 3
     @State private var showDetail = false
     @State private var showVideoFeed = false
-    let tabs = ["Friends", "Following", "For You"]
+    let tabs = ["History", "Friends", "Following", "For You"]
 
     var body: some View {
         NavigationView {
@@ -27,6 +27,10 @@ struct LiveFeedView: View {
                 .padding()
 
                 TabView(selection: $selectedTab) {
+                    // History Tab Placeholder
+                    Text("History content goes here")
+                        .tag(0)
+
                     // Friends Tab
                     List(pinStore.masterPins.reversed()) { pin in
                         PinRowView(
@@ -58,15 +62,44 @@ struct LiveFeedView: View {
                             }
                         }
                     }
-                    .tag(0)
+                    .tag(1)
 
                     // Following Tab Placeholder
                     Text("Following content goes here")
-                        .tag(1)
-
-                    // For You Tab Placeholder
-                    Text("For You content goes here")
                         .tag(2)
+
+                    // For You Tab
+                    List(pinStore.masterPins.reversed()) { pin in
+                        PinRowView(
+                            pin: pin,
+                            isLoved: lovedPins.contains(pin.id),
+                            toggleLove: {
+                                if lovedPins.contains(pin.id) {
+                                    lovedPins.remove(pin.id)
+                                } else {
+                                    lovedPins.insert(pin.id)
+                                }
+                            },
+                            share: {
+                                sharePin(pin)
+                            },
+                            selectedPin: $selectedPin,
+                            showDetail: $showDetail
+                        )
+                        .onTapGesture {
+                            selectedPin = pin
+                            region = MKCoordinateRegion(
+                                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                            )
+
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                showMap = true
+                                showDetail = true
+                            }
+                        }
+                    }
+                    .tag(3)
                 }
                 .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             }
@@ -225,4 +258,3 @@ struct POIView: View {
         .navigationTitle(pin.locationName)
     }
 }
-

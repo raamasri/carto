@@ -7,10 +7,12 @@ struct LoginView: View {
     @FocusState private var usernameFocused: Bool
     @FocusState private var passwordFocused: Bool
 
+    @AppStorage("shouldFadeInMap") var shouldFadeInMap = false
     @State private var username = ""
     @State private var password = ""
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var fadeOut = false
 
     var body: some View {
         ZStack {
@@ -68,7 +70,15 @@ struct LoginView: View {
                             showError = true
                         } else {
                             authManager.logIn(username: username, password: password)
-                            presentationMode.wrappedValue.dismiss()
+                            shouldFadeInMap = true
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                fadeOut = true
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                withAnimation(.easeInOut(duration: 0.5)) {
+                                    presentationMode.wrappedValue.dismiss()
+                                }
+                            }
                         }
                     }
                     .onTapGesture {
@@ -93,7 +103,14 @@ struct LoginView: View {
                         showError = true
                     } else {
                         authManager.logIn(username: username, password: password)
-                        presentationMode.wrappedValue.dismiss()
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            fadeOut = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                presentationMode.wrappedValue.dismiss()
+                            }
+                        }
                     }
                 }) {
                     Text("Log In")
@@ -131,6 +148,7 @@ struct LoginView: View {
                 .cornerRadius(10)
             }
             .padding()
+            .opacity(fadeOut ? 0 : 1)
         }
     }
 }
