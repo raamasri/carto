@@ -15,7 +15,7 @@ struct UserProfileView: View {
     
     @State var profileUser = User(
         id: UUID(),
-        username: "cartographer",
+        username: "",
         isPrivate: false,
         followers: Array(repeating: UUID(), count: 5),
         following: Array(repeating: UUID(), count: 10),
@@ -210,6 +210,13 @@ struct UserProfileView: View {
                              onCancel: {
                                  isEditingProfile = false
                              })
+        }
+        .onAppear {
+            Task {
+                if let username = await SupabaseManager.shared.getCurrentUsername() {
+                    profileUser.username = username
+                }
+            }
         }
     }
 }

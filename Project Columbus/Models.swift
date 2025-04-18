@@ -34,7 +34,7 @@ struct PinCollection: Identifiable {
 // MARK: - User Model
 struct User: Identifiable {
     let id: UUID
-    let username: String
+    var username: String
     let isPrivate: Bool
     var followers: [UUID]
     var following: [UUID]

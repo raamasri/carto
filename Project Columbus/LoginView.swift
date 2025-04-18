@@ -29,7 +29,7 @@ struct LoginView: View {
                 }
                 .padding()
 
-                TextField("@carto", text: $username)
+                TextField("user@carto", text: $username)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color(UIColor.secondarySystemBackground))
@@ -65,21 +65,7 @@ struct LoginView: View {
                     .focused($passwordFocused)
                     .submitLabel(.go)
                     .onSubmit {
-                        if username.isEmpty || password.isEmpty {
-                            errorMessage = "Please enter both username and password."
-                            showError = true
-                        } else {
-                            authManager.logIn(username: username, password: password)
-                            shouldFadeInMap = true
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                fadeOut = true
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                withAnimation(.easeInOut(duration: 0.5)) {
-                                    presentationMode.wrappedValue.dismiss()
-                                }
-                            }
-                        }
+                        handleLogin()
                     }
                     .onTapGesture {
                         passwordFocused = true
@@ -98,20 +84,7 @@ struct LoginView: View {
                     )
                 
                 Button(action: {
-                    if username.isEmpty || password.isEmpty {
-                        errorMessage = "Please enter both username and password."
-                        showError = true
-                    } else {
-                        authManager.logIn(username: username, password: password)
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            fadeOut = true
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation(.easeInOut(duration: 0.5)) {
-                                presentationMode.wrappedValue.dismiss()
-                            }
-                        }
-                    }
+                    handleLogin()
                 }) {
                     Text("Log In")
                         .padding()
@@ -149,6 +122,37 @@ struct LoginView: View {
             }
             .padding()
             .opacity(fadeOut ? 0 : 1)
+        }
+    }
+
+    private func handleLogin() {
+        guard !username.isEmpty, !password.isEmpty else {
+            errorMessage = "Please enter both username and password."
+            showError = true
+            return
+        }
+
+        // Clear any previous error
+        showError = false
+
+        Task {
+            let success = await authManager.logIn(username: username, password: password)
+
+            if success {
+                shouldFadeInMap = true
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    fadeOut = true
+                }
+                // Allow fade‑out to finish before dismissing
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            } else {
+                errorMessage = "Invalid username or password. Please try again."
+                showError = true
+            }
         }
     }
 }

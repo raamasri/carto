@@ -11,6 +11,7 @@ import SwiftData
 @main
 struct Project_ColumbusApp: App {
     @StateObject var pinStore = PinStore()
+    @StateObject var authManager = AuthManager()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -29,6 +30,10 @@ struct Project_ColumbusApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(pinStore)
+                .environmentObject(authManager)
+                .onAppear {
+                    authManager.checkSession()
+                }
         }
         .modelContainer(sharedModelContainer)
     }

@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		7D8D5FE02DB1CCA000377CA9 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FDF2DB1CCA000377CA9 /* Auth */; };
+		7D8D5FE22DB1CCA000377CA9 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FE12DB1CCA000377CA9 /* Functions */; };
+		7D8D5FE42DB1CCA000377CA9 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FE32DB1CCA000377CA9 /* PostgREST */; };
+		7D8D5FE62DB1CCA000377CA9 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FE52DB1CCA000377CA9 /* Realtime */; };
+		7D8D5FE82DB1CCA000377CA9 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FE72DB1CCA000377CA9 /* Storage */; };
+		7D8D5FEE2DB1CCFB00377CA9 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FED2DB1CCFB00377CA9 /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		38BB884C2D8766DA00D84636 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +61,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7D8D5FE42DB1CCA000377CA9 /* PostgREST in Frameworks */,
+				7D8D5FE22DB1CCA000377CA9 /* Functions in Frameworks */,
+				7D8D5FEE2DB1CCFB00377CA9 /* Supabase in Frameworks */,
+				7D8D5FE02DB1CCA000377CA9 /* Auth in Frameworks */,
+				7D8D5FE82DB1CCA000377CA9 /* Storage in Frameworks */,
+				7D8D5FE62DB1CCA000377CA9 /* Realtime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +93,7 @@
 				38BB883B2D8766D900D84636 /* Project Columbus */,
 				38BB884E2D8766DA00D84636 /* Project ColumbusTests */,
 				38BB88582D8766DA00D84636 /* Project ColumbusUITests */,
+				7D8D5FEC2DB1CCED00377CA9 /* Frameworks */,
 				38BB883A2D8766D900D84636 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +106,13 @@
 				38BB88552D8766DA00D84636 /* Project ColumbusUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7D8D5FEC2DB1CCED00377CA9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +135,12 @@
 			);
 			name = "Project Columbus";
 			packageProductDependencies = (
+				7D8D5FDF2DB1CCA000377CA9 /* Auth */,
+				7D8D5FE12DB1CCA000377CA9 /* Functions */,
+				7D8D5FE32DB1CCA000377CA9 /* PostgREST */,
+				7D8D5FE52DB1CCA000377CA9 /* Realtime */,
+				7D8D5FE72DB1CCA000377CA9 /* Storage */,
+				7D8D5FED2DB1CCFB00377CA9 /* Supabase */,
 			);
 			productName = "Project Columbus";
 			productReference = 38BB88392D8766D900D84636 /* Project Columbus.app */;
@@ -195,6 +224,9 @@
 			);
 			mainGroup = 38BB88302D8766D900D84636;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 38BB883A2D8766D900D84636 /* Products */;
 			projectDirPath = "";
@@ -396,13 +428,21 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Project Columbus/Preview Content\"";
+				DEVELOPMENT_TEAM = BJPH4NFNB7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Project-Columbus-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = CARTO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app requires your location to show nearby pins and events.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UILaunchStoryboardName = valleypic;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -424,13 +464,21 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Project Columbus/Preview Content\"";
+				DEVELOPMENT_TEAM = BJPH4NFNB7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Project-Columbus-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = CARTO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app requires your location to show nearby pins and events.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UILaunchStoryboardName = valleypic;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -552,6 +600,50 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase-community/supabase-swift";
+			requirement = {
+				kind = exactVersion;
+				version = 2.26.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		7D8D5FDF2DB1CCA000377CA9 /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		7D8D5FE12DB1CCA000377CA9 /* Functions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
+		};
+		7D8D5FE32DB1CCA000377CA9 /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		7D8D5FE52DB1CCA000377CA9 /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
+		};
+		7D8D5FE72DB1CCA000377CA9 /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		7D8D5FED2DB1CCFB00377CA9 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 38BB88312D8766D900D84636 /* Project object */;
 }

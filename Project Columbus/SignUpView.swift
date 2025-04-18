@@ -1,6 +1,13 @@
 import SwiftUI
 import AuthenticationServices
 
+struct UserInsert: Codable {
+    let id: String
+    let username: String
+    let email: String
+    let phone: String
+}
+
 struct SignUpView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.presentationMode) var presentationMode
@@ -14,7 +21,6 @@ struct SignUpView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var phone = ""
-    @State private var showBuildProfile = false
     @State private var profileImage: UIImage? = nil
     @State private var showImagePicker = false
     @State private var fadeOut = false
@@ -135,9 +141,6 @@ struct SignUpView: View {
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 fadeOut = true
                             }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                                showBuildProfile = true
-                            }
                         }
                     }
                     .onTapGesture {
@@ -178,11 +181,27 @@ struct SignUpView: View {
 
                 Button(action: {
                     if !username.isEmpty && !email.isEmpty && !phone.isEmpty && !password.isEmpty {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            fadeOut = true
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                            showBuildProfile = true
+                        Task {
+                            do {
+                                try await AuthService.shared.signUp(email: email, password: password)
+                                
+                                if let userId = SupabaseManager.shared.client.auth.currentUser?.id {
+                                    let insertData = UserInsert(id: userId.uuidString, username: username, email: email, phone: phone)
+                                    _ = try await SupabaseManager.shared.client
+                                        .from("users")
+                                        .insert(insertData)
+                                        .execute()
+                                }
+                                
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    fadeOut = true
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                    presentationMode.wrappedValue.dismiss()
+                                }
+                            } catch {
+                                print("Sign up failed: \(error)")
+                            }
                         }
                     }
                 }) {
@@ -193,10 +212,6 @@ struct SignUpView: View {
                         .foregroundColor(.black)
                         .cornerRadius(8)
                         .bold()
-                }
-                .sheet(isPresented: $showBuildProfile) {
-                    BuildProfileView()
-                        .environmentObject(authManager)
                 }
 
                 SignInWithAppleButton(
