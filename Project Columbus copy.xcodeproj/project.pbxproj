@@ -215,7 +215,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 38BB88342D8766D900D84636 /* Build configuration list for PBXProject "Project Columbus" */;
+			buildConfigurationList = 38BB88342D8766D900D84636 /* Build configuration list for PBXProject "Project Columbus copy" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -427,7 +427,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Project Columbus/Project Columbus.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"Project Columbus/Preview Content\"";
 				DEVELOPMENT_TEAM = BJPH4NFNB7;
 				ENABLE_PREVIEWS = YES;
@@ -448,7 +448,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.41;
 				PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -464,7 +464,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Project Columbus/Project Columbus.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"Project Columbus/Preview Content\"";
 				DEVELOPMENT_TEAM = BJPH4NFNB7;
 				ENABLE_PREVIEWS = YES;
@@ -485,7 +485,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.41;
 				PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -565,7 +565,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		38BB88342D8766D900D84636 /* Build configuration list for PBXProject "Project Columbus" */ = {
+		38BB88342D8766D900D84636 /* Build configuration list for PBXProject "Project Columbus copy" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				38BB885D2D8766DA00D84636 /* Debug */,
