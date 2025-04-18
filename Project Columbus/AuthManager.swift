@@ -44,7 +44,38 @@ class AuthManager: ObservableObject {
             return false
         }
     }
+    
+    func signUp(email: String, password: String, username: String, phone: String) async throws {
+        do {
+        let response = try await AuthService.shared.signUp(email: email, password: password)
+            
+            let userId = response.user.id
 
+            let insertData = UserInsert(id: userId.uuidString, username: username, email: email, phone: phone)
+            _ = try await SupabaseManager.shared.client
+                .from("users")
+                .insert(insertData)
+                .execute()
+            
+            DispatchQueue.main.async {
+                self.isLoggedIn = true
+                self.currentUsername = username
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoggedIn = false
+            }
+
+            // Check for "account already exists" type of error
+            let lowercasedMessage = error.localizedDescription.lowercased()
+            if lowercasedMessage.contains("user already registered") || lowercasedMessage.contains("already exists") {
+                throw NSError(domain: "", code: 409, userInfo: [NSLocalizedDescriptionKey: "An account with this email already exists."])
+            }
+
+            throw error
+        }
+    }
+    
     func logOut() {
         Task {
             do {

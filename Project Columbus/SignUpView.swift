@@ -25,6 +25,8 @@ struct SignUpView: View {
     @State private var showImagePicker = false
     @State private var fadeOut = false
     @State private var currentNonce: String?
+    @State private var signUpError: String?
+    @State private var showErrorAlert = false
 
     var body: some View {
         ZStack {
@@ -191,15 +193,7 @@ struct SignUpView: View {
                     if !username.isEmpty && !email.isEmpty && !phone.isEmpty && !password.isEmpty {
                         Task {
                             do {
-                                try await AuthService.shared.signUp(email: email, password: password)
-                                
-                                if let userId = SupabaseManager.shared.client.auth.currentUser?.id {
-                                    let insertData = UserInsert(id: userId.uuidString, username: username, email: email, phone: phone)
-                                    _ = try await SupabaseManager.shared.client
-                                        .from("users")
-                                        .insert(insertData)
-                                        .execute()
-                                }
+                                try await authManager.signUp(email: email, password: password, username: username, phone: phone)
                                 
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     fadeOut = true
@@ -208,6 +202,12 @@ struct SignUpView: View {
                                     presentationMode.wrappedValue.dismiss()
                                 }
                             } catch {
+                                if (error as NSError).code == 409 {
+                                    signUpError = "An account with this email already exists."
+                                } else {
+                                    signUpError = error.localizedDescription
+                                }
+                                showErrorAlert = true
                                 print("Sign up failed: \(error)")
                             }
                         }
@@ -220,6 +220,13 @@ struct SignUpView: View {
                         .foregroundColor(.black)
                         .cornerRadius(8)
                         .bold()
+                }
+                .alert(isPresented: $showErrorAlert) {
+                    Alert(
+                        title: Text("Sign Up Failed"),
+                        message: Text(signUpError ?? "Unknown error"),
+                        dismissButton: .default(Text("OK"))
+                    )
                 }
 
                 SignInWithAppleButton(

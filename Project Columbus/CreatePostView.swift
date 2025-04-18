@@ -139,13 +139,23 @@ struct CreatePostView: View {
                 
                 // MARK: - Post Content Section
                 Section(header: Text("Post Content")) {
-                    TextEditor(text: $postContent)
-                        .focused($isPostContentFocused)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(minHeight: 100)
-                        .background(Color.white)
-                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray, lineWidth: 1))
-                        .padding(.vertical, 4)
+                    ZStack(alignment: .topLeading) {
+                        TextEditor(text: $postContent)
+                            .focused($isPostContentFocused)
+                            .foregroundColor(.primary)
+                            .frame(minHeight: 100)
+                            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray, lineWidth: 1))
+                            .padding(.vertical, 4)
+
+                        // Invisible TextField to detect "Return"
+                        TextField("", text: .constant(""))
+                            .submitLabel(.done)
+                            .onSubmit {
+                                isPostContentFocused = false
+                            }
+                            .frame(width: 0, height: 0)
+                            .opacity(0.01)
+                    }
                 }
                 
                 // MARK: - Images Section

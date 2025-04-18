@@ -816,6 +816,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var authManager = AuthManager()
+    @StateObject private var pinStore = PinStore()
     @AppStorage("themePreference") private var themePreference: String = "Auto"
 
     var body: some View {
@@ -825,7 +826,7 @@ struct ContentView: View {
                     MainMapView()
                         .navigationBarHidden(true)
                         .environmentObject(authManager)
-                        .environmentObject(PinStore())
+                        .environmentObject(pinStore)
                 } else {
                     StartupView()
                         .environmentObject(authManager)

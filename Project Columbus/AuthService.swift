@@ -11,8 +11,8 @@ class AuthService {
     static let shared = AuthService()
     private let client = SupabaseManager.shared.client
 
-    func signUp(email: String, password: String) async throws {
-        _ = try await client.auth.signUp(email: email, password: password)
+    func signUp(email: String, password: String) async throws -> AuthResponse {
+        return try await client.auth.signUp(email: email, password: password)
     }
 
     func login(email: String, password: String) async throws {
