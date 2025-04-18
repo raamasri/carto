@@ -15,6 +15,7 @@ import SwiftUI
 class AuthManager: ObservableObject {
     @AppStorage("biometricEnabled") private var biometricEnabled: Bool = false
     @AppStorage("biometricPromptShown") private var biometricPromptShown: Bool = false
+    @Published var appleSignInErrorMessage: String?
     
     init() {
         checkSession()
@@ -100,11 +101,19 @@ class AuthManager: ObservableObject {
             )
             self.isLoggedIn = true
             return true
-        } catch {
-            print("Apple sign-in failed:", error)
-            self.isLoggedIn = false
-            return false
+    } catch {
+        print("Apple sign-in failed:", error)
+ 
+        let lowercasedMessage = error.localizedDescription.lowercased()
+        if lowercasedMessage.contains("already registered") || lowercasedMessage.contains("already exists") {
+            self.appleSignInErrorMessage = "An account with this email already exists. Try signing in with your original method."
+        } else {
+            self.appleSignInErrorMessage = "Apple Sign-In failed. Please try again."
         }
+ 
+        self.isLoggedIn = false
+        return false
+    }
     }
     
     func checkSession() {

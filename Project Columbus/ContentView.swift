@@ -311,7 +311,7 @@ struct MainMapView: View {
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(Color(.systemBackground).opacity(0.9))
+                .background(.ultraThinMaterial)
                 .cornerRadius(AppSpacing.cornerRadius)
                 .padding(.horizontal, 4)
                 .padding(.bottom, 60)
@@ -496,11 +496,11 @@ struct MainMapView: View {
                                                 VStack(alignment: .leading) {
                                                     Text(result.title)
                                                         .font(.headline)
-                                                        .foregroundColor(.white)
+                                                        .foregroundColor(Color.primary)
                                                     if !result.subtitle.isEmpty {
                                                         Text(result.subtitle)
                                                             .font(.caption)
-                                                            .foregroundColor(.white.opacity(0.8))
+                                                            .foregroundColor(Color.secondary)
                                                     }
                                                 }
                                                 .padding()
