@@ -8,12 +8,15 @@
 import Foundation
 import Supabase
 
+@MainActor
 class AuthManager: ObservableObject {
     @Published var isLoggedIn = false
+    @Published var currentUsername: String?
 
     func logIn(username: String, password: String) async -> Bool {
         do {
             try await AuthService.shared.login(email: username, password: password)
+            self.currentUsername = username
             self.isLoggedIn = true
             return true
         } catch {

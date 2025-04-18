@@ -24,6 +24,7 @@ struct SignUpView: View {
     @State private var profileImage: UIImage? = nil
     @State private var showImagePicker = false
     @State private var fadeOut = false
+    @State private var currentNonce: String?
 
     var body: some View {
         ZStack {
@@ -128,7 +129,7 @@ struct SignUpView: View {
                         }
                     )
 
-                SecureField("password", text: $password)
+                SecureField("Password", text: $password)
                     .padding()
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(.ultraThinMaterial)
@@ -216,16 +217,41 @@ struct SignUpView: View {
 
                 SignInWithAppleButton(
                     onRequest: { request in
+                        let nonce = SupabaseManager.shared.generateNonce()
+                        currentNonce = nonce
                         request.requestedScopes = [.fullName, .email]
+                        request.nonce = SupabaseManager.shared.sha256(nonce)
                     },
                     onCompletion: { result in
                         switch result {
                         case .success(let authorization):
-                            // Handle successful authorization
-                            print("Apple Sign In successful: \(authorization)")
+                            guard
+                                let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                                let tokenData = appleIDCredential.identityToken,
+                                let idToken = String(data: tokenData, encoding: .utf8),
+                                let nonce = currentNonce
+                            else {
+                                print("❌ Failed to get Apple identityToken or nonce")
+                                return
+                            }
+
+                            Task {
+                                do {
+                                    let session = try await SupabaseManager.shared.signInWithApple(idToken: idToken, nonce: nonce)
+                                    print("✅ Supabase Apple Sign-In success: \(session)")
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        fadeOut = true
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                        presentationMode.wrappedValue.dismiss()
+                                    }
+                                } catch {
+                                    print("❌ Supabase Apple Sign-In failed:", error)
+                                }
+                            }
+
                         case .failure(let error):
-                            // Handle error
-                            print("Apple Sign In failed: \(error.localizedDescription)")
+                            print("❌ Apple Sign In failed:", error.localizedDescription)
                         }
                     }
                 )

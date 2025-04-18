@@ -9,6 +9,7 @@ import SwiftUI
 import MapKit
 import PhotosUI
 import UIKit
+import Supabase
 
 struct UserProfileView: View {
     let currentUserID = UUID()
@@ -42,6 +43,7 @@ struct UserProfileView: View {
     @State private var selectedSection = "Just Added"
     let sections = ["Just Added", "Loved", "Want to Go", "Recommendations"]
     
+    @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var pinStore: PinStore
     
     @State private var selectedFilter: Reaction? = nil
@@ -213,8 +215,13 @@ struct UserProfileView: View {
         }
         .onAppear {
             Task {
-                if let username = await SupabaseManager.shared.getCurrentUsername() {
-                    profileUser.username = username
+                // Try pulling the stored username from your server
+                if let serverUsername = await SupabaseManager.shared.getCurrentUsername() {
+                    profileUser.username = serverUsername
+                }
+                // Fallback to the locally cached username if server query fails
+                else if let fallback = authManager.currentUsername {
+                    profileUser.username = fallback
                 }
             }
         }
