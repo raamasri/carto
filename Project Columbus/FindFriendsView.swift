@@ -156,9 +156,11 @@ struct FriendHistoryView: View {
 }
 
 struct FindFriendsView: View {
-    @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
-        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+    @State private var cameraPosition: MapCameraPosition = .region(
+        MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        )
     )
     @State private var selectedFriend: Friend?
     @State private var showChat = false
@@ -194,9 +196,11 @@ struct FindFriendsView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                Map(coordinateRegion: $region, annotationItems: friends) { friend in
-                MapAnnotation(coordinate: friend.location) {
-                        FriendPinView(imageName: friend.imageName)
+                Map(position: $cameraPosition) {
+                    ForEach(friends) { friend in
+                        Annotation(friend.name, coordinate: friend.location) {
+                            FriendPinView(imageName: friend.imageName)
+                        }
                     }
                 }
                 .ignoresSafeArea()

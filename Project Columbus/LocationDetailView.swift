@@ -37,8 +37,8 @@ struct LocationDetailView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
             titleSection
-            Map(coordinateRegion: $region, annotationItems: [mapItem]) { item in
-                MapMarker(coordinate: item.placemark.coordinate, tint: .red)
+            Map(initialPosition: .region(region)) {
+                Marker(mapItem.name ?? "Place", coordinate: mapItem.placemark.coordinate)
             }
                 .frame(height: 250)
                 .cornerRadius(12)

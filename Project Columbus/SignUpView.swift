@@ -121,7 +121,7 @@ struct SignUpView: View {
                     .onTapGesture {
                         phoneFocused = true
                     }
-                    .onChange(of: phone) { newValue in
+                    .onChange(of: phone) { _, newValue in
                         phone = formatPhoneNumber(newValue)
                     }
                     .overlay(

@@ -93,7 +93,7 @@ struct LoopingPlayerView: UIViewRepresentable {
             super.init(frame: .zero)
             guard let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
             
-            let asset = AVAsset(url: url)
+            let asset = AVURLAsset(url: url)
             let item  = AVPlayerItem(asset: asset)
             let queue = AVQueuePlayer()
             looper = AVPlayerLooper(player: queue, templateItem: item)

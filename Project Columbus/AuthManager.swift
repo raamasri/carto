@@ -121,7 +121,7 @@ class AuthManager: ObservableObject {
             do {
                 let session = try await SupabaseManager.shared.client.auth.session
                 DispatchQueue.main.async {
-                    self.isLoggedIn = (session != nil)
+                    self.isLoggedIn = !session.accessToken.isEmpty
                     self.currentUsername = session.user.email
                 }
             } catch {

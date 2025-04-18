@@ -40,7 +40,7 @@ struct CreatePostView: View {
                 Section(header: Text("Place Name")) {
                     TextField("Search for a place", text: $placeName)
                         .focused($isPlaceFieldFocused)
-                        .onChange(of: placeName) { newValue in
+                        .onChange(of: placeName) { oldValue, newValue in
                             completer.queryFragment = newValue
                         }
                     

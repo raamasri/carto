@@ -188,7 +188,7 @@ struct UserProfileView: View {
             selection: $selectedPhotoItem,
             matching: .images,
             photoLibrary: .shared())
-        .onChange(of: selectedPhotoItem) { newItem in
+        .onChange(of: selectedPhotoItem) { _, newItem in
             guard let newItem else { return }
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
@@ -229,7 +229,7 @@ struct UserProfileView: View {
 }
 
 // Allow UIImage to be used with .sheet(item:)
-extension UIImage: Identifiable {
+extension UIImage: @retroactive Identifiable {
     public var id: UUID {
         // use the object identifier so the same image isn't re‑presented repeatedly
         UUID()

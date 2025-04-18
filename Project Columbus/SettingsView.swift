@@ -69,7 +69,7 @@ struct SettingsView: View {
                 
                 Section(header: Text("Security")) {
                     Toggle("Enable Face ID Login", isOn: $biometricEnabled)
-                        .onChange(of: biometricEnabled) { newValue in
+                    .onChange(of: biometricEnabled) { _, newValue in
                             if newValue {
                                 authManager.authenticateWithBiometrics(successHandler: {
                                     authManager.saveCredentialsToKeychain(

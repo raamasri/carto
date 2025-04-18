@@ -35,7 +35,7 @@ struct SearchView: View {
                             span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
                         )
                     }
-                    .onChange(of: searchText) { newValue in
+                    .onChange(of: searchText) { _, newValue in
                         if newValue.starts(with: "@") || newValue.starts(with: "#") {
                             performSearch(for: newValue)
                         } else {
@@ -160,7 +160,7 @@ final class AutocompleteHandler: NSObject, MKLocalSearchCompleterDelegate {
     }
 }
 
-extension MKMapItem: Identifiable {
+extension MKMapItem: @retroactive Identifiable {
     public var id: String { self.name ?? UUID().uuidString }
 }
 

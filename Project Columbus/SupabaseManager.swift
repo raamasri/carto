@@ -29,18 +29,19 @@ class SupabaseManager {
             let session = try await client.auth.session
             let userId = session.user.id
 
-            let response = try await client
-                .database
+            struct UserResponse: Decodable {
+                let username: String
+            }
+
+            let user: UserResponse = try await client
                 .from("users")
                 .select("username")
                 .eq("id", value: userId)
                 .single()
                 .execute()
+                .value
 
-            if let data = response.value as? [String: Any],
-               let username = data["username"] as? String {
-                return username
-            }
+            return user.username
         } catch {
             print("Error fetching username: \(error)")
         }
@@ -58,21 +59,22 @@ class SupabaseManager {
         let user = authResponse.user
 
         // 2. Check for existing user
-        let existingResponse = try await client
-            .database
+        struct ExistingUserResponse: Decodable {
+            let id: String
+        }
+
+        let existingRows: [ExistingUserResponse] = try await client
             .from("users")
             .select("id")
             .eq("id", value: user.id.uuidString)
             .limit(1)
             .execute()
-
-        let existingRows = existingResponse.value as? [[String: Any]] ?? []
+            .value
         if !existingRows.isEmpty {
             print("User already exists in users table, skipping insert.")
         } else {
             // 3. Insert into your public users table
             _ = try await client
-                .database
                 .from("users")
                 .insert([
                     "id": user.id.uuidString,
@@ -97,15 +99,20 @@ class SupabaseManager {
         let session = response
     
         let userId = response.user.id.uuidString
-        let existing = try await client.database
+        struct ExistingUserResponse: Decodable {
+            let id: String
+        }
+
+        let existing: [ExistingUserResponse] = try await client
             .from("users")
             .select("id")
             .eq("id", value: userId)
             .limit(1)
             .execute()
-    
-        if (existing.value as? [[String: Any]])?.isEmpty == true {
-            _ = try await client.database
+            .value
+
+        if existing.isEmpty {
+            _ = try await client
                 .from("users")
                 .insert([
                     "id": userId,

@@ -204,7 +204,7 @@ struct MainMapView: View {
     @StateObject private var locationManager = LocationManager()
     @State private var showSideMenu = false
     @State private var selectedTab = 0
-    @State private var navigateToFeed = false
+    @Binding var navigateToFeed: Bool
     @State private var selectedPin: Pin? = nil
     @State private var animatePulse = false
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
@@ -409,9 +409,6 @@ struct MainMapView: View {
     var body: some View {
         ZStack {
             if selectedTab == 0 {
-                NavigationLink(destination: LiveFeedView(), isActive: $navigateToFeed) {
-                    EmptyView()
-                }
 
                 Map(position: $cameraPosition) {
                     pinAnnotations
@@ -543,9 +540,9 @@ struct MainMapView: View {
                     .padding(.top, AppSpacing.vertical)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .onChange(of: searchText) { newValue in
-                    searchCompleter.queryFragment = newValue
-                }
+                    .onChange(of: searchText) { oldValue, newValue in
+                        searchCompleter.queryFragment = newValue
+                    }
             }
 
             if selectedTab == 0 {
@@ -640,16 +637,8 @@ struct MainMapView: View {
             }
             .ignoresSafeArea(.container, edges: .bottom)
 
-            if let mapItem = selectedMapItem {
-                if showPOISheet {
-                    POIPopup(mapItem: mapItem, userLocation: userLocation, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
-                }
-                NavigationLink(
-                    destination: LocationDetailView(mapItem: mapItem, onAddPin: { _ in }),
-                    isActive: $showFullPOIView
-                ) {
-                    EmptyView()
-                }
+            if let mapItem = selectedMapItem, showPOISheet {
+                POIPopup(mapItem: mapItem, userLocation: userLocation, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
             }
         }
         .onAppear {
@@ -688,16 +677,21 @@ struct MainMapView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
             )
         }
-        .onChange(of: selectedTab) { newTab in
+        .onChange(of: selectedTab) { oldValue, newTab in
             // Dismiss the POI popup and clear search results when switching tabs
             showPOISheet = false
             showFullPOIView = false
             searchResults = []
             searchText = ""
         }
-        .onChange(of: showFullPOIView) { newValue in
+        .onChange(of: showFullPOIView) { oldValue, newValue in
             if !newValue {
                 showPOISheet = true
+            }
+        }
+        .navigationDestination(isPresented: $showFullPOIView) {
+            if let mapItem = selectedMapItem {
+                LocationDetailView(mapItem: mapItem, onAddPin: { _ in })
             }
         }
     }
@@ -818,13 +812,17 @@ struct ContentView: View {
     @StateObject private var authManager = AuthManager()
     @StateObject private var pinStore = PinStore()
     @AppStorage("themePreference") private var themePreference: String = "Auto"
+    @State private var navigateToFeed = false
 
     var body: some View {
         NavigationStack {
             Group {
                 if authManager.isLoggedIn {
-                    MainMapView()
+                    MainMapView(navigateToFeed: $navigateToFeed)
                         .navigationBarHidden(true)
+                        .navigationDestination(isPresented: $navigateToFeed) {
+                            LiveFeedView()
+                        }
                         .environmentObject(authManager)
                         .environmentObject(pinStore)
                 } else {
