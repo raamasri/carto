@@ -13,6 +13,7 @@ struct SettingsView: View {
     @Environment(\.presentationMode) var dismiss
     @AppStorage("themePreference") private var themePreference: String = "Auto"
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
+    @EnvironmentObject var authManager: AuthManager
     
     var body: some View {
         NavigationView {
@@ -61,8 +62,20 @@ struct SettingsView: View {
                     NavigationLink("Help & Support", destination: Text("Help Placeholder"))
                     NavigationLink("Privacy Policy", destination: Text("Privacy Placeholder"))
                     NavigationLink("Terms of Use", destination: Text("Terms Placeholder"))
-                    Text("App Version 1.0.0")
+                    Text("App Version 0.4.1")
                         .foregroundColor(.gray)
+                }
+                
+                Section {
+                    Button(role: .destructive) {
+                        performLogout()
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Log Out")
+                            Spacer()
+                        }
+                    }
                 }
             }
             .navigationTitle("Settings")
@@ -74,5 +87,24 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+    
+    private func performLogout() {
+        authManager.logOut()
+    }
+}
+
+// Parent view that provides the AuthManager environment object to SettingsView
+struct ParentView: View {
+    @StateObject var authManager = AuthManager()
+    var body: some View {
+        SettingsView()
+            .environmentObject(authManager)
+    }
+}
+
+struct SettingsView_Previews: PreviewProvider {
+    static var previews: some View {
+        ParentView()
     }
 }

@@ -30,7 +30,17 @@ class AuthManager: ObservableObject {
     }
 
     func logOut() {
-        isLoggedIn = false
+        Task {
+            do {
+                try await SupabaseManager.shared.client.auth.signOut()
+                DispatchQueue.main.async {
+                    self.currentUsername = nil
+                    self.isLoggedIn = false
+                }
+            } catch {
+                print("Failed to log out:", error)
+            }
+        }
     }
     
     @MainActor
