@@ -49,7 +49,7 @@ struct FriendPinView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.blue, Color.purple]),
+                                gradient: Gradient(colors: [Color.black, Color.gray]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -62,7 +62,7 @@ struct FriendPinView: View {
             PinTail()
                 .fill(
                     LinearGradient(
-                        gradient: Gradient(colors: [Color.blue, Color.purple]),
+                        gradient: Gradient(colors: [Color.black, Color.gray]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -162,6 +162,7 @@ struct FindFriendsView: View {
     )
     @State private var selectedFriend: Friend?
     @State private var showChat = false
+    @State private var showProfile = false
 
     let friends = [
         Friend(name: "Alice",
@@ -232,9 +233,9 @@ struct FindFriendsView: View {
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button {
                                     selectedFriend = friend
-                                    showChat = true
+                                    showProfile = true
                                 } label: {
-                                    Label("Message", systemImage: "paperplane.fill")
+                                    Label("Profile", systemImage: "person.crop.circle")
                                 }
                                 .tint(.blue)
                             }
@@ -246,9 +247,9 @@ struct FindFriendsView: View {
                     .frame(maxHeight: UIScreen.main.bounds.height / 3)
                 }
             } // end ZStack
-            .sheet(isPresented: $showChat) {
+            .sheet(isPresented: $showProfile) {
                 if let friend = selectedFriend {
-                    FriendHistoryView(friend: friend)
+                    ProfileView(friend: friend)
                 }
             }
         }
