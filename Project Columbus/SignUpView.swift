@@ -49,6 +49,9 @@ struct SignUpView: View {
                     .contentShape(Rectangle())
                     .focused($usernameFocused)
                     .submitLabel(.next)
+                    .textContentType(.username)
+                    .autocapitalization(.none)
+                    .keyboardType(.default)
                     .onSubmit {
                         emailFocused = true
                     }
@@ -76,6 +79,9 @@ struct SignUpView: View {
                     .contentShape(Rectangle())
                     .focused($emailFocused)
                     .submitLabel(.next)
+                    .textContentType(.emailAddress)
+                    .autocapitalization(.none)
+                    .keyboardType(.emailAddress)
                     .onSubmit {
                         phoneFocused = true
                     }
@@ -137,6 +143,7 @@ struct SignUpView: View {
                     .contentShape(Rectangle())
                     .focused($passwordFocused)
                     .submitLabel(.go)
+                    .textContentType(.newPassword)
                     .onSubmit {
                         if !username.isEmpty && !email.isEmpty && !phone.isEmpty && !password.isEmpty {
                             withAnimation(.easeInOut(duration: 0.3)) {

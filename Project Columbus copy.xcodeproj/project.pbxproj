@@ -435,7 +435,8 @@
 				INFOPLIST_FILE = "Project-Columbus-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = CARTO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app requires your location to show nearby pins and events.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID to securely log you into your CARTO account.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "we use your location while you use the app for search";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -448,7 +449,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.43;
+				MARKETING_VERSION = 0.44.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -472,7 +473,8 @@
 				INFOPLIST_FILE = "Project-Columbus-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = CARTO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app requires your location to show nearby pins and events.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID to securely log you into your CARTO account.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "we use your location while you use the app for search";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -485,7 +487,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.43;
+				MARKETING_VERSION = 0.44.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

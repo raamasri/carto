@@ -142,6 +142,8 @@ struct CreatePostView: View {
                     TextEditor(text: $postContent)
                         .focused($isPostContentFocused)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(minHeight: 100)
+                        .background(Color.white)
                         .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.gray, lineWidth: 1))
                         .padding(.vertical, 4)
                 }

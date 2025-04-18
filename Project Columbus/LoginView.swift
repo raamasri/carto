@@ -1,5 +1,6 @@
 import SwiftUI
 import AuthenticationServices
+import LocalAuthentication
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -38,6 +39,9 @@ struct LoginView: View {
                     .contentShape(Rectangle())
                     .focused($usernameFocused)
                     .submitLabel(.next)
+                    .textContentType(.emailAddress)
+                    .autocapitalization(.none)
+                    .keyboardType(.emailAddress)
                     .onSubmit {
                         passwordFocused = true
                     }
@@ -65,6 +69,8 @@ struct LoginView: View {
                     .contentShape(Rectangle())
                     .focused($passwordFocused)
                     .submitLabel(.go)
+                    .textContentType(.password)
+                    .textInputAutocapitalization(.never)
                     .onSubmit {
                         handleLogin()
                     }
@@ -94,6 +100,20 @@ struct LoginView: View {
                         .foregroundColor(.black)
                         .cornerRadius(8)
                         .bold()
+                }
+
+                Button(action: {
+                    authenticateWithBiometrics()
+                }) {
+                    HStack {
+                        Image(systemName: "faceid") // or "touchid" for older devices
+                        Text("Log In with Face ID")
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.white.opacity(0.1))
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
                 }
 
                 if showError {
@@ -155,6 +175,45 @@ struct LoginView: View {
             }
             .padding()
             .opacity(fadeOut ? 0 : 1)
+            .onAppear {
+                authManager.autoLoginWithBiometricsIfEnabled(successHandler: {
+                    shouldFadeInMap = true
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        fadeOut = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    }
+                }, errorHandler: { error in
+                    errorMessage = error
+                    showError = true
+                })
+            }
+        }
+    }
+
+    private func authenticateWithBiometrics() {
+        let context = LAContext()
+        var error: NSError?
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            let reason = "Log in with Face ID / Touch ID"
+
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, authenticationError in
+                DispatchQueue.main.async {
+                    if success {
+                        handleLogin()
+                    } else {
+                        errorMessage = "Biometric authentication failed."
+                        showError = true
+                    }
+                }
+            }
+        } else {
+            errorMessage = "Biometric authentication not available."
+            showError = true
         }
     }
 

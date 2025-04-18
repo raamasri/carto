@@ -49,7 +49,7 @@ struct FriendPinView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.black, Color.gray]),
+                                gradient: Gradient(colors: [Color.white, Color.gray]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -62,7 +62,7 @@ struct FriendPinView: View {
             PinTail()
                 .fill(
                     LinearGradient(
-                        gradient: Gradient(colors: [Color.black, Color.gray]),
+                        gradient: Gradient(colors: [Color.white, Color.gray]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )

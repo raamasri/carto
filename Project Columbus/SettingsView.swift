@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("themePreference") private var themePreference: String = "Auto"
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
     @EnvironmentObject var authManager: AuthManager
+    @AppStorage("biometricEnabled") private var biometricEnabled: Bool = UserDefaults.standard.bool(forKey: "biometricEnabled")
     
     var body: some View {
         NavigationView {
@@ -66,6 +67,22 @@ struct SettingsView: View {
                         .foregroundColor(.gray)
                 }
                 
+                Section(header: Text("Security")) {
+                    Toggle("Enable Face ID Login", isOn: $biometricEnabled)
+                        .onChange(of: biometricEnabled) { newValue in
+                            if newValue {
+                                authManager.authenticateWithBiometrics(successHandler: {
+                                    authManager.saveCredentialsToKeychain(
+                                        username: authManager.currentUsername ?? "",
+                                        password: authManager.lastUsedPassword
+                                    )
+                                }, errorHandler: { error in
+                                    biometricEnabled = false
+                                })
+                            }
+                        }
+                }
+                
                 Section {
                     Button(role: .destructive) {
                         performLogout()
@@ -97,6 +114,11 @@ struct SettingsView: View {
 // Parent view that provides the AuthManager environment object to SettingsView
 struct ParentView: View {
     @StateObject var authManager = AuthManager()
+    
+    init() {
+        UserDefaults.standard.register(defaults: ["biometricEnabled": false])
+    }
+    
     var body: some View {
         SettingsView()
             .environmentObject(authManager)
