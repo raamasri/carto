@@ -15,6 +15,7 @@ struct LoginView: View {
     @State private var errorMessage = ""
     @State private var fadeOut = false
     @State private var currentNonce: String?
+    @State private var showUsernamePrompt = false
 
     var body: some View {
         ZStack {
@@ -190,6 +191,24 @@ struct LoginView: View {
                     errorMessage = error
                     showError = true
                 })
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showUsernamePrompt)) { _ in
+                showUsernamePrompt = true
+            }
+            .sheet(isPresented: $showUsernamePrompt) {
+                UsernamePromptView { chosenUsername in
+                    Task {
+                        if let user = try? await SupabaseManager.shared.client.auth.user() {
+                            _ = try? await SupabaseManager.shared
+                                .client
+                                .from("users")
+                                .update(["username": chosenUsername])
+                                .eq("id", value: user.id.uuidString)
+                                .execute()
+                        }
+                    }
+                    showUsernamePrompt = false
+                }
             }
         }
     }

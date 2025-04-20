@@ -8,14 +8,6 @@
 import SwiftUI
 import MapKit
 
-struct Friend: Identifiable {
-    let id = UUID()
-    let name: String
-    let location: CLLocationCoordinate2D
-    let imageName: String
-    let history: [CLLocationCoordinate2D]
-}
-
 /// A small triangular tail for the pin.
 struct PinTail: Shape {
     func path(in rect: CGRect) -> Path {
@@ -77,28 +69,32 @@ struct FriendPinView: View {
 }
 
 struct FriendHistoryView: View {
-    let friend: Friend
+    let user: AppUser
     @State private var cameraPosition: MapCameraPosition
 
-    init(friend: Friend) {
-        self.friend = friend
+    init(user: AppUser) {
+        self.user = user
+        let defaultCoordinate = CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
         self._cameraPosition = State(initialValue: .region(MKCoordinateRegion(
-            center: friend.location,
+            center: CLLocationCoordinate2D(
+                latitude: user.latitude ?? defaultCoordinate.latitude,
+                longitude: user.longitude ?? defaultCoordinate.longitude
+            ),
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )))
     }
 
     var body: some View {
         Map(position: $cameraPosition) {
-            MapPolyline(coordinates: friend.history)
-                .stroke(Color.white, lineWidth: 4)
-
-            Annotation(friend.name, coordinate: friend.location) {
-                FriendPinView(imageName: friend.imageName)
+            Annotation(user.username, coordinate: CLLocationCoordinate2D(
+                latitude: user.latitude ?? 0,
+                longitude: user.longitude ?? 0
+            )) {
+                FriendPinView(imageName: "person.circle.fill")
             }
         }
         .ignoresSafeArea()
-        .navigationTitle(friend.name)
+        .navigationTitle(user.username)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.clear, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -156,62 +152,95 @@ struct FriendHistoryView: View {
 }
 
 struct FindFriendsView: View {
+    @EnvironmentObject var locationManager: AppLocationManager
+    @EnvironmentObject var authManager: AuthManager
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
     )
-    @State private var selectedFriend: Friend?
+    @State private var selectedUser: AppUser?
     @State private var showChat = false
     @State private var showProfile = false
+    @State private var allUsers: [AppUser] = []
+    @State private var searchText: String = ""
 
-    let friends = [
-        Friend(name: "Alice",
-               location: CLLocationCoordinate2D(latitude: 37.775, longitude: -122.418),
-               imageName: "person.circle.fill",
-               history: [
-                   CLLocationCoordinate2D(latitude: 37.770, longitude: -122.422),
-                   CLLocationCoordinate2D(latitude: 37.772, longitude: -122.419),
-                   CLLocationCoordinate2D(latitude: 37.775, longitude: -122.418)
-               ]),
-        Friend(name: "Bob",
-               location: CLLocationCoordinate2D(latitude: 37.776, longitude: -122.420),
-               imageName: "person.circle.fill",
-               history: [
-                   CLLocationCoordinate2D(latitude: 37.772, longitude: -122.423),
-                   CLLocationCoordinate2D(latitude: 37.774, longitude: -122.421),
-                   CLLocationCoordinate2D(latitude: 37.776, longitude: -122.420)
-               ]),
-        Friend(name: "Charlie",
-               location: CLLocationCoordinate2D(latitude: 37.774, longitude: -122.417),
-               imageName: "person.circle.fill",
-               history: [
-                   CLLocationCoordinate2D(latitude: 37.770, longitude: -122.415),
-                   CLLocationCoordinate2D(latitude: 37.772, longitude: -122.416),
-                   CLLocationCoordinate2D(latitude: 37.774, longitude: -122.417)
-               ])
-    ]
+    var filteredUsers: [AppUser] {
+        if searchText.isEmpty {
+            return allUsers
+        } else {
+            return allUsers.filter { user in
+                user.username.lowercased().contains(searchText.lowercased()) ||
+                user.full_name.lowercased().contains(searchText.lowercased()) ||
+                user.email.lowercased().contains(searchText.lowercased())
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 Map(position: $cameraPosition) {
-                    ForEach(friends) { friend in
-                        Annotation(friend.name, coordinate: friend.location) {
-                            FriendPinView(imageName: friend.imageName)
+                    ForEach(allUsers) { user in
+                        if let coordinate = user.location {
+                            Annotation(user.username, coordinate: coordinate) {
+                                FriendPinView(imageName: "person.circle.fill")
+                            }
                         }
                     }
                 }
                 .ignoresSafeArea()
+                .task {
+                    if let userID = authManager.currentUserID,
+                       let location = locationManager.currentLocation {
+                        await SupabaseManager.shared.updateUserLocation(
+                            userID: userID,
+                            latitude: location.coordinate.latitude,
+                            longitude: location.coordinate.longitude
+                        )
+                    }
+                    do {
+                        print("Fetching users...")
+                        let users = try await SupabaseManager.shared.fetchAllUsers()
+                        print("Fetched \(users.count) users.")
+                        allUsers = users
+                    } catch {
+                        print("Error fetching users: \(error)")
+                    }
+                }
+                
+                .safeAreaInset(edge: .top) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.gray)
+                        TextField("@handle, names, or email", text: $searchText)
+                            .autocorrectionDisabled()
+                            .padding(8)
+
+                        if !searchText.isEmpty {
+                            Button(action: {
+                                searchText = ""
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(12)
+                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    .padding(.horizontal)
+                }
 
                 VStack {
                     Spacer()
                     List {
-                        ForEach(friends) { friend in
-                            NavigationLink(destination: FriendHistoryView(friend: friend)) {
+                        ForEach(filteredUsers) { user in
+                            NavigationLink(destination: UserProfileView(profileUser: user)) {
                                 HStack {
-                                    Image(systemName: friend.imageName)
+                                    Image(systemName: "person.circle.fill")
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
                                         .frame(width: 50, height: 50)
@@ -220,10 +249,10 @@ struct FindFriendsView: View {
                                         .padding(.trailing, 8)
 
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(friend.name)
+                                        Text(user.username)
                                             .font(.headline)
                                             .foregroundColor(.primary)
-                                        Text("San Francisco • Now")
+                                        Text("Last seen: now")
                                             .font(.subheadline)
                                             .foregroundColor(.gray)
                                     }
@@ -236,7 +265,7 @@ struct FindFriendsView: View {
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button {
-                                    selectedFriend = friend
+                                    selectedUser = user
                                     showProfile = true
                                 } label: {
                                     Label("Profile", systemImage: "person.crop.circle")
@@ -252,8 +281,8 @@ struct FindFriendsView: View {
                 }
             } // end ZStack
             .sheet(isPresented: $showProfile) {
-                if let friend = selectedFriend {
-                    ProfileView(friend: friend)
+                if let user = selectedUser {
+                    UserProfileView(profileUser: user)
                 }
             }
         }

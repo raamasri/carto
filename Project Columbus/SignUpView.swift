@@ -27,6 +27,7 @@ struct SignUpView: View {
     @State private var currentNonce: String?
     @State private var signUpError: String?
     @State private var showErrorAlert = false
+    @State private var showUsernamePrompt = false
 
     var body: some View {
         ZStack {
@@ -275,6 +276,23 @@ struct SignUpView: View {
             }
             .padding()
             .opacity(fadeOut ? 0 : 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showUsernamePrompt)) { _ in
+            showUsernamePrompt = true
+        }
+        .sheet(isPresented: $showUsernamePrompt) {
+            UsernamePromptView { chosenUsername in
+                Task {
+                    if let user = try? await SupabaseManager.shared.client.auth.user() {
+                        _ = try? await SupabaseManager.shared.client
+                            .from("users")
+                            .update(["username": chosenUsername])
+                            .eq("id", value: user.id.uuidString)
+                            .execute()
+                    }
+                }
+                showUsernamePrompt = false
+            }
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $profileImage)

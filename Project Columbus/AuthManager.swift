@@ -23,6 +23,7 @@ class AuthManager: ObservableObject {
     
     @Published var isLoggedIn = false
     @Published var currentUsername: String?
+    @Published var currentUserID: String?
     @Published var lastUsedPassword: String = ""
 
     func logIn(username: String, password: String) async -> Bool {
@@ -30,6 +31,9 @@ class AuthManager: ObservableObject {
             try await AuthService.shared.login(email: username, password: password)
             self.currentUsername = username
             self.isLoggedIn = true
+            if let user = try? await SupabaseManager.shared.client.auth.user() {
+                self.currentUserID = user.id.uuidString
+            }
             self.lastUsedPassword = password
             if !biometricEnabled && !biometricPromptShown {
                 biometricPromptShown = true
@@ -84,6 +88,7 @@ class AuthManager: ObservableObject {
                 DispatchQueue.main.async {
                     self.currentUsername = nil
                     self.isLoggedIn = false
+                    self.currentUserID = nil
                 }
             } catch {
                 print("Failed to log out:", error)
@@ -100,20 +105,52 @@ class AuthManager: ObservableObject {
                 redirectTo: URL(string: "com.carto.signin://login-callback")
             )
             self.isLoggedIn = true
+
+            if let user = try? await SupabaseManager.shared.client.auth.user() {
+                let existing: [UserInsert] = try await SupabaseManager.shared.client
+                    .from("users")
+                    .select("id")
+                    .eq("id", value: user.id.uuidString)
+                    .limit(1)
+                    .execute()
+                    .value
+
+                if existing.isEmpty {
+                    let newUser = UserInsert(
+                        id: user.id.uuidString,
+                        username: "user_\(Int.random(in: 1000...9999))",
+                        email: user.email ?? "",
+                        phone: ""
+                    )
+                    _ = try await SupabaseManager.shared.client
+                        .from("users")
+                        .insert(newUser)
+                        .execute()
+                    
+                    // Prompt UI to collect custom username
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .showUsernamePrompt, object: nil)
+                    }
+                }
+
+                self.currentUsername = user.email
+                self.currentUserID = user.id.uuidString
+            }
+
             return true
-    } catch {
-        print("Apple sign-in failed:", error)
- 
-        let lowercasedMessage = error.localizedDescription.lowercased()
-        if lowercasedMessage.contains("already registered") || lowercasedMessage.contains("already exists") {
-            self.appleSignInErrorMessage = "An account with this email already exists. Try signing in with your original method."
-        } else {
-            self.appleSignInErrorMessage = "Apple Sign-In failed. Please try again."
+        } catch {
+            print("Apple sign-in failed:", error)
+
+            let lowercasedMessage = error.localizedDescription.lowercased()
+            if lowercasedMessage.contains("already registered") || lowercasedMessage.contains("already exists") {
+                self.appleSignInErrorMessage = "An account with this email already exists. Try signing in with your original method."
+            } else {
+                self.appleSignInErrorMessage = "Apple Sign-In failed. Please try again."
+            }
+
+            self.isLoggedIn = false
+            return false
         }
- 
-        self.isLoggedIn = false
-        return false
-    }
     }
     
     func checkSession() {
@@ -123,6 +160,7 @@ class AuthManager: ObservableObject {
                 DispatchQueue.main.async {
                     self.isLoggedIn = !session.accessToken.isEmpty
                     self.currentUsername = session.user.email
+                    self.currentUserID = session.user.id.uuidString
                 }
             } catch {
                 print("Failed to check session: \(error)")
@@ -229,4 +267,5 @@ class AuthManager: ObservableObject {
 
 extension Notification.Name {
     static let showBiometricPrompt = Notification.Name("showBiometricPrompt")
+    static let showUsernamePrompt = Notification.Name("showUsernamePrompt")
 }

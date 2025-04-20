@@ -12,6 +12,7 @@ import SwiftData
 struct Project_ColumbusApp: App {
     @StateObject var pinStore = PinStore()
     @StateObject var authManager = AuthManager()
+    @StateObject var locationManager = AppLocationManager()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -31,6 +32,7 @@ struct Project_ColumbusApp: App {
             ContentView()
                 .environmentObject(pinStore)
                 .environmentObject(authManager)
+                .environmentObject(locationManager)
                 .onAppear {
                     authManager.checkSession()
                 }

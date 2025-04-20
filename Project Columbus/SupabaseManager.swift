@@ -124,6 +124,135 @@ class SupabaseManager {
     
         return session
     }
+
+    func searchUsers(byUsername username: String) async -> [AppUser] {
+        do {
+            struct SupabaseUser: Decodable {
+                let id: String
+                let username: String
+                let full_name: String
+                let email: String
+                let follower_count: Int
+                let following_count: Int
+                let isFollowedByCurrentUser: Bool
+                let latitude: Double?
+                let longitude: Double?
+            }
+            
+            let users: [SupabaseUser] = try await client
+                .from("users")
+                .select("id, username, full_name, email, follower_count, following_count, isFollowedByCurrentUser, latitude, longitude")
+                .filter("username", operator: "ilike", value: "%\(username)%")
+                .execute()
+                .value
+            
+            return users.map { user in
+                AppUser(
+                    id: user.id,
+                    username: user.username,
+                    full_name: user.full_name,
+                    email: user.email,
+                    follower_count: user.follower_count,
+                    following_count: user.following_count,
+                    isFollowedByCurrentUser: user.isFollowedByCurrentUser,
+                    latitude: user.latitude ?? 0.0,
+                    longitude: user.longitude ?? 0.0
+                )
+            }
+        } catch {
+            print("Error searching users: \(error)")
+            return []
+        }
+    }
+
+    func fetchUserProfile(userID: String) async -> AppUser? {
+        do {
+            struct SupabaseUser: Decodable {
+                let id: String
+                let username: String
+                let full_name: String
+                let email: String
+                let follower_count: Int
+                let following_count: Int
+                let isFollowedByCurrentUser: Bool
+                let latitude: Double?
+                let longitude: Double?
+            }
+ 
+            let users: [SupabaseUser] = try await client
+                .from("users")
+                .select("id, username, full_name, email, follower_count, following_count, isFollowedByCurrentUser, latitude, longitude")
+                .eq("id", value: userID)
+                .execute()
+                .value
+ 
+            guard let user = users.first else { return nil }
+ 
+            return AppUser(
+                id: user.id,
+                username: user.username,
+                full_name: user.full_name,
+                email: user.email,
+                follower_count: user.follower_count,
+                following_count: user.following_count,
+                isFollowedByCurrentUser: user.isFollowedByCurrentUser,
+                latitude: user.latitude ?? 0.0,
+                longitude: user.longitude ?? 0.0
+            )
+        } catch {
+            print("Error fetching user profile: \(error)")
+            return nil
+        }
+    }
+
+    func fetchAllUsers() async throws -> [AppUser] {
+        struct SupabaseUser: Decodable {
+            let id: String
+            let username: String
+            let full_name: String
+            let email: String
+            let follower_count: Int
+            let following_count: Int
+            let latitude: Double?
+            let longitude: Double?
+        }
+
+        let users: [SupabaseUser] = try await client
+            .from("users")
+            .select("id, username, full_name, email, follower_count, following_count, latitude, longitude")
+            .execute()
+            .value
+
+        return users.map { user in
+            AppUser(
+                id: user.id,
+                username: user.username,
+                full_name: user.full_name,
+                email: user.email,
+                follower_count: user.follower_count,
+                following_count: user.following_count,
+                isFollowedByCurrentUser: false,
+                latitude: user.latitude ?? 0.0,
+                longitude: user.longitude ?? 0.0
+            )
+        }
+    }
+
+    func updateUserLocation(userID: String, latitude: Double, longitude: Double) async {
+        do {
+            let _ = try await client
+                .from("users")
+                .update([
+                    "latitude": latitude,
+                    "longitude": longitude
+                ])
+                .eq("id", value: userID)
+                .execute()
+            print("Successfully updated location.")
+        } catch {
+            print("Error updating user location: \(error)")
+        }
+    }
 }
 
 import CryptoKit
@@ -162,5 +291,90 @@ extension SupabaseManager {
         let inputData = Data(input.utf8)
         let hashed = SHA256.hash(data: inputData)
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
+    
+    
+    // MARK: - Follow Logic
+
+    func followUser(followingID: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        let followerID = session.user.id
+
+        let result = try? await client
+            .from("follows")
+            .insert([
+                "follower_id": followerID.uuidString,
+                "following_id": followingID.uuidString
+            ])
+            .execute()
+
+        return result != nil
+    }
+
+    func unfollowUser(followingID: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        let followerID = session.user.id
+
+        let result = try? await client
+            .from("follows")
+            .delete()
+            .eq("follower_id", value: followerID.uuidString)
+            .eq("following_id", value: followingID.uuidString)
+            .execute()
+
+        return result != nil
+    }
+
+    func getFollowers(of userID: UUID) async -> [UUID] {
+        let result = try? await client
+            .from("follows")
+            .select("follower_id")
+            .eq("following_id", value: userID.uuidString)
+            .execute()
+
+        guard let rows = result?.value as? [[String: Any]] else { return [] }
+        return rows.compactMap { UUID(uuidString: $0["follower_id"] as? String ?? "") }
+    }
+
+    func getFollowing(for userID: UUID) async -> [UUID] {
+        let result = try? await client
+            .from("follows")
+            .select("following_id")
+            .eq("follower_id", value: userID.uuidString)
+            .execute()
+
+        guard let rows = result?.value as? [[String: Any]] else { return [] }
+        return rows.compactMap { UUID(uuidString: $0["following_id"] as? String ?? "") }
+    }
+
+    func isFollowing(userID: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        let followerID = session.user.id
+
+        let result = try? await client
+            .from("follows")
+            .select("id")
+            .eq("follower_id", value: followerID.uuidString)
+            .eq("following_id", value: userID.uuidString)
+            .limit(1)
+            .execute()
+
+        guard let rows = result?.value as? [[String: Any]] else { return false }
+        return !rows.isEmpty
+    }
+    
+    /// Toggles follow status for a user by their string ID, returning true if now following.
+    func toggleFollowStatus(targetUserID: String) async -> Bool {
+        guard let uuid = UUID(uuidString: targetUserID) else { return false }
+        if await isFollowing(userID: uuid) {
+            // Currently following, so unfollow
+            let didUnfollow = await unfollowUser(followingID: uuid)
+            return !didUnfollow
+        } else {
+            // Not following yet, so follow
+            let didFollow = await followUser(followingID: uuid)
+            return didFollow
+        }
     }
 }

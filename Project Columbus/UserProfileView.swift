@@ -12,31 +12,16 @@ import UIKit
 import Supabase
 
 struct UserProfileView: View {
-    let currentUserID = UUID()
-    
-    @State var profileUser = User(
-        id: UUID(),
+    @State var profileUser = AppUser(
+        id: UUID().uuidString,
         username: "",
-        isPrivate: false,
-        followers: Array(repeating: UUID(), count: 5),
-        following: Array(repeating: UUID(), count: 10),
-        followRequests: [],
-        collections: [
-            PinCollection(name: "San Francisco", pins: [
-                Pin(locationName: "Zuni Café", city: "San Francisco", date: "Mar 26", latitude: 37.7730, longitude: -122.4210, reaction: .lovedIt),
-                Pin(locationName: "Tartine Bakery", city: "San Francisco", date: "Mar 25", latitude: 37.7614, longitude: -122.4241, reaction: .lovedIt),
-                Pin(locationName: "House of Prime Rib", city: "San Francisco", date: "Mar 24", latitude: 37.7930, longitude: -122.4228, reaction: .wantToGo),
-                Pin(locationName: "La Taqueria", city: "San Francisco", date: "Mar 23", latitude: 37.7502, longitude: -122.4185, reaction: .wantToGo),
-                Pin(locationName: "Swan Oyster Depot", city: "San Francisco", date: "Mar 22", latitude: 37.7913, longitude: -122.4212, reaction: .lovedIt)
-            ]),
-            PinCollection(name: "Bday", pins: []),
-            PinCollection(name: "Car Tour", pins: []),
-            PinCollection(name: "Europe 25", pins: []),
-            PinCollection(name: "Psychos", pins: []),
-            PinCollection(name: "Pizza", pins: [])
-        ],
-        favoriteSpots: [],
-        activityFeed: []
+        full_name: "",
+        email: "",
+        follower_count: 0,
+        following_count: 0,
+        isFollowedByCurrentUser: false,
+        latitude: 0.0,
+        longitude: 0.0
     )
     
     @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
@@ -59,21 +44,23 @@ struct UserProfileView: View {
     @State private var isEditingProfile = false
     @State private var tempBio = ""
     
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("@\(profileUser.username)")
-                    .font(.title)
-                    .fontWeight(.bold)
-                Spacer()
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Profile Header
-                    ZStack(alignment: .topTrailing) {
-                        HStack(alignment: .center, spacing: 12) {
+    private var profileHeader: some View {
+        HStack {
+            Text("@\(profileUser.username)")
+                .font(.title)
+                .fontWeight(.bold)
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+    }
+
+    private var profileBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Profile Header Card
+                ZStack(alignment: .topTrailing) {
+                    HStack(alignment: .center, spacing: 12) {
                         if let profileImage {
                             profileImage
                                 .resizable()
@@ -98,79 +85,114 @@ struct UserProfileView: View {
                                     showChangePicturePrompt = true
                                 }
                         }
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("@\(profileUser.username)")
-                                    .font(.headline)
-                                
-                                Text(bio)
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                                    .lineLimit(2)
-                                
-                                Text("\(profileUser.followers.count) followers • \(profileUser.following.count) following")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            Spacer()
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("@\(profileUser.username)")
+                                .font(.headline)
+
+                            Text(bio)
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                                .lineLimit(2)
+
+                            Text("\(profileUser.follower_count) followers • \(profileUser.following_count) following")
+                                .font(.caption)
+                                .foregroundColor(.gray)
                         }
-                        .padding(.vertical, 4)
-                        .padding(.horizontal)
-                    }
-                    
-                    VStack(spacing: 8) {
-                        HStack(spacing: 16) {
-                            Button(action: {
-                                tempBio = bio          // preload current bio
-                                isEditingProfile = true
-                            }) {
-                                Text("Edit Profile")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(8)
-                                    .background(Color.gray.opacity(0.2))
-                                    .cornerRadius(8)
-                            }
-                            Button(action: {}) {
-                                Text("Share profile")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(8)
-                                    .background(Color.gray.opacity(0.2))
-                                    .cornerRadius(8)
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // Map Section
-                        Map(
-                            coordinateRegion: $region,
-                            annotationItems: pinStore.masterPins
-                        ) { pin in
-                            MapAnnotation(
-                                coordinate: CLLocationCoordinate2D(
-                                    latitude: pin.latitude,
-                                    longitude: pin.longitude
-                                )
-                            ) {
-                                Image(systemName: "mappin.circle.fill")
-                                    .resizable()
-                                    .frame(width: 30, height: 30)
-                                    .foregroundColor(.blue)
-                                    .shadow(radius: 3)
-                            }
-                        }
-                        .frame(height: 470)
-                        .cornerRadius(10)
-                        .padding(.horizontal)
-                        .padding(.top, 16)
+                        Spacer()
                     }
                     .padding(.vertical, 4)
+                    .padding(.horizontal)
                 }
+
+                // Buttons and Map
+                VStack(spacing: 8) {
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            tempBio = bio
+                            isEditingProfile = true
+                        }) {
+                            Text("Edit Profile")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(8)
+                                .background(Color.gray.opacity(0.2))
+                                .cornerRadius(8)
+                        }
+                        Button(action: {}) {
+                            Text("Share profile")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(8)
+                                .background(Color.gray.opacity(0.2))
+                                .cornerRadius(8)
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    if let currentUserID = authManager.currentUserID,
+                       profileUser.id != currentUserID {
+                        Button(action: {
+                            Task {
+                                let isNowFollowing = await SupabaseManager.shared.toggleFollowStatus(
+                                    targetUserID: profileUser.id
+                                )
+                                await MainActor.run {
+                                    if isNowFollowing {
+                                        profileUser.follower_count += 1
+                                        profileUser.isFollowedByCurrentUser = true
+                                    } else {
+                                        profileUser.follower_count -= 1
+                                        profileUser.isFollowedByCurrentUser = false
+                                    }
+                                }
+                            }
+                        }) {
+                            Text(profileUser.isFollowedByCurrentUser ? "Unfollow" : "Follow")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(8)
+                                .background(profileUser.isFollowedByCurrentUser ? Color.red.opacity(0.2) : Color.blue.opacity(0.2))
+                                .cornerRadius(8)
+                        }
+                        .padding(.horizontal)
+                    }
+
+                    Map(
+                        coordinateRegion: $region,
+                        annotationItems: pinStore.masterPins
+                    ) { pin in
+                        MapAnnotation(
+                            coordinate: CLLocationCoordinate2D(
+                                latitude: pin.latitude,
+                                longitude: pin.longitude
+                            )
+                        ) {
+                            Image(systemName: "mappin.circle.fill")
+                                .resizable()
+                                .frame(width: 30, height: 30)
+                                .foregroundColor(.blue)
+                                .shadow(radius: 3)
+                        }
+                    }
+                    .frame(height: 470)
+                    .cornerRadius(10)
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+                }
+                .padding(.vertical, 4)
             }
-            .padding(.bottom, 4)
+        }
+        .padding(.bottom, 4)
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            profileHeader
+            profileBody
         }
         .padding(.top, 4)
         .confirmationDialog(
@@ -187,7 +209,8 @@ struct UserProfileView: View {
             isPresented: $isShowingPhotoPicker,
             selection: $selectedPhotoItem,
             matching: .images,
-            photoLibrary: .shared())
+            photoLibrary: .shared()
+        )
         .onChange(of: selectedPhotoItem) { _, newItem in
             guard let newItem else { return }
             Task {
@@ -200,27 +223,27 @@ struct UserProfileView: View {
         .sheet(item: $selectedUIImage) { uiImage in
             CircleCropperView(image: uiImage) { cropped in
                 profileImage = Image(uiImage: cropped)
-                selectedUIImage = nil          // dismiss after cropping
+                selectedUIImage = nil
             }
         }
         .sheet(isPresented: $isEditingProfile) {
-            EditProfileSheet(bio: $tempBio,
-                             onSave: {
-                                 bio = tempBio
-                                 isEditingProfile = false
-                             },
-                             onCancel: {
-                                 isEditingProfile = false
-                             })
+            EditProfileSheet(
+                bio: $tempBio,
+                onSave: {
+                    bio = tempBio
+                    isEditingProfile = false
+                },
+                onCancel: {
+                    isEditingProfile = false
+                }
+            )
         }
         .onAppear {
             Task {
-                // Try pulling the stored username from your server
-                if let serverUsername = await SupabaseManager.shared.getCurrentUsername() {
-                    profileUser.username = serverUsername
-                }
-                // Fallback to the locally cached username if server query fails
-                else if let fallback = authManager.currentUsername {
+                guard let userID = authManager.currentUserID else { return }
+                if let fullProfile = await SupabaseManager.shared.fetchUserProfile(userID: userID) {
+                    profileUser = fullProfile
+                } else if let fallback = authManager.currentUsername {
                     profileUser.username = fallback
                 }
             }

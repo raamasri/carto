@@ -516,7 +516,7 @@ struct MainMapView: View {
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.gray)
-                    TextField("People, Places, Memories, Ideas", text: $searchText)
+                    TextField("Places, Memories, Ideas, #tags", text: $searchText)
                         .autocorrectionDisabled()
                         .focused($isSearchFieldFocused)
                         .padding(8)

@@ -11,6 +11,7 @@ import MapKit
 class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var location: CLLocationCoordinate2D? = nil
+    @Published var currentLocation: CLLocation?
 
     override init() {
         super.init()
@@ -35,6 +36,7 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let newLocation = locations.last {
             self.location = newLocation.coordinate
+            self.currentLocation = newLocation
         }
     }
 
