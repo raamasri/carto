@@ -132,6 +132,7 @@ class SupabaseManager {
                 let username: String
                 let full_name: String
                 let email: String
+                let bio: String?
                 let follower_count: Int
                 let following_count: Int
                 let isFollowedByCurrentUser: Bool
@@ -141,7 +142,7 @@ class SupabaseManager {
             
             let users: [SupabaseUser] = try await client
                 .from("users")
-                .select("id, username, full_name, email, follower_count, following_count, isFollowedByCurrentUser, latitude, longitude")
+                .select("id, username, full_name, email, bio, follower_count, following_count, isFollowedByCurrentUser, latitude, longitude")
                 .filter("username", operator: "ilike", value: "%\(username)%")
                 .execute()
                 .value
@@ -152,6 +153,7 @@ class SupabaseManager {
                     username: user.username,
                     full_name: user.full_name,
                     email: user.email,
+                    bio: user.bio ?? "",
                     follower_count: user.follower_count,
                     following_count: user.following_count,
                     isFollowedByCurrentUser: user.isFollowedByCurrentUser,
@@ -172,6 +174,7 @@ class SupabaseManager {
                 let username: String
                 let full_name: String
                 let email: String
+                let bio: String?
                 let follower_count: Int
                 let following_count: Int
                 let isFollowedByCurrentUser: Bool
@@ -181,7 +184,7 @@ class SupabaseManager {
  
             let users: [SupabaseUser] = try await client
                 .from("users")
-                .select("id, username, full_name, email, follower_count, following_count, isFollowedByCurrentUser, latitude, longitude")
+                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude")
                 .eq("id", value: userID)
                 .execute()
                 .value
@@ -193,6 +196,7 @@ class SupabaseManager {
                 username: user.username,
                 full_name: user.full_name,
                 email: user.email,
+                bio: user.bio ?? "",
                 follower_count: user.follower_count,
                 following_count: user.following_count,
                 isFollowedByCurrentUser: user.isFollowedByCurrentUser,
@@ -211,6 +215,7 @@ class SupabaseManager {
             let username: String
             let full_name: String
             let email: String
+            let bio: String?
             let follower_count: Int
             let following_count: Int
             let latitude: Double?
@@ -219,7 +224,7 @@ class SupabaseManager {
 
         let users: [SupabaseUser] = try await client
             .from("users")
-            .select("id, username, full_name, email, follower_count, following_count, latitude, longitude")
+            .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude")
             .execute()
             .value
 
@@ -229,6 +234,7 @@ class SupabaseManager {
                 username: user.username,
                 full_name: user.full_name,
                 email: user.email,
+                bio: user.bio ?? "",
                 follower_count: user.follower_count,
                 following_count: user.following_count,
                 isFollowedByCurrentUser: false,
@@ -238,6 +244,20 @@ class SupabaseManager {
         }
     }
 
+    /// Updates the user's profile fields on the backend.
+    func updateUserProfile(userID: String, fullName: String, email: String, bio: String) async throws {
+        let response = try await client
+            .from("users")
+            .update([
+                "full_name": fullName,
+                "email": email,
+                "bio": bio
+            ])
+            .eq("id", value: userID)
+            .execute()
+        print("Supabase updateUserProfile response:", response)
+    }
+    
     func updateUserLocation(userID: String, latitude: Double, longitude: Double) async {
         do {
             let _ = try await client

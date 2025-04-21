@@ -17,6 +17,7 @@ struct UserProfileView: View {
         username: "",
         full_name: "",
         email: "",
+        bio: "",
         follower_count: 0,
         following_count: 0,
         isFollowedByCurrentUser: false,
@@ -231,18 +232,32 @@ struct UserProfileView: View {
                 }
             }
         }
-        .sheet(item: $selectedUIImage) { uiImage in
-            CircleCropperView(image: uiImage) { cropped in
-                profileImage = Image(uiImage: cropped)
-                selectedUIImage = nil
-            }
-        }
         .sheet(isPresented: $isEditingProfile) {
             EditProfileSheet(
                 bio: $tempBio,
                 onSave: {
-                    bio = tempBio
-                    isEditingProfile = false
+                    Task {
+                        do {
+                            // Persist change to backend
+                            try await SupabaseManager.shared.updateUserProfile(
+                                userID: profileUser.id,
+                                fullName: profileUser.full_name,
+                                email: profileUser.email,
+                                bio: tempBio
+                            )
+                            // Re-fetch to get the definitive record
+                            if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
+                                await MainActor.run {
+                                    profileUser = updated
+                                    bio = updated.bio
+                                    tempBio = updated.bio
+                                    isEditingProfile = false
+                                }
+                            }
+                        } catch {
+                            print("Failed to save profile:", error)
+                        }
+                    }
                 },
                 onCancel: {
                     isEditingProfile = false
@@ -254,6 +269,7 @@ struct UserProfileView: View {
                 guard let userID = authManager.currentUserID else { return }
                 if let fullProfile = await SupabaseManager.shared.fetchUserProfile(userID: userID) {
                     profileUser = fullProfile
+                    bio = fullProfile.bio
                 } else if let fallback = authManager.currentUsername {
                     profileUser.username = fallback
                 }

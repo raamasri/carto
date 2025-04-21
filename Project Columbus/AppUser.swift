@@ -13,6 +13,7 @@ struct AppUser: Identifiable {
     var username: String
     var full_name: String
     var email: String
+    var bio: String
     var follower_count: Int
     var following_count: Int
     var isFollowedByCurrentUser: Bool
