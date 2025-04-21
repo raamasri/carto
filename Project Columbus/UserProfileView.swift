@@ -107,33 +107,35 @@ struct UserProfileView: View {
 
                 // Buttons and Map
                 VStack(spacing: 8) {
-                    HStack(spacing: 16) {
-                        Button(action: {
-                            tempBio = bio
-                            isEditingProfile = true
-                        }) {
-                            Text("Edit Profile")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding(8)
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(8)
+                    if let currentUsername = authManager.currentUsername, profileUser.username == currentUsername {
+                        HStack(spacing: 16) {
+                            Button(action: {
+                                tempBio = bio
+                                isEditingProfile = true
+                            }) {
+                                Text("Edit Profile")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.2))
+                                    .cornerRadius(8)
+                            }
+                            Button(action: {}) {
+                                Text("Share profile")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.2))
+                                    .cornerRadius(8)
+                            }
                         }
-                        Button(action: {}) {
-                            Text("Share profile")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding(8)
-                                .background(Color.gray.opacity(0.2))
-                                .cornerRadius(8)
-                        }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
 
-                    if let currentUserID = authManager.currentUserID,
-                       profileUser.id != currentUserID {
+                    if let currentUsername = authManager.currentUsername,
+                       profileUser.username != currentUsername {
                         Button(action: {
                             Task {
                                 let isNowFollowing = await SupabaseManager.shared.toggleFollowStatus(
@@ -190,9 +192,18 @@ struct UserProfileView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            profileHeader
-            profileBody
+        Group {
+            if profileUser.username.isEmpty {
+                // Loading state while placeholder data is present
+                ProgressView("Loading Profile…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(spacing: 16) {
+                    profileHeader
+                    profileBody
+                }
+                .padding(.top, 4)
+            }
         }
         .padding(.top, 4)
         .confirmationDialog(
