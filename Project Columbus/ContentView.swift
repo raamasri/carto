@@ -297,6 +297,7 @@ struct MainMapView: View {
                                 showAddedAlert = true
                             }
                         }
+                        .fixedSize(horizontal: false, vertical: true)
                         Button("Cancel", role: .cancel) { }
                     }
 
@@ -480,7 +481,8 @@ struct MainMapView: View {
                     VStack(spacing: 0) {
                         Spacer().frame(height: 70) // offset below search bar
                     if !searchResults.isEmpty {
-                            ZStack {
+                        ZStack {
+                            VStack(spacing: 0) {
                                 ScrollView {
                                     VStack(spacing: 0) {
                                         ForEach(searchResults, id: \.self) { result in
@@ -506,11 +508,13 @@ struct MainMapView: View {
                                         }
                                     }
                                 }
+                                .frame(maxHeight: CGFloat(searchResults.count) * 72)
                             }
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(20)
-                            .padding(.horizontal)
                         }
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(20)
+                        .padding(.horizontal)
+                    }
                     }
                     
                     HStack {

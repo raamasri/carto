@@ -145,6 +145,8 @@ struct FriendHistoryView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 10)
                 }
+                .zIndex(1)
+                .padding(.bottom, 80)
                 .padding(.bottom, 50) // Adjust height above tab bar
             }
         )
@@ -163,10 +165,12 @@ struct FindFriendsView: View {
     @State private var selectedUser: AppUser?
     @State private var showChat = false
     @State private var showProfile = false
+    @State private var isEditing: Bool = false
     @State private var allUsers: [AppUser] = []
     @State private var searchText: String = ""
 
     var filteredUsers: [AppUser] {
+        guard isEditing else { return [] }
         if searchText.isEmpty {
             return allUsers
         } else {
@@ -201,83 +205,74 @@ struct FindFriendsView: View {
                         )
                     }
                     do {
-                        print("Fetching users...")
+                        print("FindFriendsView: fetching users...")
                         let users = try await SupabaseManager.shared.fetchAllUsers()
-                        print("Fetched \(users.count) users.")
                         allUsers = users
+                        print("FindFriendsView: fetched allUsers (\(allUsers.count)):", allUsers)
                     } catch {
                         print("Error fetching users: \(error)")
                     }
                 }
                 
-                .safeAreaInset(edge: .top) {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.gray)
-                        TextField("@handle, names, or email", text: $searchText)
-                            .autocorrectionDisabled()
-                            .padding(8)
-
-                        if !searchText.isEmpty {
-                            Button(action: {
-                                searchText = ""
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                    }
-                    .padding(12)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(12)
-                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                    .padding(.horizontal)
-                }
-
-                VStack {
-                    Spacer()
-                    List {
-                        ForEach(filteredUsers) { user in
-                            NavigationLink(destination: UserProfileView(profileUser: user)) {
-                                HStack {
-                                    Image(systemName: "person.circle.fill")
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 50, height: 50)
-                                        .clipShape(Circle())
-                                        .background(Circle().fill(Color.gray.opacity(0.2)))
-                                        .padding(.trailing, 8)
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(user.username)
-                                            .font(.headline)
-                                            .foregroundColor(.primary)
-                                        Text("Last seen: now")
-                                            .font(.subheadline)
-                                            .foregroundColor(.gray)
+                .overlay(alignment: .top) {
+                    ZStack(alignment: .top) {
+                        VStack(spacing: 0) {
+                            Spacer().frame(height: 70)
+                            if isEditing {
+                                ZStack {
+                                    ScrollView {
+                                        VStack(spacing: 0) {
+                                            ForEach(filteredUsers) { user in
+                                                Button {
+                                                    selectedUser = user
+                                                    showProfile = true
+                                                    isEditing = false
+                                                } label: {
+                                                    HStack {
+                                                        Text(user.username)
+                                                            .font(.headline)
+                                                            .foregroundColor(.primary)
+                                                        Spacer()
+                                                    }
+                                                    .padding()
+                                                }
+                                                Divider()
+                                            }
+                                        }
                                     }
-                                    Spacer()
+                                    .fixedSize(horizontal: false, vertical: true)
                                 }
-                                .padding()
                                 .background(.ultraThinMaterial)
-                                .cornerRadius(12)
-                                .shadow(radius: 4)
+                                .cornerRadius(20)
+                                .padding(.horizontal)
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button {
-                                    selectedUser = user
-                                    showProfile = true
-                                } label: {
-                                    Label("Profile", systemImage: "person.crop.circle")
-                                }
-                                .tint(.blue)
-                            }
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
                         }
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.gray)
+                            TextField("@handle, names, or email",
+                                      text: $searchText,
+                                      onEditingChanged: { editing in isEditing = editing })
+                                .autocorrectionDisabled()
+                                .padding(8)
+                            if !searchText.isEmpty || !filteredUsers.isEmpty {
+                                Button(action: {
+                                    searchText = ""
+                                    isEditing = false
+                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                        }
+                        .padding(AppSpacing.vertical)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(AppSpacing.cornerRadius)
+                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                        .padding(.horizontal, AppSpacing.horizontal)
+                        .padding(.top, AppSpacing.vertical)
                     }
-                    .listStyle(.plain)
-                    .frame(maxHeight: UIScreen.main.bounds.height / 3)
                 }
             } // end ZStack
             .sheet(isPresented: $showProfile) {

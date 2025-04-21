@@ -8,7 +8,7 @@ import Supabase
 import Foundation
 import CoreLocation
 
-struct AppUser: Identifiable {
+struct AppUser: Identifiable, Codable {
     var id: String
     var username: String
     var full_name: String
@@ -19,11 +19,70 @@ struct AppUser: Identifiable {
     var isFollowedByCurrentUser: Bool
     let latitude: Double?
     let longitude: Double?
-    //new backend driven flag
     let isCurrentUser: Bool
-    let avatarURL: String  
+    let avatarURL: String
+
     var location: CLLocationCoordinate2D? {
         guard let lat = latitude, let lon = longitude else { return nil }
         return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case username
+        case full_name
+        case email
+        case bio
+        case follower_count
+        case following_count
+        case isFollowedByCurrentUser
+        case latitude
+        case longitude
+        case isCurrentUser = "is_current_user"
+        case avatarURL
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        username = try container.decode(String.self, forKey: .username)
+        full_name = try container.decode(String.self, forKey: .full_name)
+        email = try container.decode(String.self, forKey: .email)
+        bio = try container.decode(String.self, forKey: .bio)
+        follower_count = try container.decode(Int.self, forKey: .follower_count)
+        following_count = try container.decode(Int.self, forKey: .following_count)
+        isFollowedByCurrentUser = try container.decode(Bool.self, forKey: .isFollowedByCurrentUser)
+        latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+        isCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isCurrentUser) ?? false
+        avatarURL = try container.decode(String.self, forKey: .avatarURL)
+    }
+
+    init(
+        id: String,
+        username: String,
+        full_name: String,
+        email: String,
+        bio: String,
+        follower_count: Int,
+        following_count: Int,
+        isFollowedByCurrentUser: Bool,
+        latitude: Double?,
+        longitude: Double?,
+        isCurrentUser: Bool,
+        avatarURL: String
+    ) {
+        self.id = id
+        self.username = username
+        self.full_name = full_name
+        self.email = email
+        self.bio = bio
+        self.follower_count = follower_count
+        self.following_count = following_count
+        self.isFollowedByCurrentUser = isFollowedByCurrentUser
+        self.latitude = latitude
+        self.longitude = longitude
+        self.isCurrentUser = isCurrentUser
+        self.avatarURL = avatarURL
     }
 }

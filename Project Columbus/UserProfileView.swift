@@ -139,7 +139,7 @@ struct UserProfileView: View {
 
                 // Buttons and Map
                 VStack(spacing: 8) {
-                    if profileUser.isCurrentUser {
+                    if profileUser.isCurrentUser ?? false {
                         HStack(spacing: 16) {
                             Button(action: {
                                 tempUsername = profileUser.username
@@ -168,7 +168,7 @@ struct UserProfileView: View {
                         .padding(.horizontal)
                     }
 
-                    if !profileUser.isCurrentUser {
+                    if !(profileUser.isCurrentUser ?? false) {
                         Button(action: {
                             Task {
                                 let isNowFollowing = await SupabaseManager.shared.toggleFollowStatus(

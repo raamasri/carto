@@ -130,6 +130,8 @@ class SupabaseManager {
 
     func searchUsers(byUsername username: String) async -> [AppUser] {
         do {
+            let session = try await client.auth.session
+            let currentUserID = session.user.id.uuidString
             struct SupabaseUser: Decodable {
                 let id: String
                 let username: String
@@ -142,14 +144,14 @@ class SupabaseManager {
                 let latitude: Double?
                 let longitude: Double?
             }
-            
+
             let users: [SupabaseUser] = try await client
                 .from("users")
                 .select("id, username, full_name, email, bio, follower_count, following_count, isFollowedByCurrentUser, latitude, longitude")
                 .filter("username", operator: "ilike", value: "%\(username)%")
                 .execute()
                 .value
-            
+
             return users.map { user in
                 AppUser(
                     id: user.id,
@@ -162,7 +164,7 @@ class SupabaseManager {
                     isFollowedByCurrentUser: user.isFollowedByCurrentUser,
                     latitude: user.latitude ?? 0.0,
                     longitude: user.longitude ?? 0.0,
-                    isCurrentUser: false,
+                    isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
                     avatarURL: ""
                 )
             }
@@ -174,6 +176,8 @@ class SupabaseManager {
 
     func fetchUserProfile(userID: String) async -> AppUser? {
         do {
+            let session = try await client.auth.session
+            let currentUserID = session.user.id.uuidString
             struct SupabaseUser: Decodable {
                 let id: String
                 let username: String
@@ -184,18 +188,17 @@ class SupabaseManager {
                 let following_count: Int
                 let latitude: Double?
                 let longitude: Double?
-                let is_current_user: Bool
             }
- 
+
             let users: [SupabaseUser] = try await client
                 .from("user_profiles")
-                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude, is_current_user")
+                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude")
                 .eq("id", value: userID)
                 .execute()
                 .value
- 
+
             guard let user = users.first else { return nil }
- 
+
             return AppUser(
                 id: user.id,
                 username: user.username,
@@ -204,10 +207,10 @@ class SupabaseManager {
                 bio: user.bio ?? "",
                 follower_count: user.follower_count,
                 following_count: user.following_count,
-                isFollowedByCurrentUser: user.is_current_user,
+                isFollowedByCurrentUser: false,
                 latitude: user.latitude ?? 0.0,
                 longitude: user.longitude ?? 0.0,
-                isCurrentUser: user.is_current_user,
+                isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
                 avatarURL: ""
             )
         } catch {
@@ -217,6 +220,8 @@ class SupabaseManager {
     }
 
     func fetchAllUsers() async throws -> [AppUser] {
+        let session = try await client.auth.session
+        let currentUserID = session.user.id.uuidString
         struct SupabaseUser: Decodable {
             let id: String
             let username: String
@@ -227,7 +232,6 @@ class SupabaseManager {
             let following_count: Int
             let latitude: Double?
             let longitude: Double?
-            let is_current_user: Bool
         }
 
         let users: [SupabaseUser] = try await client
@@ -248,7 +252,7 @@ class SupabaseManager {
                 isFollowedByCurrentUser: false,
                 latitude: user.latitude ?? 0.0,
                 longitude: user.longitude ?? 0.0,
-                isCurrentUser: false,
+                isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
                 avatarURL: ""
             )
         }
