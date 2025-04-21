@@ -62,6 +62,9 @@ struct LiveFeedView: View {
                             }
                         }
                     }
+                    .refreshable {
+                        refreshPins()
+                    }
                     .tag(1)
 
                     // Following Tab Placeholder
@@ -98,6 +101,9 @@ struct LiveFeedView: View {
                                 showDetail = true
                             }
                         }
+                    }
+                    .refreshable {
+                        refreshPins()
                     }
                     .tag(3)
                 }
@@ -153,6 +159,11 @@ struct LiveFeedView: View {
                 VideoFeedView()
             }
         }
+    }
+
+    func refreshPins() {
+        print("🔄 Refreshing pins...")
+        pinStore.fetchPins() // Replace with actual refresh logic from your PinStore
     }
 
     func sharePin(_ pin: Pin) {

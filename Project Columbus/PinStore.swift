@@ -54,4 +54,12 @@ class PinStore: ObservableObject {
         PinCollection(name: "Bars", pins: []),
         PinCollection(name: "Shopping", pins: [])
     ]
+    
+    @MainActor
+    func fetchPins() {
+        print("📡 Fetching pins from data source...")
+        // TODO: Replace this with real fetch logic from your database or API
+        // Example:
+        // await loadPins()
+    }
 }

@@ -14,8 +14,9 @@ import Supabase
 struct UserProfileView: View {
     let profileUser: AppUser
     @State private var displayedUser: AppUser
+    @State private var bio: String
     
-    @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
+    // @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
     @State private var selectedSection = "Just Added"
     let sections = ["Just Added", "Loved", "Want to Go", "Recommendations"]
     
@@ -27,6 +28,7 @@ struct UserProfileView: View {
     init(profileUser: AppUser) {
         self.profileUser = profileUser
         _displayedUser = State(initialValue: profileUser)
+        _bio = State(initialValue: profileUser.bio)
     }
     
     @State private var selectedFilter: Reaction? = nil
@@ -214,7 +216,21 @@ struct UserProfileView: View {
                 .padding(.vertical, 4)
             }
         }
+        .refreshable {
+            refreshUserProfile()
+        }
         .padding(.bottom, 4)
+    }
+
+    func refreshUserProfile() {
+        Task {
+            if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
+                await MainActor.run {
+                    displayedUser = updated
+                    bio = updated.bio
+                }
+            }
+        }
     }
 
     var body: some View {
