@@ -322,7 +322,29 @@ class SupabaseManager {
             print("Supabase updateUserProfile response:", response)
         }
     }
-    
+    func getFollowers(for userID: String) async -> [AppUser] {
+        do {
+            let response: PostgrestResponse<[AppUser]> = try await client.rpc("get_followers", params: ["target_user_id": userID]).execute()
+            return decodeAppUsers(from: response)
+        } catch {
+            print("Error fetching followers: \(error)")
+            return []
+        }
+    }
+
+    func getFollowingUsers(for userID: String) async -> [AppUser] {
+        do {
+            let response: PostgrestResponse<[AppUser]> = try await client.rpc("get_following", params: ["user_id": userID]).execute()
+            return decodeAppUsers(from: response)
+        } catch {
+            print("Error fetching following users: \(error)")
+            return []
+        }
+    }
+
+    private func decodeAppUsers(from response: PostgrestResponse<[AppUser]>) -> [AppUser] {
+        return (try? response.value) ?? []
+    }
     func updateUserLocation(userID: String, latitude: Double, longitude: Double) async {
         do {
             let _ = try await client

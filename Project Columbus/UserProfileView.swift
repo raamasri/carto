@@ -122,9 +122,21 @@ struct UserProfileView: View {
                                 .foregroundColor(.gray)
                                 .lineLimit(2)
 
-                            Text("\(displayedUser.follower_count) \(displayedUser.follower_count == 1 ? "follower" : "followers") • \(displayedUser.following_count) following")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                            HStack(spacing: 8) {
+                                NavigationLink(destination: UserListView(userID: profileUser.id, listType: .followers)) {
+                                    Text("\(displayedUser.follower_count) \(displayedUser.follower_count == 1 ? "follower" : "followers")")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
+                                Text("•")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                NavigationLink(destination: UserListView(userID: profileUser.id, listType: .following)) {
+                                    Text("\(displayedUser.following_count) following")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
+                            }
                             if displayedUser.isCurrentUser == false && profileUser.isFollowedByCurrentUser {
                                 Text("Follows you")
                                     .font(.caption2)
