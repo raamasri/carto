@@ -132,6 +132,7 @@ class SupabaseManager {
         do {
             let session = try await client.auth.session
             let currentUserID = session.user.id.uuidString
+
             struct SupabaseUser: Decodable {
                 let id: String
                 let username: String
@@ -140,17 +141,18 @@ class SupabaseManager {
                 let bio: String?
                 let follower_count: Int
                 let following_count: Int
-                let isFollowedByCurrentUser: Bool
                 let latitude: Double?
                 let longitude: Double?
             }
 
             let users: [SupabaseUser] = try await client
                 .from("users")
-                .select("id, username, full_name, email, bio, follower_count, following_count, isFollowedByCurrentUser, latitude, longitude")
+                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude")
                 .filter("username", operator: "ilike", value: "%\(username)%")
                 .execute()
                 .value
+
+            let followingIDs = await getFollowing(for: session.user.id)
 
             return users.map { user in
                 AppUser(
@@ -161,7 +163,7 @@ class SupabaseManager {
                     bio: user.bio ?? "",
                     follower_count: user.follower_count,
                     following_count: user.following_count,
-                    isFollowedByCurrentUser: user.isFollowedByCurrentUser,
+                    isFollowedByCurrentUser: followingIDs.contains(UUID(uuidString: user.id) ?? UUID()),
                     latitude: user.latitude ?? 0.0,
                     longitude: user.longitude ?? 0.0,
                     isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
@@ -222,6 +224,7 @@ class SupabaseManager {
     func fetchAllUsers() async throws -> [AppUser] {
         let session = try await client.auth.session
         let currentUserID = session.user.id.uuidString
+
         struct SupabaseUser: Decodable {
             let id: String
             let username: String
@@ -240,7 +243,20 @@ class SupabaseManager {
             .execute()
             .value
 
-        return users.map { user in
+        let followingIDs = await getFollowing(for: session.user.id)
+
+        print("📦 fetchAllUsers: fetched \(users.count) users from Supabase")
+        
+        for user in users {
+            print("🔍 User: \(user.username), lat: \(String(describing: user.latitude)), lon: \(String(describing: user.longitude)), id: \(user.id)")
+        }
+        
+        let filteredUsers = users
+            .filter { $0.id.lowercased() != currentUserID.lowercased() }
+        
+        print("✅ Returning \(filteredUsers.count) users after filtering current user")
+        
+        return filteredUsers.map { user in
             AppUser(
                 id: user.id,
                 username: user.username,
@@ -249,10 +265,10 @@ class SupabaseManager {
                 bio: user.bio ?? "",
                 follower_count: user.follower_count,
                 following_count: user.following_count,
-                isFollowedByCurrentUser: false,
+                isFollowedByCurrentUser: followingIDs.contains(UUID(uuidString: user.id) ?? UUID()),
                 latitude: user.latitude ?? 0.0,
                 longitude: user.longitude ?? 0.0,
-                isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
+                isCurrentUser: false,
                 avatarURL: ""
             )
         }
