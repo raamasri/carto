@@ -45,6 +45,7 @@ struct UserProfileView: View {
     @State private var isShowingPhotoPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var selectedUIImage: UIImage? = nil
+    @State private var imageToCrop: UIImage? = nil
     @State private var profileImage: Image? = nil
     @State private var isEditingProfile = false
     @State private var tempBio = ""
@@ -232,27 +233,7 @@ struct UserProfileView: View {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
                    let uiImage = UIImage(data: data) {
                     selectedUIImage = uiImage
-                    if let jpegData = uiImage.jpegData(compressionQuality: 0.8) {
-                        do {
-                            let url = try await SupabaseManager.shared.uploadProfileImage(jpegData, for: profileUser.id)
-                            try await SupabaseManager.shared.updateUserProfile(
-                                userID: profileUser.id,
-                                fullName: profileUser.full_name,
-                                email: profileUser.email,
-                                bio: profileUser.bio,
-                                avatarURL: url.absoluteString
-                            )
-                            if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
-                                await MainActor.run {
-                                    profileUser = updated
-                                    bio = updated.bio
-                                    profileImage = Image(uiImage: uiImage)
-                                }
-                            }
-                        } catch {
-                            print("Failed to upload avatar:", error)
-                        }
-                    }
+                    imageToCrop = uiImage // triggers cropper
                 }
             }
         }
@@ -288,6 +269,34 @@ struct UserProfileView: View {
                     isEditingProfile = false
                 }
             )
+        }
+        .sheet(item: $imageToCrop) { image in
+            CircleCropperView(image: image) { cropped in
+                Task {
+                    do {
+                        if let jpegData = cropped.jpegData(compressionQuality: 0.8) {
+                            guard let userID = authManager.currentUserID else { return }
+                            let url = try await SupabaseManager.shared.uploadProfileImage(jpegData, for: userID)
+                            try await SupabaseManager.shared.updateUserProfile(
+                                userID: profileUser.id,
+                                fullName: profileUser.full_name,
+                                email: profileUser.email,
+                                bio: profileUser.bio,
+                                avatarURL: url.absoluteString
+                            )
+                            if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
+                                await MainActor.run {
+                                    profileUser = updated
+                                    bio = updated.bio
+                                    profileImage = Image(uiImage: cropped)
+                                }
+                            }
+                        }
+                    } catch {
+                        print("Failed to upload avatar:", error)
+                    }
+                }
+            }
         }
         .onAppear {
             Task {

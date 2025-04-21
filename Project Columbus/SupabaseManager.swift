@@ -432,17 +432,28 @@ extension SupabaseManager {
     
     func uploadProfileImage(_ imageData: Data, for userID: String) async throws -> URL {
         let fileName = "\(userID)-avatar.jpg"
-        
+
+        let session = try await client.auth.session
+        let currentUserID = session.user.id.uuidString
+
         let _ = try await client.storage
             .from("profile-images")
-            .upload(fileName, data: imageData)
+            .upload(
+                path: fileName,
+                file: imageData,
+                options: FileOptions(
+                    contentType: "image/jpeg",
+                    upsert: true,
+                    metadata: ["owner": AnyJSON.string(currentUserID)]
+                )
+            )
 
-        // Build public URL manually since SDK method is unavailable
-        let baseUrl = baseURL.absoluteString
-        let urlString = "\(baseUrl)/storage/v1/object/public/profile-images/\(fileName)"
+        // Build public URL
+        let urlString = "\(baseURL.absoluteString)/storage/v1/object/public/profile-images/\(fileName)"
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }
+
         return url
     }
 }
