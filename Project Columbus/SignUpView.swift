@@ -6,6 +6,7 @@ struct UserInsert: Codable {
     let username: String
     let email: String
     let phone: String
+    let full_name: String
 }
 
 struct SignUpView: View {
@@ -16,8 +17,10 @@ struct SignUpView: View {
     @FocusState private var emailFocused: Bool
     @FocusState private var passwordFocused: Bool
     @FocusState private var phoneFocused: Bool
+    @FocusState private var fullNameFocused: Bool
 
     @State private var username = ""
+    @State private var fullName = ""
     @State private var email = ""
     @State private var password = ""
     @State private var phone = ""
@@ -43,6 +46,34 @@ struct SignUpView: View {
                         .foregroundColor(.white)
                     Spacer()
                 }
+                TextField("Full Name", text: $fullName)
+                    .padding()
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(10)
+                    .contentShape(Rectangle())
+                    .focused($fullNameFocused)
+                    .submitLabel(.next)
+                    .autocapitalization(.words)
+                    .disableAutocorrection(true)
+                    .onSubmit {
+                        usernameFocused = true
+                    }
+                    .onTapGesture {
+                        fullNameFocused = true
+                    }
+                    .overlay(
+                        HStack {
+                            Spacer()
+                            if !fullName.isEmpty {
+                                Button(action: { fullName = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.trailing, 10)
+                            }
+                        }
+                    )
 
                 TextField("Desired Username (@urmom)", text: $username)
                     .padding()
@@ -191,10 +222,10 @@ struct SignUpView: View {
                 }
 
                 Button(action: {
-                    if !username.isEmpty && !email.isEmpty && !phone.isEmpty && !password.isEmpty {
+                    if !fullName.isEmpty && !username.isEmpty && !email.isEmpty && !phone.isEmpty && !password.isEmpty {
                         Task {
                             do {
-                                try await authManager.signUp(email: email, password: password, username: username, phone: phone)
+                                try await authManager.signUp(email: email, password: password, username: username, fullName: fullName, phone: phone)
                                 
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     fadeOut = true

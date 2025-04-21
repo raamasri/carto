@@ -50,13 +50,13 @@ class AuthManager: ObservableObject {
         }
     }
     
-    func signUp(email: String, password: String, username: String, phone: String) async throws {
+    func signUp(email: String, password: String, username: String, fullName: String, phone: String) async throws {
         do {
         let response = try await AuthService.shared.signUp(email: email, password: password)
             
             let userId = response.user.id
 
-            let insertData = UserInsert(id: userId.uuidString, username: username, email: email, phone: phone)
+            let insertData = UserInsert(id: userId.uuidString, username: username, email: email, phone: phone, full_name: fullName)
             _ = try await SupabaseManager.shared.client
                 .from("users")
                 .insert(insertData)
@@ -120,7 +120,8 @@ class AuthManager: ObservableObject {
                         id: user.id.uuidString,
                         username: "user_\(Int.random(in: 1000...9999))",
                         email: user.email ?? "",
-                        phone: ""
+                        phone: "",
+                        full_name: "" // 👈 leave it blank for now, or use user.email ?? "" if you'd like
                     )
                     _ = try await SupabaseManager.shared.client
                         .from("users")

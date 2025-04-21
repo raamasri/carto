@@ -47,6 +47,8 @@ struct UserProfileView: View {
     @State private var selectedUIImage: UIImage? = nil
     @State private var imageToCrop: UIImage? = nil
     @State private var profileImage: Image? = nil
+    @State private var tempUsername: String = ""
+    @State private var tempFullName: String = ""
     @State private var isEditingProfile = false
     @State private var tempBio = ""
     
@@ -75,9 +77,35 @@ struct UserProfileView: View {
                                 .clipShape(Circle())
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 .shadow(radius: 4)
-                                .onTapGesture {
-                                    showChangePicturePrompt = true
+                                .onTapGesture { showChangePicturePrompt = true }
+                        } else if let url = URL(string: profileUser.avatarURL), !profileUser.avatarURL.isEmpty {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case .empty:
+                                    ProgressView()
+                                case .success(let img):
+                                    img
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                        .shadow(radius: 4)
+                                        .onTapGesture { showChangePicturePrompt = true }
+                                case .failure:
+                                    Image(systemName: "person.circle.fill")
+                                        .resizable()
+                                        .foregroundColor(.gray)
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                        .shadow(radius: 4)
+                                        .onTapGesture { showChangePicturePrompt = true }
+                                @unknown default:
+                                    EmptyView()
                                 }
+                            }
                         } else {
                             Image(systemName: "person.circle.fill")
                                 .resizable()
@@ -87,9 +115,7 @@ struct UserProfileView: View {
                                 .clipShape(Circle())
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 .shadow(radius: 4)
-                                .onTapGesture {
-                                    showChangePicturePrompt = true
-                                }
+                                .onTapGesture { showChangePicturePrompt = true }
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
@@ -116,6 +142,8 @@ struct UserProfileView: View {
                     if profileUser.isCurrentUser {
                         HStack(spacing: 16) {
                             Button(action: {
+                                tempUsername = profileUser.username
+                                tempFullName = profileUser.full_name
                                 tempBio = bio
                                 isEditingProfile = true
                             }) {
@@ -239,6 +267,8 @@ struct UserProfileView: View {
         }
         .sheet(isPresented: $isEditingProfile) {
             EditProfileSheet(
+                username: $tempUsername,
+                fullName: $tempFullName,
                 bio: $tempBio,
                 onSave: {
                     Task {
@@ -246,7 +276,8 @@ struct UserProfileView: View {
                             // Persist change to backend
                             try await SupabaseManager.shared.updateUserProfile(
                                 userID: profileUser.id,
-                                fullName: profileUser.full_name,
+                                username: tempUsername,
+                                fullName: tempFullName,
                                 email: profileUser.email,
                                 bio: tempBio,
                                 avatarURL: profileUser.avatarURL
@@ -276,12 +307,15 @@ struct UserProfileView: View {
                     do {
                         if let jpegData = cropped.jpegData(compressionQuality: 0.8) {
                             guard let userID = authManager.currentUserID else { return }
+                            print("✏️ authManager.currentUserID:", authManager.currentUserID ?? "nil")
+                            print("✏️ target userID for upload:", userID)
                             let url = try await SupabaseManager.shared.uploadProfileImage(jpegData, for: userID)
                             try await SupabaseManager.shared.updateUserProfile(
                                 userID: profileUser.id,
-                                fullName: profileUser.full_name,
+                                username: profileUser.username,
+                                fullName: tempFullName, // ✅ user's edited name
                                 email: profileUser.email,
-                                bio: profileUser.bio,
+                                bio: bio,
                                 avatarURL: url.absoluteString
                             )
                             if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
@@ -398,6 +432,8 @@ struct CircleCropperView: View {
 }
 
 struct EditProfileSheet: View {
+    @Binding var username: String
+    @Binding var fullName: String
     @Binding var bio: String
     var onSave: () -> Void
     var onCancel: () -> Void
@@ -405,6 +441,14 @@ struct EditProfileSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section(header: Text("Name")) {
+                    TextField("Full name", text: $fullName)
+                }
+                Section(header: Text("Username")) {
+                    TextField("Username", text: $username)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                }
                 Section(header: Text("Bio")) {
                     TextEditor(text: $bio)
                         .frame(minHeight: 120)

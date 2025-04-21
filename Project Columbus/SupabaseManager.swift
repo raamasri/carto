@@ -255,39 +255,49 @@ class SupabaseManager {
     }
 
     /// Updates the user's profile fields on the backend.
-    func updateUserProfile(userID: String, fullName: String, email: String, bio: String, avatarURL: String?) async throws {
-    // Debug: check if a profile row exists before update
-    let existingProfile = await fetchUserProfile(userID: userID)
-    print("Supabase existing profile before update:", existingProfile as Any)
-    print("Sending bio:", bio)
-    if existingProfile == nil {
-        // Insert a new profile row since none exists
-        let insertResponse = try await client
-            .from("users")
-            .insert([
-                "id": userID,
-                "username": "",        // You may choose to use profileUser.username if available
-                "full_name": fullName,
-                "email": email,
-                "bio": bio,
-                "avatar_url": avatarURL ?? ""
-            ])
-            .execute()
-        print("Supabase insertUserProfile response:", insertResponse)
-    } else {
-        // Existing row: perform update
-        let response = try await client
-            .from("users")
-            .update([
-                "full_name": fullName,
-                "email": email,
-                "bio": bio,
-                "avatar_url": avatarURL ?? ""
-            ])
-            .eq("id", value: userID)
-            .execute()
-        print("Supabase updateUserProfile response:", response)
-    }
+    /// Updates the user's profile fields on the backend.
+    func updateUserProfile(
+        userID: String,
+        username: String,
+        fullName: String,
+        email: String,
+        bio: String,
+        avatarURL: String?
+    ) async throws {
+        // Debug: check if a profile row exists before update
+        let existingProfile = await fetchUserProfile(userID: userID)
+        print("Supabase existing profile before update:", existingProfile as Any)
+        print("Sending bio:", bio)
+        
+        if existingProfile == nil {
+            // Insert a new profile row since none exists
+            let insertResponse = try await client
+                .from("users")
+                .insert([
+                    "id": userID,
+                    "username": username,
+                    "full_name": fullName,
+                    "email": email,
+                    "bio": bio,
+                    "avatar_url": avatarURL ?? ""
+                ])
+                .execute()
+            print("Supabase insertUserProfile response:", insertResponse)
+        } else {
+            // Existing row: perform update
+            let response = try await client
+                .from("users")
+                .update([
+                    "username": username,
+                    "full_name": fullName,
+                    "email": email,
+                    "bio": bio,
+                    "avatar_url": avatarURL ?? ""
+                ])
+                .eq("id", value: userID)
+                .execute()
+            print("Supabase updateUserProfile response:", response)
+        }
     }
     
     func updateUserLocation(userID: String, latitude: Double, longitude: Double) async {
@@ -432,28 +442,36 @@ extension SupabaseManager {
     
     func uploadProfileImage(_ imageData: Data, for userID: String) async throws -> URL {
         let fileName = "\(userID)-avatar.jpg"
+        print("Uploading profile image with fileName: \(fileName)")
 
         let session = try await client.auth.session
         let currentUserID = session.user.id.uuidString
+        print("Current authenticated user ID: \(currentUserID)")
+        print("Target user ID for upload: \(userID)")
 
-        let _ = try await client.storage
+        let uploadOptions = FileOptions(
+            contentType: "image/jpeg",
+            upsert: true,
+            metadata: ["owner": AnyJSON.string(currentUserID)]
+        )
+        print("Upload options: \(uploadOptions)")
+
+        let uploadResponse = try await client.storage
             .from("profile-images")
             .upload(
-                path: fileName,
-                file: imageData,
-                options: FileOptions(
-                    contentType: "image/jpeg",
-                    upsert: true,
-                    metadata: ["owner": AnyJSON.string(currentUserID)]
-                )
+                fileName,
+                data: imageData,
+                options: uploadOptions
             )
+        print("Upload succeeded: \(uploadResponse)")
 
         // Build public URL
-        let urlString = "\(baseURL.absoluteString)/storage/v1/object/public/profile-images/\(fileName)"
+        let urlString = "https://rthgzxorsccgeztwaxnt.supabase.co/storage/v1/object/public/profile-images/\(fileName)"
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }
 
+        print("Generated public URL: \(url)")
         return url
     }
 }
