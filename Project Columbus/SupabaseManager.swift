@@ -11,13 +11,16 @@ import CryptoKit
 
 class SupabaseManager {
     static let shared = SupabaseManager()
-
+    let baseURL: URL
+    
     let client: SupabaseClient
 
     private init() {
         let supabaseUrl = URL(string: "https://rthgzxorsccgeztwaxnt.supabase.co")!
         let supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0aGd6eG9yc2NjZ2V6dHdheG50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ4NTYyNTMsImV4cCI6MjA2MDQzMjI1M30.mbXmJTsBIMHdlL_lcSAX0Zd87YH-_jDkWb8H6W1wW6I"
-
+        
+        self.baseURL = supabaseUrl
+        
         self.client = SupabaseClient(
             supabaseURL: supabaseUrl,
             supabaseKey: supabaseKey
@@ -158,8 +161,9 @@ class SupabaseManager {
                     following_count: user.following_count,
                     isFollowedByCurrentUser: user.isFollowedByCurrentUser,
                     latitude: user.latitude ?? 0.0,
-                longitude: user.longitude ?? 0.0,
-                isCurrentUser: false
+                    longitude: user.longitude ?? 0.0,
+                    isCurrentUser: false,
+                    avatarURL: ""
                 )
             }
         } catch {
@@ -203,7 +207,8 @@ class SupabaseManager {
                 isFollowedByCurrentUser: user.is_current_user,
                 latitude: user.latitude ?? 0.0,
                 longitude: user.longitude ?? 0.0,
-                isCurrentUser: user.is_current_user
+                isCurrentUser: user.is_current_user,
+                avatarURL: ""
             )
         } catch {
             print("Error fetching user profile: \(error)")
@@ -243,13 +248,14 @@ class SupabaseManager {
                 isFollowedByCurrentUser: false,
                 latitude: user.latitude ?? 0.0,
                 longitude: user.longitude ?? 0.0,
-                isCurrentUser: false
+                isCurrentUser: false,
+                avatarURL: ""
             )
         }
     }
 
     /// Updates the user's profile fields on the backend.
-    func updateUserProfile(userID: String, fullName: String, email: String, bio: String) async throws {
+    func updateUserProfile(userID: String, fullName: String, email: String, bio: String, avatarURL: String?) async throws {
     // Debug: check if a profile row exists before update
     let existingProfile = await fetchUserProfile(userID: userID)
     print("Supabase existing profile before update:", existingProfile as Any)
@@ -263,7 +269,8 @@ class SupabaseManager {
                 "username": "",        // You may choose to use profileUser.username if available
                 "full_name": fullName,
                 "email": email,
-                "bio": bio
+                "bio": bio,
+                "avatar_url": avatarURL ?? ""
             ])
             .execute()
         print("Supabase insertUserProfile response:", insertResponse)
@@ -274,7 +281,8 @@ class SupabaseManager {
             .update([
                 "full_name": fullName,
                 "email": email,
-                "bio": bio
+                "bio": bio,
+                "avatar_url": avatarURL ?? ""
             ])
             .eq("id", value: userID)
             .execute()
@@ -420,5 +428,21 @@ extension SupabaseManager {
             let didFollow = await followUser(followingID: uuid)
             return didFollow
         }
+    }
+    
+    func uploadProfileImage(_ imageData: Data, for userID: String) async throws -> URL {
+        let fileName = "\(userID)-avatar.jpg"
+        
+        let _ = try await client.storage
+            .from("profile-images")
+            .upload(fileName, data: imageData)
+
+        // Build public URL manually since SDK method is unavailable
+        let baseUrl = baseURL.absoluteString
+        let urlString = "\(baseUrl)/storage/v1/object/public/profile-images/\(fileName)"
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+        return url
     }
 }

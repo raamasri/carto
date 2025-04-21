@@ -21,6 +21,7 @@ struct AppUser: Identifiable {
     let longitude: Double?
     //new backend driven flag
     let isCurrentUser: Bool
+    let avatarURL: String  
     var location: CLLocationCoordinate2D? {
         guard let lat = latitude, let lon = longitude else { return nil }
         return CLLocationCoordinate2D(latitude: lat, longitude: lon)

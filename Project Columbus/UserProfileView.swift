@@ -23,7 +23,8 @@ struct UserProfileView: View {
         isFollowedByCurrentUser: false,
         latitude: 0.0,
         longitude: 0.0,
-        isCurrentUser: false
+        isCurrentUser: false,
+        avatarURL: ""
     )
     
     @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
@@ -231,6 +232,27 @@ struct UserProfileView: View {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
                    let uiImage = UIImage(data: data) {
                     selectedUIImage = uiImage
+                    if let jpegData = uiImage.jpegData(compressionQuality: 0.8) {
+                        do {
+                            let url = try await SupabaseManager.shared.uploadProfileImage(jpegData, for: profileUser.id)
+                            try await SupabaseManager.shared.updateUserProfile(
+                                userID: profileUser.id,
+                                fullName: profileUser.full_name,
+                                email: profileUser.email,
+                                bio: profileUser.bio,
+                                avatarURL: url.absoluteString
+                            )
+                            if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
+                                await MainActor.run {
+                                    profileUser = updated
+                                    bio = updated.bio
+                                    profileImage = Image(uiImage: uiImage)
+                                }
+                            }
+                        } catch {
+                            print("Failed to upload avatar:", error)
+                        }
+                    }
                 }
             }
         }
@@ -245,7 +267,8 @@ struct UserProfileView: View {
                                 userID: profileUser.id,
                                 fullName: profileUser.full_name,
                                 email: profileUser.email,
-                                bio: tempBio
+                                bio: tempBio,
+                                avatarURL: profileUser.avatarURL
                             )
                             // Re-fetch to get the definitive record
                             if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
