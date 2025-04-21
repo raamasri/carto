@@ -119,7 +119,7 @@ struct UserProfileView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("@\(profileUser.username)")
+                            Text(profileUser.full_name)
                                 .font(.headline)
 
                             Text(bio)
