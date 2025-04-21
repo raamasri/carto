@@ -122,9 +122,14 @@ struct UserProfileView: View {
                                 .foregroundColor(.gray)
                                 .lineLimit(2)
 
-                            Text("\(displayedUser.follower_count) followers • \(displayedUser.following_count) following")
+                            Text("\(displayedUser.follower_count) \(displayedUser.follower_count == 1 ? "follower" : "followers") • \(displayedUser.following_count) following")
                                 .font(.caption)
                                 .foregroundColor(.gray)
+                            if displayedUser.isCurrentUser == false && profileUser.isFollowedByCurrentUser {
+                                Text("Follows you")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
                         }
                         Spacer()
                     }
@@ -164,11 +169,9 @@ struct UserProfileView: View {
                     }
 
                     if !(profileUser.isCurrentUser ?? false) {
-                        Button(action: {
+                        FollowButton(isFollowing: $displayedUser.isFollowedByCurrentUser) {
                             Task {
-                                let isNowFollowing = await SupabaseManager.shared.toggleFollowStatus(
-                                    targetUserID: profileUser.id
-                                )
+                                let isNowFollowing = await SupabaseManager.shared.toggleFollowStatus(targetUserID: profileUser.id)
                                 await MainActor.run {
                                     if isNowFollowing {
                                         displayedUser.follower_count += 1
@@ -179,16 +182,7 @@ struct UserProfileView: View {
                                     }
                                 }
                             }
-                        }) {
-                            Text(displayedUser.isFollowedByCurrentUser ? "Unfollow" : "Follow")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding(8)
-                                .background(profileUser.isFollowedByCurrentUser ? Color.red.opacity(0.2) : Color.blue.opacity(0.2))
-                                .cornerRadius(8)
                         }
-                        .padding(.horizontal)
                     }
 
                     Map(
@@ -500,5 +494,26 @@ struct EditProfileSheet: View {
                 }
             }
         }
+    }
+}
+
+
+struct FollowButton: View {
+    @Binding var isFollowing: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: {
+            action()
+        }) {
+            Text(isFollowing ? "Unfollow" : "Follow")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(8)
+                .background(isFollowing ? Color.red.opacity(0.2) : Color.blue.opacity(0.2))
+                .cornerRadius(8)
+        }
+        .padding(.horizontal)
     }
 }

@@ -202,6 +202,8 @@ class SupabaseManager {
 
             guard let user = users.first else { return nil }
 
+            let isFollowing = await isFollowing(userID: UUID(uuidString: user.id) ?? UUID())
+
             return AppUser(
                 id: user.id,
                 username: user.username,
@@ -210,7 +212,7 @@ class SupabaseManager {
                 bio: user.bio ?? "",
                 follower_count: user.follower_count,
                 following_count: user.following_count,
-                isFollowedByCurrentUser: false,
+                isFollowedByCurrentUser: isFollowing,
                 latitude: user.latitude ?? 0.0,
                 longitude: user.longitude ?? 0.0,
                 isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
