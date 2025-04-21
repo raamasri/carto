@@ -158,7 +158,8 @@ class SupabaseManager {
                     following_count: user.following_count,
                     isFollowedByCurrentUser: user.isFollowedByCurrentUser,
                     latitude: user.latitude ?? 0.0,
-                    longitude: user.longitude ?? 0.0
+                longitude: user.longitude ?? 0.0,
+                isCurrentUser: false
                 )
             }
         } catch {
@@ -172,19 +173,19 @@ class SupabaseManager {
             struct SupabaseUser: Decodable {
                 let id: String
                 let username: String
-                let full_name: String
+                let full_name: String?
                 let email: String
                 let bio: String?
                 let follower_count: Int
                 let following_count: Int
-                let isFollowedByCurrentUser: Bool
                 let latitude: Double?
                 let longitude: Double?
+                let is_current_user: Bool
             }
  
             let users: [SupabaseUser] = try await client
-                .from("users")
-                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude")
+                .from("user_profiles")
+                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude, is_current_user")
                 .eq("id", value: userID)
                 .execute()
                 .value
@@ -194,14 +195,15 @@ class SupabaseManager {
             return AppUser(
                 id: user.id,
                 username: user.username,
-                full_name: user.full_name,
+                full_name: user.full_name ?? "",
                 email: user.email,
                 bio: user.bio ?? "",
                 follower_count: user.follower_count,
                 following_count: user.following_count,
-                isFollowedByCurrentUser: user.isFollowedByCurrentUser,
+                isFollowedByCurrentUser: user.is_current_user,
                 latitude: user.latitude ?? 0.0,
-                longitude: user.longitude ?? 0.0
+                longitude: user.longitude ?? 0.0,
+                isCurrentUser: user.is_current_user
             )
         } catch {
             print("Error fetching user profile: \(error)")
@@ -220,6 +222,7 @@ class SupabaseManager {
             let following_count: Int
             let latitude: Double?
             let longitude: Double?
+            let is_current_user: Bool
         }
 
         let users: [SupabaseUser] = try await client
@@ -239,13 +242,33 @@ class SupabaseManager {
                 following_count: user.following_count,
                 isFollowedByCurrentUser: false,
                 latitude: user.latitude ?? 0.0,
-                longitude: user.longitude ?? 0.0
+                longitude: user.longitude ?? 0.0,
+                isCurrentUser: false
             )
         }
     }
 
     /// Updates the user's profile fields on the backend.
     func updateUserProfile(userID: String, fullName: String, email: String, bio: String) async throws {
+    // Debug: check if a profile row exists before update
+    let existingProfile = await fetchUserProfile(userID: userID)
+    print("Supabase existing profile before update:", existingProfile as Any)
+    print("Sending bio:", bio)
+    if existingProfile == nil {
+        // Insert a new profile row since none exists
+        let insertResponse = try await client
+            .from("users")
+            .insert([
+                "id": userID,
+                "username": "",        // You may choose to use profileUser.username if available
+                "full_name": fullName,
+                "email": email,
+                "bio": bio
+            ])
+            .execute()
+        print("Supabase insertUserProfile response:", insertResponse)
+    } else {
+        // Existing row: perform update
         let response = try await client
             .from("users")
             .update([
@@ -256,6 +279,7 @@ class SupabaseManager {
             .eq("id", value: userID)
             .execute()
         print("Supabase updateUserProfile response:", response)
+    }
     }
     
     func updateUserLocation(userID: String, latitude: Double, longitude: Double) async {

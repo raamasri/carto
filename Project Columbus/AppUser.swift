@@ -19,7 +19,8 @@ struct AppUser: Identifiable {
     var isFollowedByCurrentUser: Bool
     let latitude: Double?
     let longitude: Double?
-
+    //new backend driven flag
+    let isCurrentUser: Bool
     var location: CLLocationCoordinate2D? {
         guard let lat = latitude, let lon = longitude else { return nil }
         return CLLocationCoordinate2D(latitude: lat, longitude: lon)

@@ -22,7 +22,8 @@ struct UserProfileView: View {
         following_count: 0,
         isFollowedByCurrentUser: false,
         latitude: 0.0,
-        longitude: 0.0
+        longitude: 0.0,
+        isCurrentUser: false
     )
     
     @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
@@ -31,6 +32,8 @@ struct UserProfileView: View {
     
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var pinStore: PinStore
+    
+    // The isCurrentUser flag is now provided by the backend via profileUser.isCurrentUser
     
     @State private var selectedFilter: Reaction? = nil
     @State private var region = MKCoordinateRegion(
@@ -108,7 +111,7 @@ struct UserProfileView: View {
 
                 // Buttons and Map
                 VStack(spacing: 8) {
-                    if let currentUsername = authManager.currentUsername, profileUser.username == currentUsername {
+                    if profileUser.isCurrentUser {
                         HStack(spacing: 16) {
                             Button(action: {
                                 tempBio = bio
@@ -135,8 +138,7 @@ struct UserProfileView: View {
                         .padding(.horizontal)
                     }
 
-                    if let currentUsername = authManager.currentUsername,
-                       profileUser.username != currentUsername {
+                    if !profileUser.isCurrentUser {
                         Button(action: {
                             Task {
                                 let isNowFollowing = await SupabaseManager.shared.toggleFollowStatus(
