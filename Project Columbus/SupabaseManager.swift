@@ -190,11 +190,12 @@ class SupabaseManager {
                 let following_count: Int
                 let latitude: Double?
                 let longitude: Double?
+                let avatar_url: String?
             }
 
             let users: [SupabaseUser] = try await client
-                .from("user_profiles")
-                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude")
+                .from("users")
+                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude, avatar_url")
                 .eq("id", value: userID)
                 .execute()
                 .value
@@ -213,7 +214,7 @@ class SupabaseManager {
                 latitude: user.latitude ?? 0.0,
                 longitude: user.longitude ?? 0.0,
                 isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
-                avatarURL: ""
+                avatarURL: user.avatar_url ?? ""
             )
         } catch {
             print("Error fetching user profile: \(error)")
@@ -475,15 +476,27 @@ extension SupabaseManager {
             metadata: ["owner": AnyJSON.string(currentUserID)]
         )
         print("Upload options: \(uploadOptions)")
+        print("🔍 Uploading avatar with fileName:", fileName)
+        print("🔍 Upload options metadata:", uploadOptions.metadata)
 
-        let uploadResponse = try await client.storage
-            .from("profile-images")
-            .upload(
-                fileName,
-                data: imageData,
-                options: uploadOptions
-            )
-        print("Upload succeeded: \(uploadResponse)")
+        do {
+            let uploadResponse = try await client.storage
+                .from("profile-images")
+                .upload(
+                    fileName,
+                    data: imageData,
+                    options: uploadOptions
+                )
+            print("✅ Upload succeeded:", uploadResponse)
+        } catch let storageError as StorageError {
+            print("❌ StorageError uploading avatar - statusCode:", storageError.statusCode ?? "nil",
+                  "message:", storageError.message ?? "nil",
+                  "error:", storageError.error ?? "nil")
+            throw storageError
+        } catch {
+            print("❌ Unexpected error uploading avatar:", error)
+            throw error
+        }
 
         // Build public URL
         let urlString = "https://rthgzxorsccgeztwaxnt.supabase.co/storage/v1/object/public/profile-images/\(fileName)"

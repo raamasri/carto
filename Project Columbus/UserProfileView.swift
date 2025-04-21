@@ -73,7 +73,7 @@ struct UserProfileView: View {
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 .shadow(radius: 4)
                                 .onTapGesture { showChangePicturePrompt = true }
-                        } else if let url = URL(string: profileUser.avatarURL), !profileUser.avatarURL.isEmpty {
+                        } else if let url = URL(string: displayedUser.avatarURL), !displayedUser.avatarURL.isEmpty {
                             AsyncImage(url: url) { phase in
                                 switch phase {
                                 case .empty:
@@ -114,7 +114,7 @@ struct UserProfileView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(displayedUser.full_name)
+                            Text(displayedUser.full_name.isEmpty ? "@\(displayedUser.username)" : displayedUser.full_name)
                                 .font(.headline)
 
                             Text(bio)
@@ -319,7 +319,20 @@ struct UserProfileView: View {
                             guard let userID = authManager.currentUserID else { return }
                             print("✏️ authManager.currentUserID:", authManager.currentUserID ?? "nil")
                             print("✏️ target userID for upload:", userID)
-                            let url = try await SupabaseManager.shared.uploadProfileImage(jpegData, for: userID)
+                            try await SupabaseManager.shared.client.storage
+                                .from("profile-images")
+                                .upload(
+                                    "\(userID)-avatar.jpg",
+                                    data: jpegData,
+                                    options: FileOptions(
+                                        contentType: "image/jpeg",
+                                        upsert: true,
+                                        metadata: ["owner": AnyJSON.string(userID)]
+                                    )
+                                )
+                            let url = try SupabaseManager.shared.client.storage
+                                .from("profile-images")
+                                .getPublicURL(path: "\(userID)-avatar.jpg")
                             try await SupabaseManager.shared.updateUserProfile(
                                 userID: profileUser.id,
                                 username: displayedUser.username,
@@ -344,6 +357,26 @@ struct UserProfileView: View {
         }
         .onAppear {
             print("👀 UserProfileView appeared for:", profileUser.username)
+
+            Task {
+                if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
+                    displayedUser = updated
+                    bio = updated.bio
+
+                    if let url = URL(string: updated.avatarURL) {
+                        do {
+                            let (data, _) = try await URLSession.shared.data(from: url)
+                            if let uiImage = UIImage(data: data) {
+                                await MainActor.run {
+                                    profileImage = Image(uiImage: uiImage)
+                                }
+                            }
+                        } catch {
+                            print("Failed to load image data:", error)
+                        }
+                    }
+                }
+            }
         }
     }
 }
