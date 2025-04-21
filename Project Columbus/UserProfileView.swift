@@ -12,20 +12,8 @@ import UIKit
 import Supabase
 
 struct UserProfileView: View {
-    @State var profileUser = AppUser(
-        id: UUID().uuidString,
-        username: "",
-        full_name: "",
-        email: "",
-        bio: "",
-        follower_count: 0,
-        following_count: 0,
-        isFollowedByCurrentUser: false,
-        latitude: 0.0,
-        longitude: 0.0,
-        isCurrentUser: false,
-        avatarURL: ""
-    )
+    let profileUser: AppUser
+    @State private var displayedUser: AppUser
     
     @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
     @State private var selectedSection = "Just Added"
@@ -35,6 +23,11 @@ struct UserProfileView: View {
     @EnvironmentObject var pinStore: PinStore
     
     // The isCurrentUser flag is now provided by the backend via profileUser.isCurrentUser
+    
+    init(profileUser: AppUser) {
+        self.profileUser = profileUser
+        _displayedUser = State(initialValue: profileUser)
+    }
     
     @State private var selectedFilter: Reaction? = nil
     @State private var region = MKCoordinateRegion(
@@ -119,7 +112,7 @@ struct UserProfileView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(profileUser.full_name)
+                            Text(displayedUser.full_name)
                                 .font(.headline)
 
                             Text(bio)
@@ -127,7 +120,7 @@ struct UserProfileView: View {
                                 .foregroundColor(.gray)
                                 .lineLimit(2)
 
-                            Text("\(profileUser.follower_count) followers • \(profileUser.following_count) following")
+                            Text("\(displayedUser.follower_count) followers • \(displayedUser.following_count) following")
                                 .font(.caption)
                                 .foregroundColor(.gray)
                         }
@@ -176,16 +169,16 @@ struct UserProfileView: View {
                                 )
                                 await MainActor.run {
                                     if isNowFollowing {
-                                        profileUser.follower_count += 1
-                                        profileUser.isFollowedByCurrentUser = true
+                                        displayedUser.follower_count += 1
+                                        displayedUser.isFollowedByCurrentUser = true
                                     } else {
-                                        profileUser.follower_count -= 1
-                                        profileUser.isFollowedByCurrentUser = false
+                                        displayedUser.follower_count -= 1
+                                        displayedUser.isFollowedByCurrentUser = false
                                     }
                                 }
                             }
                         }) {
-                            Text(profileUser.isFollowedByCurrentUser ? "Unfollow" : "Follow")
+                            Text(displayedUser.isFollowedByCurrentUser ? "Unfollow" : "Follow")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
@@ -225,7 +218,8 @@ struct UserProfileView: View {
     }
 
     var body: some View {
-        Group {
+        print("🧭 Loading UserProfileView for username:", profileUser.username)
+        return Group {
             if profileUser.username.isEmpty {
                 // Loading state while placeholder data is present
                 ProgressView("Loading Profile…")
@@ -285,7 +279,7 @@ struct UserProfileView: View {
                             // Re-fetch to get the definitive record
                             if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
                                 await MainActor.run {
-                                    profileUser = updated
+                                    displayedUser = updated
                                     bio = updated.bio
                                     tempBio = updated.bio
                                     isEditingProfile = false
@@ -312,7 +306,7 @@ struct UserProfileView: View {
                             let url = try await SupabaseManager.shared.uploadProfileImage(jpegData, for: userID)
                             try await SupabaseManager.shared.updateUserProfile(
                                 userID: profileUser.id,
-                                username: profileUser.username,
+                                username: displayedUser.username,
                                 fullName: tempFullName, // ✅ user's edited name
                                 email: profileUser.email,
                                 bio: bio,
@@ -320,7 +314,7 @@ struct UserProfileView: View {
                             )
                             if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
                                 await MainActor.run {
-                                    profileUser = updated
+                                    displayedUser = updated
                                     bio = updated.bio
                                     profileImage = Image(uiImage: cropped)
                                 }
@@ -333,15 +327,7 @@ struct UserProfileView: View {
             }
         }
         .onAppear {
-            Task {
-                guard let userID = authManager.currentUserID else { return }
-                if let fullProfile = await SupabaseManager.shared.fetchUserProfile(userID: userID) {
-                    profileUser = fullProfile
-                    bio = fullProfile.bio
-                } else if let fallback = authManager.currentUsername {
-                    profileUser.username = fallback
-                }
-            }
+            print("👀 UserProfileView appeared for:", profileUser.username)
         }
     }
 }

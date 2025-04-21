@@ -192,7 +192,7 @@ struct IdentifiableMapItem: Identifiable {
 import SwiftUI
 import MapKit
 struct MainMapView: View {
-    
+    @EnvironmentObject var authManager: AuthManager
     @State private var shouldTrackUser = false
     @State private var isUserManuallyMovingMap = false
     @State private var cameraPosition = MapCameraPosition.region(MKCoordinateRegion(
@@ -465,8 +465,25 @@ struct MainMapView: View {
                 }
 
             } else if selectedTab == 4 {
-                UserProfileView()
-                
+                Group {
+                    if let currentUser = authManager.currentUser {
+                        UserProfileView(profileUser: currentUser)
+                            .onAppear {
+                                print("📍 selectedTab 4 triggered. currentUser = \(currentUser.username)")
+                            }
+                    } else {
+                        Text("Loading user profile...")
+                            .onAppear {
+                                print("📍 selectedTab 4 triggered. currentUser = nil")
+                            }
+                    }
+                }
+                .task {
+                    if authManager.currentUser == nil {
+                        print("🔄 Re-fetching current user from Supabase...")
+                        await authManager.fetchCurrentUser()
+                    }
+                }
             } else if selectedTab == 1 {
                 FindFriendsView()
             } else if selectedTab == 2 {

@@ -24,6 +24,7 @@ class AuthManager: ObservableObject {
     @Published var isLoggedIn = false
     @Published var currentUsername: String?
     @Published var currentUserID: String?
+    @Published var currentUser: AppUser? = nil
     @Published var lastUsedPassword: String = ""
 
     func logIn(username: String, password: String) async -> Bool {
@@ -33,6 +34,7 @@ class AuthManager: ObservableObject {
             self.isLoggedIn = true
             if let user = try? await SupabaseManager.shared.client.auth.user() {
                 self.currentUserID = user.id.uuidString
+                await fetchCurrentUser()
             }
             self.lastUsedPassword = password
             if !biometricEnabled && !biometricPromptShown {
@@ -136,6 +138,7 @@ class AuthManager: ObservableObject {
 
                 self.currentUsername = user.email
                 self.currentUserID = user.id.uuidString
+                await fetchCurrentUser()
             }
 
             return true
@@ -162,6 +165,9 @@ class AuthManager: ObservableObject {
                     self.isLoggedIn = !session.accessToken.isEmpty
                     self.currentUsername = session.user.email
                     self.currentUserID = session.user.id.uuidString
+                }
+                Task {
+                    await self.fetchCurrentUser()
                 }
             } catch {
                 print("Failed to check session: \(error)")
@@ -263,6 +269,42 @@ class AuthManager: ObservableObject {
             return (username, password)
         }
         return nil
+    }
+    
+    func fetchCurrentUser() async {
+        guard let id = currentUserID else { return }
+        do {
+            let response: [SelfUser] = try await SupabaseManager.shared.client
+                .from("users")
+                .select()
+                .eq("id", value: id)
+                .limit(1)
+                .execute()
+                .value
+
+            if let user = response.first {
+                let appUser = AppUser(
+                    id: user.id,
+                    username: user.username,
+                    full_name: user.full_name,
+                    email: user.email,
+                    bio: user.bio ?? "",
+                    follower_count: user.follower_count,
+                    following_count: user.following_count,
+                    isFollowedByCurrentUser: false,
+                    latitude: user.latitude,
+                    longitude: user.longitude,
+                    isCurrentUser: true,
+                    avatarURL: user.avatarURL ?? ""
+                )
+                print("✅ currentUser fetched:", appUser.username)
+                self.currentUser = appUser
+            } else {
+                print("⚠️ No user found with id:", id)
+            }
+        } catch {
+            print("❌ Failed to fetch currentUser:", error)
+        }
     }
 }
 

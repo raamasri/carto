@@ -86,3 +86,16 @@ struct AppUser: Identifiable, Codable {
         self.avatarURL = avatarURL
     }
 }
+
+struct SelfUser: Codable {
+    var id: String
+    var username: String
+    var full_name: String
+    var email: String
+    var bio: String?
+    var follower_count: Int
+    var following_count: Int
+    var latitude: Double?
+    var longitude: Double?
+    var avatarURL: String?
+}
