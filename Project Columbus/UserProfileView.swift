@@ -167,8 +167,8 @@ struct UserProfileView: View {
                                     .background(Color.gray.opacity(0.2))
                                     .cornerRadius(8)
                             }
-                            Button(action: {}) {
-                                Text("Share profile")
+                            NavigationLink(destination: NotificationView()) {
+                                Text("Notifications")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                     .frame(maxWidth: .infinity)
