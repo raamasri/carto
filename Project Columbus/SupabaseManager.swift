@@ -9,7 +9,7 @@ import Supabase
 import Foundation
 import CryptoKit
 
-class SupabaseManager {
+class SupabaseManager: ObservableObject {
     static let shared = SupabaseManager()
     let baseURL: URL
     

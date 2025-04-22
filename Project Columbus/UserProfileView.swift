@@ -241,17 +241,28 @@ struct UserProfileView: View {
 
     var body: some View {
         print("🧭 Loading UserProfileView for username:", profileUser.username)
-        return Group {
-            if profileUser.username.isEmpty {
-                // Loading state while placeholder data is present
-                ProgressView("Loading Profile…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                VStack(spacing: 16) {
-                    profileHeader
-                    profileBody
+        return NavigationStack {
+            Group {
+                if profileUser.username.isEmpty {
+                    // Loading state while placeholder data is present
+                    ProgressView("Loading Profile…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(spacing: 16) {
+                        profileHeader
+                        profileBody
+                    }
+                    .padding(.top, 4)
                 }
-                .padding(.top, 4)
+            }
+            .toolbar {
+                if profileUser.isCurrentUser ?? false {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        NavigationLink(destination: NotificationView()) {
+                            Image(systemName: "bell")
+                        }
+                    }
+                }
             }
         }
         .padding(.top, 4)
