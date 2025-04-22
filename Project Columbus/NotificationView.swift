@@ -35,6 +35,8 @@ struct NotificationView: View {
 
     @State private var followRequests: [NotificationItem] = []
     @State private var isLoading = true
+    @State private var showConfirmation = false
+    @State private var confirmationMessage = ""
 
     var body: some View {
         NavigationView {
@@ -83,6 +85,9 @@ struct NotificationView: View {
                     await fetchFollowRequests()
                 }
             }
+        }
+        .alert(isPresented: $showConfirmation) {
+            Alert(title: Text("Follow Request"), message: Text(confirmationMessage), dismissButton: .default(Text("OK")))
         }
     }
 
@@ -152,6 +157,11 @@ struct NotificationView: View {
 
                 // Remove from local list
                 followRequests.removeAll { $0.id == request.id }
+
+                await MainActor.run {
+                    confirmationMessage = "Accepted follow request from @\(request.fromUsername)"
+                    showConfirmation = true
+                }
             } catch {
                 print("❌ Failed to accept follow request:", error)
             }

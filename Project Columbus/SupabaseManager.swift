@@ -29,25 +29,73 @@ class SupabaseManager: ObservableObject {
 
     /// Checks if a follow request exists between the current user and a target user
     func hasFollowRequestSent(to userID: UUID) async -> Bool {
-        guard let session = try? await client.auth.session else { return false }
-        let currentUserID = session.user.id
+        do {
+            // Define a simple decodable struct for the notification response
+            struct NotificationResponse: Decodable {
+                let id: UUID
+            }
+            guard let session = try? await client.auth.session else { return false }
+            let currentUserID = session.user.id.uuidString
 
-        let result = try? await client
-            .from("notifications")
-            .select("id")
-            .eq("user_id", value: userID.uuidString)
-            .eq("from_user_id", value: currentUserID.uuidString)
-            .eq("type", value: "follow_request")
-            .limit(1)
-            .execute()
+            // 🔥 DEBUG: verify the method is called and parameters
+            print("🧪 currentUserID:", currentUserID)
+            print("🧪 target userID for check:", userID.uuidString)
 
-        guard let rows = result?.value as? [[String: Any]] else {
-            print("⚠️ Failed to decode follow request check result")
+            // 🔥 DEBUG: fetch all notifications unfiltered to see what the client can access
+            let allResp: PostgrestResponse<[NotificationResponse]> = try await client
+                .from("notifications")
+                .select("id, user_id, from_user_id, type")
+                .execute()
+            print("🔁 ALL notifications unfiltered:", allResp.value)
+
+            // 🔥 DEBUG: test hardcoded filter to rule out runtime parameter mismatch
+            let hardcodedResp: PostgrestResponse<[NotificationResponse]> = try await client
+                .from("notifications")
+                .select("id")
+                .eq("user_id", value: "169d7f26-4ee7-4be9-8657-99ea61c66782")
+                .eq("from_user_id", value: "9751E517-9B49-43BB-88B4-129450B3EF41")
+                .limit(1)
+                .execute()
+            print("🔁 HARDCODED filter JSON:", String(data: hardcodedResp.data, encoding: .utf8) ?? "nil")
+            print("🔍 HARDCODED count:", hardcodedResp.value.count)
+
+            // Execute and capture raw response for debugging
+            let resp: PostgrestResponse<[NotificationResponse]> = try await client
+                .from("notifications")
+                .select("id")
+                .eq("user_id", value: userID.uuidString)
+                .eq("from_user_id", value: currentUserID)
+                .eq("type", value: "follow_request")
+                .limit(1)
+                .execute()
+
+            // Dump raw response to console
+            print("🔁 raw follow request response:", resp)
+
+            // Print raw JSON payload
+            if let jsonString = String(data: resp.data, encoding: .utf8) {
+                print("🔁 raw follow JSON:", jsonString)
+            } else {
+                print("🔁 failed to convert raw data to string")
+            }
+
+            // Attempt manual JSON decode for troubleshooting
+            do {
+                let manualDecode = try JSONDecoder().decode([NotificationResponse].self, from: resp.data)
+                print("🔁 manual decode result:", manualDecode)
+            } catch {
+                print("🔁 manual decode error:", error)
+            }
+
+            // Extract decoded value
+            let notifications = resp.value
+
+            print("🔍 Follow request count: \(notifications.count)")
+            return !notifications.isEmpty
+        } catch {
+            print("Error checking follow request: \(error)")
             return false
         }
-
-        print("🔍 Follow request rows found: \(rows.count)")
-        return !rows.isEmpty
     }
     
     func getCurrentUsername() async -> String? {
@@ -347,7 +395,16 @@ class SupabaseManager: ObservableObject {
     }
     func getFollowers(for userID: String) async -> [AppUser] {
         do {
-            let response: PostgrestResponse<[AppUser]> = try await client.rpc("get_followers", params: ["target_user_id": userID]).execute()
+            let session = try await client.auth.session
+            let currentUserID = session.user.id.uuidString
+
+            let response: PostgrestResponse<[AppUser]> = try await client
+                .rpc("get_followers_with_status", params: [
+                    "current_user_id": currentUserID,
+                    "viewed_user_id": userID
+                ])
+                .execute()
+
             return decodeAppUsers(from: response)
         } catch {
             print("Error fetching followers: \(error)")
@@ -357,7 +414,16 @@ class SupabaseManager: ObservableObject {
 
     func getFollowingUsers(for userID: String) async -> [AppUser] {
         do {
-            let response: PostgrestResponse<[AppUser]> = try await client.rpc("get_following", params: ["user_id": userID]).execute()
+            let session = try await client.auth.session
+            let currentUserID = session.user.id.uuidString
+
+            let response: PostgrestResponse<[AppUser]> = try await client
+                .rpc("get_following_users_with_status", params: [
+                    "current_user_id": currentUserID,
+                    "viewed_user_id": userID
+                ])
+                .execute()
+
             return decodeAppUsers(from: response)
         } catch {
             print("Error fetching following users: \(error)")

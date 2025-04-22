@@ -16,6 +16,7 @@ struct UserListView: View {
     let listType: UserListType
     
     @State private var users: [AppUser] = []
+    @State private var isLoading = true
     
     var body: some View {
         List(users, id: \.id) { user in
@@ -47,18 +48,18 @@ struct UserListView: View {
             }
         }
         .navigationTitle(listType == .followers ? "Followers" : "Following")
-        .onAppear {
-            Task {
-                if listType == .followers {
-                    users = await SupabaseManager.shared.getFollowers(for: userID)
-                } else {
-                    users = await SupabaseManager.shared.getFollowingUsers(for: userID)
-                }
-                print("📍 Loaded \(users.count) users for \(listType == .followers ? "followers" : "following")")
+        .task {
+            isLoading = true
+            if listType == .followers {
+                users = await SupabaseManager.shared.getFollowers(for: userID)
+            } else {
+                users = await SupabaseManager.shared.getFollowingUsers(for: userID)
             }
+            isLoading = false
+            print("📍 Loaded \(users.count) users for \(listType == .followers ? "followers" : "following")")
         }
         
-        if users.isEmpty {
+        if !isLoading && users.isEmpty {
             Text("No users found.")
                 .foregroundColor(.gray)
         }

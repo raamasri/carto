@@ -442,39 +442,19 @@ struct UserProfileView: View {
                     }
                 }
                 print("👤 Checking follow request from:", authManager.currentUserID ?? "nil")
-                guard let currentUserID = authManager.currentUserID else {
-                    print("❌ currentUserID not ready, skipping follow request check")
-                    return
-                }
                 do {
-                    let response = try await SupabaseManager.shared.client
-                        .from("notifications")
-                        .select("*")
-                        .eq("user_id", value: profileUser.id)
-                        .eq("from_user_id", value: currentUserID)
-                        .eq("type", value: "follow_request")
-                        .limit(1)
-                        .execute()
-
-                    print("🧪 Raw PostgrestResponse debug dump:")
-                    dump(response)
-
-                    if let array = response.value as? [[String: Any]], !array.isEmpty {
-                        print("📦 Response type:", type(of: array))
-                        print("📊 Found:", array)
+                    if let uuid = UUID(uuidString: profileUser.id) {
+                        let hasSent = await SupabaseManager.shared.hasFollowRequestSent(to: uuid)
+                        print("📌 hasFollowRequestSent(to:) result:", hasSent)
                         await MainActor.run {
-                            hasRequestedFollow = true
+                            hasRequestedFollow = hasSent
                         }
                     } else {
-                        print("⚠️ No matching follow request found.")
-                        await MainActor.run {
-                            hasRequestedFollow = false
-                        }
+                        print("❌ Failed to convert profileUser.id to UUID:", profileUser.id)
                     }
                 } catch {
-                    print("❌ Error fetching follow request:", error)
+                    print("❌ Error checking follow request via helper:", error)
                 }
-
             }
         }
     }
