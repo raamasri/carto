@@ -15,6 +15,8 @@ struct SettingsView: View {
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
     @EnvironmentObject var authManager: AuthManager
     @AppStorage("biometricEnabled") private var biometricEnabled: Bool = UserDefaults.standard.bool(forKey: "biometricEnabled")
+    @State private var showDeleteConfirmation = false
+    @State private var deletionResultMessage: IdentifiableString? = nil
     
     var body: some View {
         NavigationView {
@@ -85,6 +87,25 @@ struct SettingsView: View {
                 
                 Section {
                     Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Delete Account")
+                            Spacer()
+                        }
+                    }
+                    .alert(isPresented: $showDeleteConfirmation) {
+                        Alert(
+                            title: Text("Are you sure?"),
+                            message: Text("This will permanently delete your account."),
+                            primaryButton: .destructive(Text("Delete")) {
+                                deleteAccount()
+                            },
+                            secondaryButton: .cancel()
+                        )
+                    }
+                    Button(role: .destructive) {
                         performLogout()
                     } label: {
                         HStack {
@@ -103,11 +124,25 @@ struct SettingsView: View {
                     }
                 }
             }
+            .alert(item: $deletionResultMessage) { message in
+                Alert(title: Text(message.value))
+            }
         }
     }
     
     private func performLogout() {
         authManager.logOut()
+    }
+    
+    private func deleteAccount() {
+        authManager.deleteAccount { success in
+            if success {
+                deletionResultMessage = IdentifiableString(value: "Account successfully deleted.")
+                performLogout()
+            } else {
+                deletionResultMessage = IdentifiableString(value: "Failed to delete account. Please try again.")
+            }
+        }
     }
 }
 
@@ -122,6 +157,7 @@ struct ParentView: View {
     var body: some View {
         SettingsView()
             .environmentObject(authManager)
+            .preferredColorScheme(.dark)
     }
 }
 
@@ -129,4 +165,9 @@ struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         ParentView()
     }
+}
+
+struct IdentifiableString: Identifiable {
+    var id: String { value }
+    let value: String
 }

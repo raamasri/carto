@@ -306,6 +306,36 @@ class AuthManager: ObservableObject {
             print("❌ Failed to fetch currentUser:", error)
         }
     }
+
+    func deleteAccount(completion: @escaping (Bool) -> Void) {
+        Task {
+            do {
+                // Delete the user from Supabase auth
+                try await SupabaseManager.shared.client.auth.admin.deleteUser(id: currentUserID ?? "")
+                
+                // Also remove user from 'users' table
+                if let id = currentUserID {
+                    _ = try await SupabaseManager.shared.client
+                        .from("users")
+                        .delete()
+                        .eq("id", value: id)
+                        .execute()
+                }
+
+                DispatchQueue.main.async {
+                    self.currentUsername = nil
+                    self.isLoggedIn = false
+                    self.currentUserID = nil
+                    completion(true)
+                }
+            } catch {
+                print("❌ Failed to delete account:", error)
+                DispatchQueue.main.async {
+                    completion(false)
+                }
+            }
+        }
+    }
 }
 
 extension Notification.Name {
