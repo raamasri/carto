@@ -46,6 +46,7 @@ struct UserProfileView: View {
     @State private var tempFullName: String = ""
     @State private var isEditingProfile = false
     @State private var tempBio = ""
+    @State private var hasRequestedFollow = false
     
     private var profileHeader: some View {
         HStack {
@@ -167,7 +168,11 @@ struct UserProfileView: View {
                                     .background(Color.gray.opacity(0.2))
                                     .cornerRadius(8)
                             }
-                            NavigationLink(destination: NotificationView()) {
+                            NavigationLink(destination:
+                                NotificationView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(SupabaseManager.shared)
+                            ) {
                                 Text("Notifications")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
@@ -181,17 +186,36 @@ struct UserProfileView: View {
                     }
 
                     if !(profileUser.isCurrentUser ?? false) {
-                        FollowButton(isFollowing: $displayedUser.isFollowedByCurrentUser) {
+                        FollowButton(isFollowing: $hasRequestedFollow, followText: hasRequestedFollow ? "Requested" : "Follow") {
                             Task {
-                                let isNowFollowing = await SupabaseManager.shared.toggleFollowStatus(targetUserID: profileUser.id)
-                                await MainActor.run {
-                                    if isNowFollowing {
-                                        displayedUser.follower_count += 1
-                                        displayedUser.isFollowedByCurrentUser = true
+                                guard let currentUserID = authManager.currentUserID else { return }
+                                do {
+                                    if hasRequestedFollow {
+                                        // Cancel the request
+                                        _ = try await SupabaseManager.shared.client
+                                            .from("notifications")
+                                            .delete()
+                                            .eq("user_id", value: profileUser.id)
+                                            .eq("from_user_id", value: currentUserID)
+                                            .eq("type", value: "follow_request")
+                                            .eq("is_read", value: false)
+                                            .execute()
+                                        hasRequestedFollow = false
                                     } else {
-                                        displayedUser.follower_count -= 1
-                                        displayedUser.isFollowedByCurrentUser = false
+                                        // Send a new follow request
+                                        _ = try await SupabaseManager.shared.client
+                                            .from("notifications")
+                                            .insert([
+                                                "user_id": AnyJSON.string(profileUser.id),
+                                                "from_user_id": AnyJSON.string(currentUserID),
+                                                "type": AnyJSON.string("follow_request"),
+                                                "is_read": AnyJSON.bool(false)
+                                            ])
+                                            .execute()
+                                        hasRequestedFollow = true
                                     }
+                                } catch {
+                                    print("❌ Failed to toggle follow request:", error)
                                 }
                             }
                         }
@@ -258,7 +282,11 @@ struct UserProfileView: View {
             .toolbar {
                 if profileUser.isCurrentUser ?? false {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        NavigationLink(destination: NotificationView()) {
+                        NavigationLink(destination:
+                            NotificationView()
+                                .environmentObject(authManager)
+                                .environmentObject(SupabaseManager.shared)
+                        ) {
                             Image(systemName: "bell")
                         }
                     }
@@ -393,6 +421,19 @@ struct UserProfileView: View {
                         }
                     }
                 }
+                // Check if follow request is pending
+                let result = try? await SupabaseManager.shared.client
+                    .from("notifications")
+                    .select("id")
+                    .eq("user_id", value: profileUser.id)
+                    .eq("from_user_id", value: authManager.currentUserID ?? "")
+                    .eq("type", value: "follow_request")
+                    .eq("is_read", value: false)
+                    .limit(1)
+                    .execute()
+                if let value = result?.value as? [[String: AnyJSON]], !value.isEmpty {
+                    hasRequestedFollow = true
+                }
             }
         }
     }
@@ -523,18 +564,19 @@ struct EditProfileSheet: View {
 
 struct FollowButton: View {
     @Binding var isFollowing: Bool
+    var followText: String
     var action: () -> Void
 
     var body: some View {
         Button(action: {
             action()
         }) {
-            Text(isFollowing ? "Unfollow" : "Follow")
+            Text(followText)
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
                 .padding(8)
-                .background(isFollowing ? Color.red.opacity(0.2) : Color.blue.opacity(0.2))
+                .background(isFollowing ? Color.gray.opacity(0.2) : Color.blue.opacity(0.2))
                 .cornerRadius(8)
         }
         .padding(.horizontal)
