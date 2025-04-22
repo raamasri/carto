@@ -188,22 +188,38 @@ struct UserProfileView: View {
                     if !(profileUser.isCurrentUser ?? false) {
                         FollowButton(isFollowing: $hasRequestedFollow, followText: hasRequestedFollow ? "Requested" : "Follow") {
                             Task {
+                                print("📍 Follow button tapped")
+                                print("🧪 currentUserID =", authManager.currentUserID ?? "nil")
                                 guard let currentUserID = authManager.currentUserID else { return }
                                 do {
                                     if hasRequestedFollow {
-                                        // Cancel the request
+                                        print("🔄 Cancelling follow request...")
                                         _ = try await SupabaseManager.shared.client
                                             .from("notifications")
                                             .delete()
                                             .eq("user_id", value: profileUser.id)
                                             .eq("from_user_id", value: currentUserID)
                                             .eq("type", value: "follow_request")
-                                            .eq("is_read", value: false)
                                             .execute()
-                                        hasRequestedFollow = false
+                                        await MainActor.run {
+                                            hasRequestedFollow = false
+                                            print("🔁 Follow state updated. Requested: \(hasRequestedFollow)")
+                                        }
                                     } else {
-                                        // Send a new follow request
+                                        // Remove any previous requests before inserting
                                         _ = try await SupabaseManager.shared.client
+                                            .from("notifications")
+                                            .delete()
+                                            .eq("user_id", value: profileUser.id)
+                                            .eq("from_user_id", value: currentUserID)
+                                            .eq("type", value: "follow_request")
+                                            .execute()
+
+                                        // Log values about to be inserted
+                                        print("📤 Inserting follow request with from_user_id:", currentUserID, "→ user_id:", profileUser.id)
+
+                                        // Insert new follow request
+                                        let insertResult = try await SupabaseManager.shared.client
                                             .from("notifications")
                                             .insert([
                                                 "user_id": AnyJSON.string(profileUser.id),
@@ -212,10 +228,14 @@ struct UserProfileView: View {
                                                 "is_read": AnyJSON.bool(false)
                                             ])
                                             .execute()
+
+                                        print("✅ Insert result:", insertResult)
+
                                         hasRequestedFollow = true
                                     }
                                 } catch {
                                     print("❌ Failed to toggle follow request:", error)
+                                    print("❌ Full error details:", error.localizedDescription)
                                 }
                             }
                         }
@@ -421,19 +441,40 @@ struct UserProfileView: View {
                         }
                     }
                 }
-                // Check if follow request is pending
-                let result = try? await SupabaseManager.shared.client
-                    .from("notifications")
-                    .select("id")
-                    .eq("user_id", value: profileUser.id)
-                    .eq("from_user_id", value: authManager.currentUserID ?? "")
-                    .eq("type", value: "follow_request")
-                    .eq("is_read", value: false)
-                    .limit(1)
-                    .execute()
-                if let value = result?.value as? [[String: AnyJSON]], !value.isEmpty {
-                    hasRequestedFollow = true
+                print("👤 Checking follow request from:", authManager.currentUserID ?? "nil")
+                guard let currentUserID = authManager.currentUserID else {
+                    print("❌ currentUserID not ready, skipping follow request check")
+                    return
                 }
+                do {
+                    let response = try await SupabaseManager.shared.client
+                        .from("notifications")
+                        .select("*")
+                        .eq("user_id", value: profileUser.id)
+                        .eq("from_user_id", value: currentUserID)
+                        .eq("type", value: "follow_request")
+                        .limit(1)
+                        .execute()
+
+                    print("🧪 Raw PostgrestResponse debug dump:")
+                    dump(response)
+
+                    if let array = response.value as? [[String: Any]], !array.isEmpty {
+                        print("📦 Response type:", type(of: array))
+                        print("📊 Found:", array)
+                        await MainActor.run {
+                            hasRequestedFollow = true
+                        }
+                    } else {
+                        print("⚠️ No matching follow request found.")
+                        await MainActor.run {
+                            hasRequestedFollow = false
+                        }
+                    }
+                } catch {
+                    print("❌ Error fetching follow request:", error)
+                }
+
             }
         }
     }

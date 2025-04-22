@@ -74,6 +74,9 @@ struct NotificationView: View {
                     }
                 }
             }
+            .refreshable {
+                await fetchFollowRequests()
+            }
             .navigationTitle("Notifications")
             .onAppear {
                 Task {
@@ -92,7 +95,7 @@ struct NotificationView: View {
         do {
             let rawData = try await supabaseManager.client
                 .from("notifications")
-                .select("id, from_user_id, users!from_user_id(username, full_name, avatar_url)")
+                .select("id, from_user_id, users!notifications_from_user_id_fkey(username, full_name, avatar_url)")
                 .eq("user_id", value: currentUserID)
                 .eq("type", value: "follow_request")
                 .eq("is_read", value: false)
@@ -111,7 +114,18 @@ struct NotificationView: View {
                 )
             }
 
-            followRequests = requests
+            // Remove duplicates by keeping only the most recent notification per sender
+            var seen = Set<String>()
+            let deduplicated = requests.filter { request in
+                if seen.contains(request.fromUserID) {
+                    return false
+                } else {
+                    seen.insert(request.fromUserID)
+                    return true
+                }
+            }
+
+            followRequests = deduplicated
         } catch {
             print("❌ Failed to fetch notifications:", error)
         }

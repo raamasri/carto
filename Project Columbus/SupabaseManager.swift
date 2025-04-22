@@ -26,6 +26,29 @@ class SupabaseManager: ObservableObject {
             supabaseKey: supabaseKey
         )
     }
+
+    /// Checks if a follow request exists between the current user and a target user
+    func hasFollowRequestSent(to userID: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        let currentUserID = session.user.id
+
+        let result = try? await client
+            .from("notifications")
+            .select("id")
+            .eq("user_id", value: userID.uuidString)
+            .eq("from_user_id", value: currentUserID.uuidString)
+            .eq("type", value: "follow_request")
+            .limit(1)
+            .execute()
+
+        guard let rows = result?.value as? [[String: Any]] else {
+            print("⚠️ Failed to decode follow request check result")
+            return false
+        }
+
+        print("🔍 Follow request rows found: \(rows.count)")
+        return !rows.isEmpty
+    }
     
     func getCurrentUsername() async -> String? {
         do {
@@ -415,6 +438,21 @@ extension SupabaseManager {
                 "following_id": followingID.uuidString
             ])
             .execute()
+
+        // Also insert a notification for the followed user
+        let insertResponse = try? await client
+            .from("notifications")
+            .insert([
+                "user_id": followingID.uuidString,
+                "from_user_id": followerID.uuidString,
+                "type": "follow_request",
+                "is_read": "false"
+            ])
+            .select()
+            .single()
+            .execute()
+
+        print("📥 Inserted notification:", insertResponse?.value ?? "nil")
 
         return result != nil
     }
