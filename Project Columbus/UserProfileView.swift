@@ -441,7 +441,15 @@ struct UserProfileView: View {
                         }
                     }
                 }
+
                 print("👤 Checking follow request from:", authManager.currentUserID ?? "nil")
+
+                // Only check for follow request if this is not your own profile
+                guard !(profileUser.isCurrentUser ?? false) else {
+                    print("ℹ️ Skipping follow request check – viewing own profile.")
+                    return
+                }
+
                 do {
                     if let uuid = UUID(uuidString: profileUser.id) {
                         let hasSent = await SupabaseManager.shared.hasFollowRequestSent(to: uuid)

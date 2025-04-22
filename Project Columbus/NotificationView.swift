@@ -68,6 +68,7 @@ struct NotificationView: View {
                             Spacer()
 
                             Button("Accept") {
+                                print("✅ Accept button pressed for @\(request.fromUsername)")
                                 acceptFollowRequest(request)
                             }
                             .buttonStyle(.bordered)
@@ -138,32 +139,40 @@ struct NotificationView: View {
 
     func acceptFollowRequest(_ request: NotificationItem) {
         Task {
+            print("────────── Accept Flow Start ──────────")
+            print("🚀 acceptFollowRequest called for notification ID:", request.id.uuidString)
+
             do {
-                // Create new follow relationship
-                _ = try await supabaseManager.client
-                    .from("follows")
-                    .insert([
-                        "follower_id": request.fromUserID,
-                        "following_id": authManager.currentUserID ?? ""
-                    ])
-                    .execute()
+                // 1) Perform follow + notification in a single RPC
+                let didFollow = await supabaseManager.followUser(followingID: UUID(uuidString: request.fromUserID)!)
+                print("🧪 rpc_follow_and_notify returned:", didFollow)
 
-                // Mark notification as read
-                _ = try await supabaseManager.client
-                    .from("notifications")
-                    .update(["is_read": true])
-                    .eq("id", value: request.id.uuidString)
-                    .execute()
-
-                // Remove from local list
-                followRequests.removeAll { $0.id == request.id }
-
-                await MainActor.run {
-                    confirmationMessage = "Accepted follow request from @\(request.fromUsername)"
-                    showConfirmation = true
+                // 2) If follow succeeded, mark this notification as read
+                if didFollow {
+                    let markReadResponse = try await supabaseManager.client
+                        .from("notifications")
+                        .update(["is_read": true])
+                        .eq("id", value: request.id.uuidString)
+                        .eq("user_id", value: authManager.currentUserID ?? "")
+                        .execute()
+                    print("📤 Notification update status code:", markReadResponse.response.statusCode)
+                    if let json = String(data: markReadResponse.data, encoding: .utf8) {
+                        print("📤 Notification update response JSON:", json)
+                    }
+                } else {
+                    print("❌ rpc_follow_and_notify failed, skipping notification update")
                 }
             } catch {
-                print("❌ Failed to accept follow request:", error)
+                print("❌ Accept flow failed:", error)
+            }
+
+            print("────────── Accept Flow End ──────────")
+
+            followRequests.removeAll { $0.id == request.id }
+
+            await MainActor.run {
+                confirmationMessage = "Accepted follow request from @\(request.fromUsername)"
+                showConfirmation = true
             }
         }
     }

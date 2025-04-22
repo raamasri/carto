@@ -65,7 +65,7 @@ struct SettingsView: View {
                     NavigationLink("Help & Support", destination: Text("Help Placeholder"))
                     NavigationLink("Privacy Policy", destination: Text("Privacy Placeholder"))
                     NavigationLink("Terms of Use", destination: Text("Terms Placeholder"))
-                    Text("App Version 0.46.0 ©2025 Carto Inc.")
+                    Text("App Version 0.50.0 ©2025 Carto Inc.")
                         .foregroundColor(.gray)
                 }
                 

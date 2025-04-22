@@ -35,7 +35,7 @@ class SupabaseManager: ObservableObject {
                 let id: UUID
             }
             guard let session = try? await client.auth.session else { return false }
-            let currentUserID = session.user.id.uuidString
+            let currentUserID = session.user.id.uuidString.lowercased()
 
             // 🔥 DEBUG: verify the method is called and parameters
             print("🧪 currentUserID:", currentUserID)
@@ -63,14 +63,30 @@ class SupabaseManager: ObservableObject {
             let resp: PostgrestResponse<[NotificationResponse]> = try await client
                 .from("notifications")
                 .select("id")
-                .eq("user_id", value: userID.uuidString)
+                .eq("user_id", value: userID.uuidString.lowercased())
                 .eq("from_user_id", value: currentUserID)
                 .eq("type", value: "follow_request")
                 .limit(1)
                 .execute()
 
+            // 🔥 DEBUG: show dynamic query URL and JSON for troubleshooting
+            if let url = resp.response.url {
+                print("🔁 DYNAMIC filter URL:", url.absoluteString)
+            }
+            if let jsonPayload = String(data: resp.data, encoding: .utf8) {
+                print("🔁 DYNAMIC filter JSON:", jsonPayload)
+            } else {
+                print("🔁 DYNAMIC JSON conversion failed")
+            }
+            // 🔁 HTTP status code for dynamic filter
+            if let status = resp.response.statusCode as Int? {
+                print("🔁 HTTP status code:", status)
+            }
+
             // Dump raw response to console
             print("🔁 raw follow request response:", resp)
+            // 🔁 Detailed HTTP response headers for debugging
+            print("🔁 HTTP response headers:", resp.response.allHeaderFields)
 
             // Print raw JSON payload
             if let jsonString = String(data: resp.data, encoding: .utf8) {
@@ -497,30 +513,20 @@ extension SupabaseManager {
         guard let session = try? await client.auth.session else { return false }
         let followerID = session.user.id
 
-        let result = try? await client
-            .from("follows")
-            .insert([
-                "follower_id": followerID.uuidString,
-                "following_id": followingID.uuidString
-            ])
-            .execute()
+        do {
+            let rpcResponse: PostgrestResponse<Void> = try await client
+                .rpc("rpc_follow_and_notify", params: [
+                    "p_follower": followerID.uuidString,
+                    "p_following": followingID.uuidString
+                ])
+                .execute()
 
-        // Also insert a notification for the followed user
-        let insertResponse = try? await client
-            .from("notifications")
-            .insert([
-                "user_id": followingID.uuidString,
-                "from_user_id": followerID.uuidString,
-                "type": "follow_request",
-                "is_read": "false"
-            ])
-            .select()
-            .single()
-            .execute()
-
-        print("📥 Inserted notification:", insertResponse?.value ?? "nil")
-
-        return result != nil
+            print("🚀 rpc_follow_and_notify response:", rpcResponse)
+            return true
+        } catch {
+            print("❌ rpc_follow_and_notify failed:", error)
+            return false
+        }
     }
 
     func unfollowUser(followingID: UUID) async -> Bool {
