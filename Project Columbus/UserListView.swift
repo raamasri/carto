@@ -50,10 +50,13 @@ struct UserListView: View {
         .navigationTitle(listType == .followers ? "Followers" : "Following")
         .task {
             isLoading = true
+            print("🧪 Fetching \(listType == .followers ? "followers" : "following") for userID: \(userID)")
             if listType == .followers {
                 users = await SupabaseManager.shared.getFollowers(for: userID)
+                print("🧪 Retrieved users: \(users.map { $0.username })")
             } else {
                 users = await SupabaseManager.shared.getFollowingUsers(for: userID)
+                print("🧪 Retrieved users: \(users.map { $0.username })")
             }
             isLoading = false
             print("📍 Loaded \(users.count) users for \(listType == .followers ? "followers" : "following")")

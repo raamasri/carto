@@ -168,7 +168,8 @@ struct NotificationView: View {
 
             print("────────── Accept Flow End ──────────")
 
-            followRequests.removeAll { $0.id == request.id }
+            // Refresh the list so the marked notification is excluded
+            await fetchFollowRequests()
 
             await MainActor.run {
                 confirmationMessage = "Accepted follow request from @\(request.fromUsername)"

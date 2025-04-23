@@ -35,7 +35,7 @@ struct AppUser: Identifiable, Codable {
         case bio
         case follower_count
         case following_count
-        case isFollowedByCurrentUser
+        case isFollowedByCurrentUser = "isfollowedbycurrentuser"
         case latitude
         case longitude
         case isCurrentUser = "is_current_user"
