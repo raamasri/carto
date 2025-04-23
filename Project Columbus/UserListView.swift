@@ -22,7 +22,7 @@ struct UserListView: View {
         List(users, id: \.id) { user in
             NavigationLink(destination: UserProfileView(profileUser: user)) {
                 HStack {
-                    if let url = URL(string: user.avatarURL), !user.avatarURL.isEmpty {
+                    if let avatar = user.avatarURL, !avatar.isEmpty, let url = URL(string: avatar) {
                         AsyncImage(url: url) { image in
                             image.resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -50,13 +50,16 @@ struct UserListView: View {
         .navigationTitle(listType == .followers ? "Followers" : "Following")
         .task {
             isLoading = true
-            print("🧪 Fetching \(listType == .followers ? "followers" : "following") for userID: \(userID)")
-            if listType == .followers {
-                users = await SupabaseManager.shared.getFollowers(for: userID)
+            do {
+                print("🧪 Fetching \(listType == .followers ? "followers" : "following") for userID: \(userID)")
+                if listType == .followers {
+                    users = try await SupabaseManager.shared.getFollowers(for: userID)
+                } else {
+                    users = try await SupabaseManager.shared.getFollowingUsers(for: userID)
+                }
                 print("🧪 Retrieved users: \(users.map { $0.username })")
-            } else {
-                users = await SupabaseManager.shared.getFollowingUsers(for: userID)
-                print("🧪 Retrieved users: \(users.map { $0.username })")
+            } catch {
+                print("❌ Failed to fetch users: \(error)")
             }
             isLoading = false
             print("📍 Loaded \(users.count) users for \(listType == .followers ? "followers" : "following")")

@@ -12,15 +12,15 @@ struct AppUser: Identifiable, Codable {
     var id: String
     var username: String
     var full_name: String
-    var email: String
-    var bio: String
+    var email: String?
+    var bio: String?
     var follower_count: Int
     var following_count: Int
     var isFollowedByCurrentUser: Bool
     let latitude: Double?
     let longitude: Double?
     let isCurrentUser: Bool
-    let avatarURL: String
+    let avatarURL: String?
 
     var location: CLLocationCoordinate2D? {
         guard let lat = latitude, let lon = longitude else { return nil }
@@ -47,30 +47,30 @@ struct AppUser: Identifiable, Codable {
         id = try container.decode(String.self, forKey: .id)
         username = try container.decode(String.self, forKey: .username)
         full_name = try container.decode(String.self, forKey: .full_name)
-        email = try container.decode(String.self, forKey: .email)
-        bio = try container.decode(String.self, forKey: .bio)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        bio = try container.decodeIfPresent(String.self, forKey: .bio)
         follower_count = try container.decode(Int.self, forKey: .follower_count)
         following_count = try container.decode(Int.self, forKey: .following_count)
         isFollowedByCurrentUser = try container.decode(Bool.self, forKey: .isFollowedByCurrentUser)
         latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
         longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
         isCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isCurrentUser) ?? false
-        avatarURL = try container.decode(String.self, forKey: .avatarURL)
+        avatarURL = try container.decodeIfPresent(String.self, forKey: .avatarURL)
     }
 
     init(
         id: String,
         username: String,
         full_name: String,
-        email: String,
-        bio: String,
+        email: String?,
+        bio: String?,
         follower_count: Int,
         following_count: Int,
         isFollowedByCurrentUser: Bool,
         latitude: Double?,
         longitude: Double?,
         isCurrentUser: Bool,
-        avatarURL: String
+        avatarURL: String?
     ) {
         self.id = id
         self.username = username

@@ -177,7 +177,7 @@ struct FindFriendsView: View {
             return allUsers.filter { user in
                 user.username.lowercased().contains(searchText.lowercased()) ||
                 user.full_name.lowercased().contains(searchText.lowercased()) ||
-                user.email.lowercased().contains(searchText.lowercased())
+                (user.email?.lowercased().contains(searchText.lowercased()) ?? false)
             }
         }
     }

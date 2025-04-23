@@ -28,7 +28,7 @@ struct UserProfileView: View {
     init(profileUser: AppUser) {
         self.profileUser = profileUser
         _displayedUser = State(initialValue: profileUser)
-        _bio = State(initialValue: profileUser.bio)
+        _bio = State(initialValue: profileUser.bio ?? "")
     }
     
     @State private var selectedFilter: Reaction? = nil
@@ -74,7 +74,7 @@ struct UserProfileView: View {
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 .shadow(radius: 4)
                                 .onTapGesture { showChangePicturePrompt = true }
-                        } else if let url = URL(string: displayedUser.avatarURL), !displayedUser.avatarURL.isEmpty {
+                        } else if let avatar = displayedUser.avatarURL, !avatar.isEmpty, let url = URL(string: avatar) {
                             AsyncImage(url: url) { phase in
                                 switch phase {
                                 case .empty:
@@ -277,7 +277,7 @@ struct UserProfileView: View {
             if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
                 await MainActor.run {
                     displayedUser = updated
-                    bio = updated.bio
+                    bio = updated.bio ?? ""
                 }
             }
         }
@@ -299,16 +299,16 @@ struct UserProfileView: View {
                     .padding(.top, 4)
                 }
             }
-            .toolbar {
-                if profileUser.isCurrentUser ?? false {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        NavigationLink(destination:
-                            NotificationView()
-                                .environmentObject(authManager)
-                                .environmentObject(SupabaseManager.shared)
-                        ) {
-                            Image(systemName: "bell")
-                        }
+        }
+        .toolbar {
+            if profileUser.isCurrentUser ?? false {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination:
+                        NotificationView()
+                            .environmentObject(authManager)
+                            .environmentObject(SupabaseManager.shared)
+                    ) {
+                        Image(systemName: "bell")
                     }
                 }
             }
@@ -353,16 +353,16 @@ struct UserProfileView: View {
                                 userID: profileUser.id,
                                 username: tempUsername,
                                 fullName: tempFullName,
-                                email: profileUser.email,
+                                email: profileUser.email ?? "",
                                 bio: tempBio,
-                                avatarURL: profileUser.avatarURL
+                                avatarURL: profileUser.avatarURL ?? ""
                             )
                             // Re-fetch to get the definitive record
                             if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
                                 await MainActor.run {
                                     displayedUser = updated
-                                    bio = updated.bio
-                                    tempBio = updated.bio
+                                    bio = updated.bio ?? ""
+                                    tempBio = updated.bio ?? ""
                                     isEditingProfile = false
                                 }
                             }
@@ -376,7 +376,7 @@ struct UserProfileView: View {
                 }
             )
         }
-        .sheet(item: $imageToCrop) { image in
+                .sheet(item: $imageToCrop) { image in
             CircleCropperView(image: image) { cropped in
                 Task {
                     do {
@@ -402,14 +402,14 @@ struct UserProfileView: View {
                                 userID: profileUser.id,
                                 username: displayedUser.username,
                                 fullName: tempFullName, // ✅ user's edited name
-                                email: profileUser.email,
+                                email: profileUser.email ?? "",
                                 bio: bio,
                                 avatarURL: url.absoluteString
                             )
                             if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
                                 await MainActor.run {
                                     displayedUser = updated
-                                    bio = updated.bio
+                                    bio = updated.bio ?? ""
                                     profileImage = Image(uiImage: cropped)
                                 }
                             }
@@ -426,9 +426,9 @@ struct UserProfileView: View {
             Task {
                 if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
                     displayedUser = updated
-                    bio = updated.bio
+                    bio = updated.bio ?? ""
 
-                    if let url = URL(string: updated.avatarURL) {
+                    if let avatar = updated.avatarURL, let url = URL(string: avatar) {
                         do {
                             let (data, _) = try await URLSession.shared.data(from: url)
                             if let uiImage = UIImage(data: data) {
