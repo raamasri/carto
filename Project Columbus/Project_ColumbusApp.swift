@@ -7,12 +7,17 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 @main
 struct Project_ColumbusApp: App {
     @StateObject var pinStore = PinStore()
     @StateObject var authManager = AuthManager()
     @StateObject var locationManager = AppLocationManager()
+
+    init() {
+        ImageCache.shared.clearCache()
+    }
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([

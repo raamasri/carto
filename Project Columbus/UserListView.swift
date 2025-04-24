@@ -22,15 +22,35 @@ struct UserListView: View {
         List(users, id: \.id) { user in
             NavigationLink(destination: UserProfileView(profileUser: user)) {
                 HStack {
-                    if let avatar = user.avatarURL, !avatar.isEmpty, let url = URL(string: avatar) {
-                        AsyncImage(url: url) { image in
-                            image.resizable()
+                    if let avatar = user.avatarURL, !avatar.isEmpty {
+                        if let cached = ImageCache.shared.image(forKey: user.id) {
+                            Image(uiImage: cached)
+                                .resizable()
                                 .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Color.gray
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                        } else if let url = URL(string: avatar) {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    let _ = {
+                                        if let uiImage = image.asUIImage() {
+                                            ImageCache.shared.insertImage(uiImage, forKey: user.id)
+                                        }
+                                    }()
+                                    image.resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                case .failure(_):
+                                    Color.gray
+                                case .empty:
+                                    Color.gray
+                                @unknown default:
+                                    Color.gray
+                                }
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
                         }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
                     } else {
                         Image(systemName: "person.circle.fill")
                             .resizable()
@@ -48,6 +68,19 @@ struct UserListView: View {
             }
         }
         .navigationTitle(listType == .followers ? "Followers" : "Following")
+        .refreshable {
+            isLoading = true
+            do {
+                if listType == .followers {
+                    users = try await SupabaseManager.shared.getFollowers(for: userID)
+                } else {
+                    users = try await SupabaseManager.shared.getFollowingUsers(for: userID)
+                }
+            } catch {
+                print("❌ Failed to refresh users: \(error)")
+            }
+            isLoading = false
+        }
         .task {
             isLoading = true
             do {
@@ -68,6 +101,22 @@ struct UserListView: View {
         if !isLoading && users.isEmpty {
             Text("No users found.")
                 .foregroundColor(.gray)
+        }
+    }
+}
+
+extension Image {
+    func asUIImage() -> UIImage? {
+        let controller = UIHostingController(rootView: self.resizable())
+        let view = controller.view
+
+        let targetSize = CGSize(width: 40, height: 40)
+        view?.bounds = CGRect(origin: .zero, size: targetSize)
+        view?.backgroundColor = .clear
+
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        return renderer.image { _ in
+            view?.drawHierarchy(in: view!.bounds, afterScreenUpdates: true)
         }
     }
 }

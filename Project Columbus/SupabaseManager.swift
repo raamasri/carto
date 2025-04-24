@@ -611,7 +611,7 @@ extension SupabaseManager {
         )
         print("Upload options: \(uploadOptions)")
         print("🔍 Uploading avatar with fileName:", fileName)
-        print("🔍 Upload options metadata:", uploadOptions.metadata)
+        print("🔍 Upload options metadata:", uploadOptions.metadata!)
 
         do {
             let uploadResponse = try await client.storage

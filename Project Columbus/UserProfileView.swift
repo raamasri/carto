@@ -428,16 +428,23 @@ struct UserProfileView: View {
                     displayedUser = updated
                     bio = updated.bio ?? ""
 
-                    if let avatar = updated.avatarURL, let url = URL(string: avatar) {
-                        do {
-                            let (data, _) = try await URLSession.shared.data(from: url)
-                            if let uiImage = UIImage(data: data) {
-                                await MainActor.run {
-                                    profileImage = Image(uiImage: uiImage)
-                                }
+                    if let avatar = updated.avatarURL {
+                        if let cached = ImageCache.shared.image(forKey: profileUser.id) {
+                            await MainActor.run {
+                                profileImage = Image(uiImage: cached)
                             }
-                        } catch {
-                            print("Failed to load image data:", error)
+                        } else if let url = URL(string: avatar) {
+                            do {
+                                let (data, _) = try await URLSession.shared.data(from: url)
+                                if let uiImage = UIImage(data: data) {
+                                    ImageCache.shared.insertImage(uiImage, forKey: profileUser.id)
+                                    await MainActor.run {
+                                        profileImage = Image(uiImage: uiImage)
+                                    }
+                                }
+                            } catch {
+                                print("Failed to load image data:", error)
+                            }
                         }
                     }
                 }
