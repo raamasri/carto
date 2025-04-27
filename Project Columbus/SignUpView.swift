@@ -31,6 +31,8 @@ struct SignUpView: View {
     @State private var signUpError: String?
     @State private var showErrorAlert = false
     @State private var showUsernamePrompt = false
+    @State private var isCheckingUsername = false
+    @State private var usernameError: String? = nil
 
     var body: some View {
         ZStack {
@@ -223,10 +225,18 @@ struct SignUpView: View {
 
                 Button(action: {
                     if !fullName.isEmpty && !username.isEmpty && !email.isEmpty && !phone.isEmpty && !password.isEmpty {
+                        isCheckingUsername = true
+                        usernameError = nil
                         Task {
+                            let available = await SupabaseManager.shared.isUsernameAvailable(username: username)
+                            isCheckingUsername = false
+                            if !available {
+                                usernameError = "Username is already taken."
+                                showErrorAlert = true
+                                return
+                            }
                             do {
                                 try await authManager.signUp(email: email, password: password, username: username, fullName: fullName, phone: phone)
-                                
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     fadeOut = true
                                 }
@@ -245,18 +255,24 @@ struct SignUpView: View {
                         }
                     }
                 }) {
-                    Text("Sign Up")
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.white)
-                        .foregroundColor(.black)
-                        .cornerRadius(8)
-                        .bold()
+                    if isCheckingUsername {
+                        ProgressView()
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Sign Up")
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.white)
+                            .foregroundColor(.black)
+                            .cornerRadius(8)
+                            .bold()
+                    }
                 }
                 .alert(isPresented: $showErrorAlert) {
                     Alert(
                         title: Text("Sign Up Failed"),
-                        message: Text(signUpError ?? "Unknown error"),
+                        message: Text(usernameError ?? signUpError ?? "Unknown error"),
                         dismissButton: .default(Text("OK"))
                     )
                 }

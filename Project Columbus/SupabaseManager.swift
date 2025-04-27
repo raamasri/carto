@@ -465,6 +465,23 @@ class SupabaseManager: ObservableObject {
             print("Error updating user location: \(error)")
         }
     }
+
+    /// Checks if a username is available (not already taken)
+    func isUsernameAvailable(username: String) async -> Bool {
+        do {
+            let result: [[String: String]] = try await client
+                .from("users")
+                .select("id")
+                .eq("username", value: username)
+                .limit(1)
+                .execute()
+                .value
+            return result.isEmpty
+        } catch {
+            print("Error checking username availability: \(error)")
+            return false // Assume not available on error
+        }
+    }
 }
 
 import CryptoKit
