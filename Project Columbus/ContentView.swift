@@ -795,7 +795,7 @@ struct MainMapView: View {
                     ),
                     Pin(
                         locationName: "City Lights Booksellers",
-                        city: "San    Francisco",
+                        city: "San Francisco",
                         date: "Apr 10",
                         latitude: 37.7975,
                         longitude: -122.4060,
