@@ -10,6 +10,7 @@ import SwiftUI
 import MapKit
 import Foundation
 import Project_Columbus
+import AVKit
 // Pin is defined in Models.swift in the same module
 
 struct PinCardView: View {
@@ -167,20 +168,28 @@ struct PinCardView: View {
                     }
                     if let media = pin.mediaURLs, !media.isEmpty {
                         TabView {
-                            ForEach(media, id: \ .self) { url in
-                                AsyncImage(url: URL(string: url)) { phase in
-                                    if let image = phase.image {
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .clipped()
-                                    } else {
-                                        Color.gray
+                            ForEach(media, id: \.self) { urlString in
+                                if urlString.hasSuffix(".mp4"), let url = URL(string: urlString) {
+                                    VideoPlayer(player: AVPlayer(url: url))
+                                        .aspectRatio(16/9, contentMode: .fit)
+                                        .clipped()
+                                } else if let url = URL(string: urlString) {
+                                    AsyncImage(url: url) { phase in
+                                        if let image = phase.image {
+                                            image
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .clipped()
+                                        } else {
+                                            Color.gray
+                                        }
                                     }
+                                } else {
+                                    Color.gray
                                 }
                             }
                         }
-                        .frame(height: 200)
+                        .frame(height: 220)
                         .tabViewStyle(.page)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                     }

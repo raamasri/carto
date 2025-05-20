@@ -717,7 +717,10 @@ struct MainMapView: View {
                         longitude: -122.4100,
                         reaction: .lovedIt,
                         reviewText: "I loved the za here. @pinalowers ask for Jeremy and he will hook you up. Def going back soon.",
-                        mediaURLs: [],
+                        mediaURLs: [
+                            "https://picsum.photos/400/300",
+                            "https://www.w3schools.com/html/mov_bbb.mp4"
+                        ],
                         mentionedFriends: [UUID(), UUID()],
                         starRating: 4.8,
                         distance: 4.1,
