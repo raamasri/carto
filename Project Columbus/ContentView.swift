@@ -1,4 +1,3 @@
-
 struct FullPOIView: View {
     let mapItem: MKMapItem
 
@@ -224,103 +223,137 @@ struct MainMapView: View {
         @Binding var showPOISheet: Bool
         @Binding var showFullPOIView: Bool
         @EnvironmentObject var pinStore: PinStore
-    @State private var showAddedAlert = false
-    @State private var showListDialog = false
-    private let defaultLists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
-    // Removed lookAroundScene since it's no longer needed
+        @State private var showAddedAlert = false
+        @State private var showListDialog = false
+        private let defaultLists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
 
-    var body: some View {
-        VStack {
-            Spacer()
+        var body: some View {
+            VStack {
+                Spacer()
+                mainPopupContent
+            }
+        }
+
+        private var mainPopupContent: some View {
             VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .topTrailing) {
-                    Text(mapItem.name ?? "Unknown Place")
-                        .font(.title.bold())
-                        .lineLimit(1)
-                        .padding(.trailing, 100)
+                titleBar
+                addressView
+                lookAroundView
+                distanceView
+                addToListSection
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(.ultraThinMaterial)
+            .cornerRadius(AppSpacing.cornerRadius)
+            .padding(.horizontal, 4)
+            .padding(.bottom, 60)
+            .alert("Added to List", isPresented: $showAddedAlert) {
+                Button("OK", role: .cancel) { }
+            }
+        }
 
-                    HStack(spacing: 10) {
-                        Button(action: {
-                            let placemark = mapItem.placemark
-                            let mapItem = MKMapItem(placemark: placemark)
-                            mapItem.name = placemark.name
-                            mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
-                        }) {
-                            Image(systemName: "arrow.turn.up.right")
-                                .foregroundColor(.white)
-                                .padding(10)
-                                .background(Color.blue)
-                                .clipShape(Circle())
-                        }
+        private var titleBar: some View {
+            ZStack(alignment: .topTrailing) {
+                Text(mapItem.name ?? "Unknown Place")
+                    .font(.title.bold())
+                    .lineLimit(1)
+                    .padding(.trailing, 100)
 
-                        Button(action: {
-                            showPOISheet = false
-                        }) {
-                            Image(systemName: "xmark")
-                                .foregroundColor(.white)
-                                .padding(10)
-                                .background(Color.gray)
-                                .clipShape(Circle())
-                        }
+                HStack(spacing: 10) {
+                    Button(action: {
+                        let placemark = mapItem.placemark
+                        let mapItem = MKMapItem(placemark: placemark)
+                        mapItem.name = placemark.name
+                        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+                    }) {
+                        Image(systemName: "arrow.turn.up.right")
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(Color.blue)
+                            .clipShape(Circle())
+                    }
+
+                    Button(action: {
+                        showPOISheet = false
+                    }) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(Color.gray)
+                            .clipShape(Circle())
                     }
                 }
+            }
+        }
+
+        private var addressView: some View {
+            Group {
                 if let address = mapItem.placemark.title {
                     Text(address)
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
-                LookAroundPreview(coordinate: mapItem.placemark.coordinate)
-                    .frame(height: 200)
-                    .cornerRadius(AppSpacing.cornerRadius)
+            }
+        }
+
+        private var lookAroundView: some View {
+            LookAroundPreview(coordinate: mapItem.placemark.coordinate)
+                .frame(height: 200)
+                .cornerRadius(AppSpacing.cornerRadius)
+        }
+
+        private var distanceView: some View {
+            Group {
                 if let distance = userLocation.map({ CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)) }) {
                     Text(String(format: "Distance: %.2f km", distance / 1000))
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
-                ZStack(alignment: .bottomLeading) {
-                    Button("Add to List") {
-                        showListDialog = true
-                    }
-                    .padding(.leading)
-                    .confirmationDialog("Choose a list", isPresented: $showListDialog, titleVisibility: .visible) {
-                        ForEach(defaultLists, id: \.self) { list in
-                            Button(list) {
-                                let newPin = Pin(
-                                    locationName: mapItem.name ?? "Unknown Place",
-                                    city: mapItem.placemark.locality ?? "",
-                                    date: formattedDate(),
-                                    latitude: mapItem.placemark.coordinate.latitude,
-                                    longitude: mapItem.placemark.coordinate.longitude,
-                                    reaction: .lovedIt
-                                )
-                                pinStore.addPin(newPin, to: list)
-                                showAddedAlert = true
-                            }
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                        Button("Cancel", role: .cancel) { }
-                    }
+            }
+        }
 
-                    HStack {
-                        Spacer()
-                        Button("Show More") {
-                            showFullPOIView = true
+        private var addToListSection: some View {
+            ZStack(alignment: .bottomLeading) {
+                Button("Add to List") {
+                    showListDialog = true
+                }
+                .padding(.leading)
+                .confirmationDialog("Choose a list", isPresented: $showListDialog, titleVisibility: .visible) {
+                    ForEach(defaultLists, id: \.self) { list in
+                        Button(list) {
+                            let newPin = Pin(
+                                locationName: mapItem.name ?? "Unknown Place",
+                                city: mapItem.placemark.locality ?? "",
+                                date: formattedDate(),
+                                latitude: mapItem.placemark.coordinate.latitude,
+                                longitude: mapItem.placemark.coordinate.longitude,
+                                reaction: .lovedIt,
+                                reviewText: nil,
+                                mediaURLs: [],
+                                mentionedFriends: [],
+                                starRating: nil,
+                                distance: nil,
+                                authorHandle: "@you",
+                                createdAt: Date(),
+                                tripName: nil
+                            )
+                            pinStore.addPin(newPin, to: list)
+                            showAddedAlert = true
                         }
                     }
+                    .fixedSize(horizontal: false, vertical: true)
+                    Button("Cancel", role: .cancel) { }
                 }
-                .padding(.top, 8)
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(.ultraThinMaterial)
-                .cornerRadius(AppSpacing.cornerRadius)
-                .padding(.horizontal, 4)
-                .padding(.bottom, 60)
-                .alert("Added to List", isPresented: $showAddedAlert) {
-                    Button("OK", role: .cancel) { }
+
+                HStack {
+                    Spacer()
+                    Button("Show More") {
+                        showFullPOIView = true
+                    }
                 }
             }
-// Removed .task block that loaded lookAroundScene
+            .padding(.top, 8)
         }
     }
     
@@ -341,14 +374,22 @@ struct MainMapView: View {
                 ))
             }
             
-            // Create a new pin based on the search result.
+            // Create a new pin based on the search result, including all required parameters.
             let newPin = Pin(
                 locationName: item.name ?? "Unknown Place",
                 city: "", // Optionally set a city, if available
                 date: formattedDate(), // Using the existing formattedDate() function
                 latitude: coordinate.latitude,
                 longitude: coordinate.longitude,
-                reaction: .lovedIt // Default reaction
+                reaction: .lovedIt, // Default reaction
+                reviewText: nil,
+                mediaURLs: [],
+                mentionedFriends: [],
+                starRating: nil,
+                distance: nil,
+                authorHandle: "@you",
+                createdAt: Date(),
+                tripName: nil
             )
             // Check if this pin does not already exist to avoid duplicates, then append
             if !pinStore.masterPins.contains(where: { $0.latitude == newPin.latitude && $0.longitude == newPin.longitude }) {
@@ -672,13 +713,118 @@ struct MainMapView: View {
             // Add some initial pins
             if pinStore.masterPins.isEmpty {
                 pinStore.masterPins = [
-                    Pin(locationName: "Blue Bottle Coffee", city: "San Francisco", date: "Apr 15", latitude: 37.7764, longitude: -122.4231, reaction: .lovedIt, ),
-                    Pin(locationName: "Tartine Bakery", city: "San Francisco", date: "Apr 14", latitude: 37.7616, longitude: -122.4241, reaction: .lovedIt, ),
-                    Pin(locationName: "The Mill", city: "San Francisco", date: "Apr 13", latitude: 37.7763, longitude: -122.4375, reaction: .lovedIt, ),
-                    Pin(locationName: "Bi-Rite Creamery", city: "San Francisco", date: "Apr 12", latitude: 37.7615, longitude: -122.4258, reaction: .lovedIt, ),
-                    Pin(locationName: "Dolores Park", city: "San Francisco", date: "Apr 11", latitude: 37.7596, longitude: -122.4269, reaction: .wantToGo, ),
-                    Pin(locationName: "City Lights Booksellers", city: "San    Francisco", date: "Apr 10", latitude: 37.7975, longitude: -122.4060, reaction: .lovedIt, ),
-                    Pin(locationName: "Ferry Building Marketplace", city: "San Francisco", date: "Apr 09", latitude: 37.7955, longitude: -122.3937, reaction: .lovedIt, )
+                    Pin(
+                        locationName: "Blue Bottle Coffee",
+                        city: "San Francisco",
+                        date: "Apr 15",
+                        latitude: 37.7764,
+                        longitude: -122.4231,
+                        reaction: .lovedIt,
+                        reviewText: nil,
+                        mediaURLs: [],
+                        mentionedFriends: [],
+                        starRating: nil,
+                        distance: nil,
+                        authorHandle: "@you",
+                        createdAt: Date(),
+                        tripName: nil
+                    ),
+                    Pin(
+                        locationName: "Tartine Bakery",
+                        city: "San Francisco",
+                        date: "Apr 14",
+                        latitude: 37.7616,
+                        longitude: -122.4241,
+                        reaction: .lovedIt,
+                        reviewText: nil,
+                        mediaURLs: [],
+                        mentionedFriends: [],
+                        starRating: nil,
+                        distance: nil,
+                        authorHandle: "@you",
+                        createdAt: Date(),
+                        tripName: nil
+                    ),
+                    Pin(
+                        locationName: "The Mill",
+                        city: "San Francisco",
+                        date: "Apr 13",
+                        latitude: 37.7763,
+                        longitude: -122.4375,
+                        reaction: .lovedIt,
+                        reviewText: nil,
+                        mediaURLs: [],
+                        mentionedFriends: [],
+                        starRating: nil,
+                        distance: nil,
+                        authorHandle: "@you",
+                        createdAt: Date(),
+                        tripName: nil
+                    ),
+                    Pin(
+                        locationName: "Bi-Rite Creamery",
+                        city: "San Francisco",
+                        date: "Apr 12",
+                        latitude: 37.7615,
+                        longitude: -122.4258,
+                        reaction: .lovedIt,
+                        reviewText: nil,
+                        mediaURLs: [],
+                        mentionedFriends: [],
+                        starRating: nil,
+                        distance: nil,
+                        authorHandle: "@you",
+                        createdAt: Date(),
+                        tripName: nil
+                    ),
+                    Pin(
+                        locationName: "Dolores Park",
+                        city: "San Francisco",
+                        date: "Apr 11",
+                        latitude: 37.7596,
+                        longitude: -122.4269,
+                        reaction: .wantToGo,
+                        reviewText: nil,
+                        mediaURLs: [],
+                        mentionedFriends: [],
+                        starRating: nil,
+                        distance: nil,
+                        authorHandle: "@you",
+                        createdAt: Date(),
+                        tripName: nil
+                    ),
+                    Pin(
+                        locationName: "City Lights Booksellers",
+                        city: "San    Francisco",
+                        date: "Apr 10",
+                        latitude: 37.7975,
+                        longitude: -122.4060,
+                        reaction: .lovedIt,
+                        reviewText: nil,
+                        mediaURLs: [],
+                        mentionedFriends: [],
+                        starRating: nil,
+                        distance: nil,
+                        authorHandle: "@you",
+                        createdAt: Date(),
+                        tripName: nil
+                    ),
+                    Pin(
+                        locationName: "Ferry Building Marketplace",
+                        city: "San Francisco",
+                        date: "Apr 09",
+                        latitude: 37.7955,
+                        longitude: -122.3937,
+                        reaction: .lovedIt,
+                        reviewText: nil,
+                        mediaURLs: [],
+                        mentionedFriends: [],
+                        starRating: nil,
+                        distance: nil,
+                        authorHandle: "@you",
+                        createdAt: Date(),
+                        tripName: nil
+                    )
                 ]
             }
         }

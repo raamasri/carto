@@ -22,6 +22,15 @@ struct Pin: Identifiable, Equatable {
     let latitude: Double
     let longitude: Double
     let reaction: Reaction
+    // --- New properties ---
+    let reviewText: String?
+    let mediaURLs: [String]?
+    let mentionedFriends: [UUID]
+    let starRating: Double?
+    let distance: Double?
+    let authorHandle: String
+    let createdAt: Date
+    let tripName: String?
 }
 
 // MARK: - Pin Collection

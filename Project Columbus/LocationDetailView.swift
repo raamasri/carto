@@ -127,7 +127,15 @@ struct LocationDetailView: View {
                             date: formattedDate(),
                             latitude: mapItem.placemark.coordinate.latitude,
                             longitude: mapItem.placemark.coordinate.longitude,
-                            reaction: .wantToGo
+                            reaction: .wantToGo,
+                            reviewText: nil,
+                            mediaURLs: [],
+                            mentionedFriends: [],
+                            starRating: nil,
+                            distance: nil,
+                            authorHandle: "@you",
+                            createdAt: Date(),
+                            tripName: nil
                         )
                         pinStore.addPin(newPin, to: list)
                     }

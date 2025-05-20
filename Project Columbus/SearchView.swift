@@ -120,7 +120,15 @@ struct SearchView: View {
             date: formattedDate(),
             latitude: item.placemark.coordinate.latitude,
             longitude: item.placemark.coordinate.longitude,
-            reaction: .wantToGo
+            reaction: .wantToGo,
+            reviewText: nil,
+            mediaURLs: [],
+            mentionedFriends: [],
+            starRating: nil,
+            distance: nil,
+            authorHandle: "@you",
+            createdAt: Date(),
+            tripName: nil
         )
         pinStore.masterPins.append(newPin)
         quickAddedItemIDs.insert(uniqueID)
