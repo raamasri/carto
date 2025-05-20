@@ -1046,5 +1046,15 @@ struct ContentView: View {
         }
     }
 
+// Add this extension near your Pin model definition
+extension Pin {
+    func toMapItem() -> MKMapItem {
+        let placemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+        let item = MKMapItem(placemark: placemark)
+        item.name = locationName
+        return item
+    }
+}
+
 
 

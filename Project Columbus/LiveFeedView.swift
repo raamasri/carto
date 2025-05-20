@@ -33,19 +33,17 @@ struct LiveFeedView: View {
 
                     // Friends Tab
                     List(pinStore.masterPins.reversed()) { pin in
-                        PinCardView(pin: pin)
-                            .onTapGesture {
-                                selectedPin = pin
-                                region = MKCoordinateRegion(
-                                    center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
-                                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                                )
-
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    showMap = true
-                                    showDetail = true // ← ADD THIS
-                                }
-                            }
+                        NavigationLink(
+                            destination: LocationDetailView(
+                                mapItem: pin.toMapItem(),
+                                onAddPin: { _ in }
+                            )
+                            .environmentObject(pinStore)
+                        ) {
+                            PinCardView(pin: pin)
+                                .environmentObject(pinStore)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .refreshable {
                         refreshPins()
@@ -58,19 +56,17 @@ struct LiveFeedView: View {
 
                     // For You Tab
                     List(pinStore.masterPins.reversed()) { pin in
-                        PinCardView(pin: pin)
-                            .onTapGesture {
-                                selectedPin = pin
-                                region = MKCoordinateRegion(
-                                    center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
-                                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                                )
-
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    showMap = true
-                                    showDetail = true
-                                }
-                            }
+                        NavigationLink(
+                            destination: LocationDetailView(
+                                mapItem: pin.toMapItem(),
+                                onAddPin: { _ in }
+                            )
+                            .environmentObject(pinStore)
+                        ) {
+                            PinCardView(pin: pin)
+                                .environmentObject(pinStore)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .refreshable {
                         refreshPins()
