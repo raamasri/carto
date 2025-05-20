@@ -16,6 +16,8 @@ struct PinCardView: View {
     let pin: Pin
     @State private var showFullMap = false
     @State private var showAddToList = false
+    @State private var showAddedAlert = false
+    @EnvironmentObject var pinStore: PinStore
 
     // Helper: Relative date string
     private var relativeDateString: String {
@@ -28,11 +30,12 @@ struct PinCardView: View {
     private func styledReview(_ text: String) -> Text {
         let words = text.split(separator: " ")
         var result = Text("")
-        for word in words {
+        for (i, word) in words.enumerated() {
+            if i > 0 { result = result + Text(" ") }
             if word.hasPrefix("@") || word.hasPrefix("#") {
-                result = result + Text(" " + word).foregroundColor(.blue).bold()
+                result = result + Text(String(word)).foregroundColor(.blue).bold()
             } else {
-                result = result + Text(" " + word)
+                result = result + Text(String(word))
             }
         }
         return result
@@ -158,6 +161,8 @@ struct PinCardView: View {
                     if let review = pin.reviewText, !review.isEmpty {
                         styledReview(review)
                             .font(.body)
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 2)
                     }
                     if let media = pin.mediaURLs, !media.isEmpty {
@@ -202,13 +207,12 @@ struct PinCardView: View {
                 }
             }
             .padding()
-            .background(hasReviewOrMedia ? Color(.white) : Color(.gray).opacity(0.1))
+            .background(Color(.systemBackground))
             .cornerRadius(14)
             .shadow(color: Color.black.opacity(hasReviewOrMedia ? 0.12 : 0.05), radius: hasReviewOrMedia ? 5 : 2, x: 0, y: 2)
 
             // Add to List button
             Button(action: {
-                // Placeholder: show add to list action
                 print("Add to List tapped for \(pin.locationName)")
                 showAddToList = true
             }) {
@@ -223,6 +227,48 @@ struct PinCardView: View {
             }
             .padding(10)
             .shadow(radius: 2)
+            .buttonStyle(.plain)
         }
+        .sheet(isPresented: $showAddToList) {
+            AddToListSheet(pin: pin) { list in
+                pinStore.addPin(pin, to: list)
+                showAddedAlert = true
+            }
+        }
+        .alert("Added to List!", isPresented: $showAddedAlert) {
+            Button("OK", role: .cancel) { }
+        }
+    }
+}
+
+struct AddToListSheet: View {
+    let pin: Pin
+    let lists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
+    var onSelect: (String) -> Void
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Add to List")
+                .font(.title2)
+                .bold()
+                .padding(.top)
+            ForEach(lists, id: \.self) { list in
+                Button(action: {
+                    onSelect(list)
+                    dismiss()
+                }) {
+                    Text(list)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                }
+            }
+            Button("Cancel", role: .cancel) { dismiss() }
+                .padding(.top, 8)
+        }
+        .padding()
     }
 }

@@ -224,7 +224,7 @@ struct MainMapView: View {
         @Binding var showFullPOIView: Bool
         @EnvironmentObject var pinStore: PinStore
         @State private var showAddedAlert = false
-        @State private var showListDialog = false
+        @State private var showAddToList = false
         private let defaultLists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
 
         var body: some View {
@@ -232,6 +232,34 @@ struct MainMapView: View {
                 Spacer()
                 mainPopupContent
             }
+            .sheet(isPresented: $showAddToList) {
+                AddToListSheet(pin: tempPin) { list in
+                    pinStore.addPin(tempPin, to: list)
+                    showAddedAlert = true
+                }
+            }
+            .alert("Added to List!", isPresented: $showAddedAlert) {
+                Button("OK", role: .cancel) { }
+            }
+        }
+
+        private var tempPin: Pin {
+            Pin(
+                locationName: mapItem.name ?? "Unknown Place",
+                city: mapItem.placemark.locality ?? "",
+                date: formattedDate(),
+                latitude: mapItem.placemark.coordinate.latitude,
+                longitude: mapItem.placemark.coordinate.longitude,
+                reaction: .lovedIt,
+                reviewText: nil,
+                mediaURLs: [],
+                mentionedFriends: [],
+                starRating: nil,
+                distance: nil,
+                authorHandle: "@you",
+                createdAt: Date(),
+                tripName: nil
+            )
         }
 
         private var mainPopupContent: some View {
@@ -240,7 +268,7 @@ struct MainMapView: View {
                 addressView
                 lookAroundView
                 distanceView
-                addToListSection
+                addToListButton
             }
             .padding()
             .frame(maxWidth: .infinity)
@@ -248,9 +276,6 @@ struct MainMapView: View {
             .cornerRadius(AppSpacing.cornerRadius)
             .padding(.horizontal, 4)
             .padding(.bottom, 60)
-            .alert("Added to List", isPresented: $showAddedAlert) {
-                Button("OK", role: .cancel) { }
-            }
         }
 
         private var titleBar: some View {
@@ -313,44 +338,15 @@ struct MainMapView: View {
             }
         }
 
-        private var addToListSection: some View {
-            ZStack(alignment: .bottomLeading) {
+        private var addToListButton: some View {
+            HStack {
                 Button("Add to List") {
-                    showListDialog = true
+                    showAddToList = true
                 }
                 .padding(.leading)
-                .confirmationDialog("Choose a list", isPresented: $showListDialog, titleVisibility: .visible) {
-                    ForEach(defaultLists, id: \.self) { list in
-                        Button(list) {
-                            let newPin = Pin(
-                                locationName: mapItem.name ?? "Unknown Place",
-                                city: mapItem.placemark.locality ?? "",
-                                date: formattedDate(),
-                                latitude: mapItem.placemark.coordinate.latitude,
-                                longitude: mapItem.placemark.coordinate.longitude,
-                                reaction: .lovedIt,
-                                reviewText: nil,
-                                mediaURLs: [],
-                                mentionedFriends: [],
-                                starRating: nil,
-                                distance: nil,
-                                authorHandle: "@you",
-                                createdAt: Date(),
-                                tripName: nil
-                            )
-                            pinStore.addPin(newPin, to: list)
-                            showAddedAlert = true
-                        }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    Button("Cancel", role: .cancel) { }
-                }
-
-                HStack {
-                    Spacer()
-                    Button("Show More") {
-                        showFullPOIView = true
-                    }
+                Spacer()
+                Button("Show More") {
+                    showFullPOIView = true
                 }
             }
             .padding(.top, 8)
@@ -420,7 +416,7 @@ struct MainMapView: View {
                 .animation(.easeInOut(duration: 0.2), value: isSelected)
                 .onTapGesture(perform: onTap)
         }
-}
+    }
     
     struct PinAnnotationDot: View {
         let pin: Pin
@@ -713,6 +709,22 @@ struct MainMapView: View {
             // Add some initial pins
             if pinStore.masterPins.isEmpty {
                 pinStore.masterPins = [
+                    Pin(
+                        locationName: "Tonys Pizza",
+                        city: "San Francisco",
+                        date: "May 1",
+                        latitude: 37.8000,
+                        longitude: -122.4100,
+                        reaction: .lovedIt,
+                        reviewText: "I loved the za here. @pinalowers ask for Jeremy and he will hook you up. Def going back soon.",
+                        mediaURLs: [],
+                        mentionedFriends: [UUID(), UUID()],
+                        starRating: 4.8,
+                        distance: 4.1,
+                        authorHandle: "@raama",
+                        createdAt: Date().addingTimeInterval(-3600 * 24 * 6), // 6 days ago
+                        tripName: "SF Trip"
+                    ),
                     Pin(
                         locationName: "Blue Bottle Coffee",
                         city: "San Francisco",
