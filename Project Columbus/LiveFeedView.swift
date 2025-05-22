@@ -1,8 +1,14 @@
 import SwiftUI
 import MapKit
 
+struct AlertMessage: Identifiable {
+    var id: String { message }
+    let message: String
+}
+
 struct LiveFeedView: View {
     @EnvironmentObject var pinStore: PinStore
+    @EnvironmentObject var authManager: AuthManager
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -13,6 +19,13 @@ struct LiveFeedView: View {
     @State private var selectedTab = 3
     @State private var showDetail = false
     @State private var showVideoFeed = false
+    @State private var showSendToModal = false
+    @State private var pinToSend: Pin? = nil
+    @State private var pinToAdd: Pin? = nil
+    @State private var showAddToListSheet = false
+    @State private var followingUsers: [AppUser] = []
+    @State private var isLoadingFollowing = false
+    @State private var sendConfirmation: AlertMessage? = nil
     let tabs = ["History", "Friends", "Following", "For You"]
 
     var body: some View {
@@ -44,6 +57,25 @@ struct LiveFeedView: View {
                                 .environmentObject(pinStore)
                         }
                         .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button {
+                                pinToAdd = pin
+                                showAddToListSheet = true
+                            } label: {
+                                Label("Add to List", systemImage: "plus")
+                            }
+                            .tint(.blue)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button {
+                                pinToSend = pin
+                                showSendToModal = true
+                                fetchFollowingUsersIfNeeded()
+                            } label: {
+                                Label("Send To", systemImage: "paperplane")
+                            }
+                            .tint(.green)
+                        }
                     }
                     .refreshable {
                         refreshPins()
@@ -67,6 +99,25 @@ struct LiveFeedView: View {
                                 .environmentObject(pinStore)
                         }
                         .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button {
+                                pinToAdd = pin
+                                showAddToListSheet = true
+                            } label: {
+                                Label("Add to List", systemImage: "plus")
+                            }
+                            .tint(.blue)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            Button {
+                                pinToSend = pin
+                                showSendToModal = true
+                                fetchFollowingUsersIfNeeded()
+                            } label: {
+                                Label("Send To", systemImage: "paperplane")
+                            }
+                            .tint(.green)
+                        }
                     }
                     .refreshable {
                         refreshPins()
@@ -124,6 +175,23 @@ struct LiveFeedView: View {
             .sheet(isPresented: $showVideoFeed) {
                 VideoFeedView()
             }
+            .sheet(isPresented: $showSendToModal) {
+                if let pin = pinToSend {
+                    SendToSheet(pin: pin, followingUsers: followingUsers, isLoading: isLoadingFollowing) { user in
+                        sendConfirmation = AlertMessage(message: "Sent to @\(user.username)")
+                    }
+                }
+            }
+            .sheet(isPresented: $showAddToListSheet) {
+                if let pin = pinToAdd {
+                    AddToListSheetDynamic(pin: pin) { list in
+                        pinStore.addPin(pin, to: list)
+                    }
+                }
+            }
+            .alert(item: $sendConfirmation) { confirmation in
+                Alert(title: Text(confirmation.message))
+            }
         }
     }
 
@@ -140,6 +208,77 @@ struct LiveFeedView: View {
            let rootVC = scene.windows.first?.rootViewController {
             rootVC.present(activityVC, animated: true, completion: nil)
         }
+    }
+
+    func fetchFollowingUsersIfNeeded() {
+        guard let userID = authManager.currentUserID, followingUsers.isEmpty else { return }
+        isLoadingFollowing = true
+        Task {
+            let fetched = await SupabaseManager.shared.getFollowingUsers(for: userID)
+            await MainActor.run {
+                followingUsers = fetched
+                isLoadingFollowing = false
+            }
+        }
+    }
+}
+
+struct SendToSheet: View {
+    let pin: Pin
+    let followingUsers: [AppUser]
+    let isLoading: Bool
+    var onSend: (AppUser) -> Void
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Send \(pin.locationName) to...")
+                .font(.title2)
+                .bold()
+                .padding(.top)
+            if isLoading {
+                ProgressView("Loading...")
+            } else if followingUsers.isEmpty {
+                Text("You are not following anyone yet.")
+                    .foregroundColor(.gray)
+            } else {
+                List(followingUsers, id: \.id) { user in
+                    Button(action: {
+                        onSend(user)
+                        dismiss()
+                    }) {
+                        HStack {
+                            if let avatar = user.avatarURL, !avatar.isEmpty, let url = URL(string: avatar) {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image.resizable().aspectRatio(contentMode: .fill)
+                                    default:
+                                        Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray)
+                                    }
+                                }
+                                .frame(width: 32, height: 32)
+                                .clipShape(Circle())
+                            } else {
+                                Image(systemName: "person.circle.fill")
+                                    .resizable()
+                                    .foregroundColor(.gray)
+                                    .frame(width: 32, height: 32)
+                            }
+                            VStack(alignment: .leading) {
+                                Text(user.full_name.isEmpty ? "@\(user.username)" : user.full_name)
+                                Text("@\(user.username)")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { dismiss() }
+                .padding(.top, 8)
+        }
+        .padding()
     }
 }
 
@@ -168,5 +307,37 @@ struct POIView: View {
             // Additional POI details can be added here
         }
         .navigationTitle(pin.locationName)
+    }
+}
+
+struct AddToListSheetDynamic: View {
+    let pin: Pin
+    @EnvironmentObject var pinStore: PinStore
+    var onSelect: (String) -> Void
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Add to List")
+                .font(.title2)
+                .bold()
+                .padding(.top)
+            ForEach(pinStore.collections, id: \.name) { collection in
+                Button(action: {
+                    onSelect(collection.name)
+                    dismiss()
+                }) {
+                    Text(collection.name)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                }
+            }
+            Button("Cancel", role: .cancel) { dismiss() }
+                .padding(.top, 8)
+        }
+        .padding()
     }
 }
