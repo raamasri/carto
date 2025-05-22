@@ -18,7 +18,11 @@ struct PinCardView: View {
     @State private var showFullMap = false
     @State private var showAddToList = false
     @State private var showAddedAlert = false
+    @State private var showFriendReviewList = false
+    @State private var friends: [AppUser] = []
+    @State private var isLoadingFriends = false
     @EnvironmentObject var pinStore: PinStore
+    @EnvironmentObject var authManager: AuthManager
 
     // Helper: Relative date string
     private var relativeDateString: String {
@@ -42,24 +46,84 @@ struct PinCardView: View {
         return result
     }
 
-    // Helper: Avatars for mentioned friends (placeholder)
-    private var avatarsRow: some View {
-        HStack(spacing: -10) {
-            ForEach(pin.mentionedFriends.prefix(3), id: \ .self) { _ in
-                Image(systemName: "person.crop.circle.fill")
+    // Helper: Avatars for friends who reviewed this place
+    private func friendsWhoReviewed() -> [(AppUser, Pin)] {
+        let allPins = pinStore.masterPins
+        let placePins = allPins.filter { abs($0.latitude - pin.latitude) < 0.0001 && abs($0.longitude - pin.longitude) < 0.0001 }
+        return placePins.compactMap { p in
+            if let user = friends.first(where: { $0.username == p.authorHandle.replacingOccurrences(of: "@", with: "") }) {
+                return (user, p)
+            }
+            return nil
+        }.sorted { $0.1.createdAt > $1.1.createdAt }
+    }
+
+    // Friend Avatar View Component
+    private struct FriendAvatarView: View {
+        let user: AppUser
+        
+        var body: some View {
+            if let avatar = user.avatarURL, !avatar.isEmpty, let url = URL(string: avatar) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray)
+                    }
+                }
+                .frame(width: 24, height: 24)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
+            } else {
+                Image(systemName: "person.circle.fill")
                     .resizable()
+                    .foregroundColor(.gray)
                     .frame(width: 24, height: 24)
-                    .background(Circle().fill(Color.white))
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
             }
-            if pin.mentionedFriends.count > 3 {
-                Text("+\(pin.mentionedFriends.count - 3)")
-                    .font(.caption)
-                    .padding(.leading, 4)
+        }
+    }
+
+    // Friend Avatars Row Content
+    private struct FriendAvatarsRowContent: View {
+        let friendPins: [(AppUser, Pin)]
+        let count: Int
+        let onTap: () -> Void
+        
+        var body: some View {
+            HStack(spacing: -10) {
+                ForEach(Array(friendPins.prefix(3).enumerated()), id: \.element.0.id) { _, element in
+                    let (user, _) = element
+                    FriendAvatarView(user: user)
+                }
+                if count > 3 {
+                    Text("+\(count - 3)")
+                        .font(.caption)
+                        .padding(.leading, 4)
+                }
+            }
+            .padding(.vertical, 2)
+            .onTapGesture(perform: onTap)
+        }
+    }
+
+    private var friendsAvatarsRow: some View {
+        let friendPins = friendsWhoReviewed()
+        let count = friendPins.count
+        
+        return Group {
+            if isLoadingFriends {
+                ProgressView().frame(width: 24, height: 24)
+            } else {
+                FriendAvatarsRowContent(
+                    friendPins: friendPins,
+                    count: count,
+                    onTap: { showFriendReviewList = true }
+                )
             }
         }
-        .padding(.vertical, 2)
     }
 
     // Helper: Trip tag
@@ -148,9 +212,7 @@ struct PinCardView: View {
                     miniMap
                 }
                 // Avatars row (if any)
-                if !pin.mentionedFriends.isEmpty {
-                    avatarsRow
-                }
+                friendsAvatarsRow
                 // Minimal card (just a pin, no review/media)
                 if !hasReviewOrMedia {
                     Text(relativeDateString)
@@ -246,6 +308,27 @@ struct PinCardView: View {
         }
         .alert("Added to List!", isPresented: $showAddedAlert) {
             Button("OK", role: .cancel) { }
+        }
+        .onAppear {
+            if friends.isEmpty, let userID = authManager.currentUserID {
+                isLoadingFriends = true
+                Task {
+                    let fetched = await SupabaseManager.shared.getFollowingUsers(for: userID)
+                    await MainActor.run {
+                        friends = fetched
+                        isLoadingFriends = false
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showFriendReviewList) {
+            FriendReviewListView(
+                placeName: pin.locationName,
+                latitude: pin.latitude,
+                longitude: pin.longitude,
+                allPins: pinStore.masterPins,
+                friends: friends
+            )
         }
     }
 }
