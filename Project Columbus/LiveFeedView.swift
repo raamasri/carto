@@ -213,8 +213,13 @@ struct LiveFeedView: View {
     func fetchFollowingUsersIfNeeded() {
         guard let userID = authManager.currentUserID, followingUsers.isEmpty else { return }
         isLoadingFollowing = true
+        let start = Date()
         Task {
+            print("⏱️ Fetching following users started at \(start)")
             let fetched = await SupabaseManager.shared.getFollowingUsers(for: userID)
+            let end = Date()
+            let duration = end.timeIntervalSince(start)
+            print("⏱️ Fetching following users finished at \(end) (duration: \(duration) seconds)")
             await MainActor.run {
                 followingUsers = fetched
                 isLoadingFollowing = false
@@ -252,7 +257,11 @@ struct SendToSheet: View {
                                 AsyncImage(url: url) { phase in
                                     switch phase {
                                     case .success(let image):
-                                        image.resizable().aspectRatio(contentMode: .fill)
+                                        image.resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .onAppear {
+                                                print("🖼️ Image loaded for \(user.username) at \(Date())")
+                                            }
                                     default:
                                         Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray)
                                     }
