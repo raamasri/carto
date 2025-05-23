@@ -40,138 +40,36 @@ struct LiveFeedView: View {
                 .pickerStyle(SegmentedPickerStyle())
                 .padding()
 
-                TabView(selection: $selectedTab) {
-                    // History Tab - User's own activity
-                    VStack {
-                        if authManager.isLoggedIn {
-                            List(pinStore.masterPins.filter { $0.authorHandle.contains(authManager.currentUsername ?? "") }.reversed()) { pin in
-                                NavigationLink(
-                                    destination: LocationDetailView(
-                                        mapItem: pin.toMapItem(),
-                                        onAddPin: { _ in }
-                                    )
-                                    .environmentObject(pinStore)
-                                ) {
-                                    PinCardView(pin: pin)
+                // Content based on selected tab
+                Group {
+                    switch selectedTab {
+                    case 0:
+                        // History Tab - User's own activity
+                        VStack {
+                            if authManager.isLoggedIn {
+                                List(pinStore.masterPins.filter { $0.authorHandle.contains(authManager.currentUsername ?? "") }.reversed()) { pin in
+                                    NavigationLink(
+                                        destination: LocationDetailView(
+                                            mapItem: pin.toMapItem(),
+                                            onAddPin: { _ in }
+                                        )
                                         .environmentObject(pinStore)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .refreshable {
-                                await refreshPins()
-                            }
-                        } else {
-                            Text("Please log in to view your history")
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .tag(0)
-
-                    // Friends Tab
-                    List(pinStore.masterPins.reversed()) { pin in
-                        NavigationLink(
-                            destination: LocationDetailView(
-                                mapItem: pin.toMapItem(),
-                                onAddPin: { _ in }
-                            )
-                            .environmentObject(pinStore)
-                        ) {
-                            PinCardView(pin: pin)
-                                .environmentObject(pinStore)
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button {
-                                pinToAdd = pin
-                                showAddToListSheet = true
-                            } label: {
-                                Label("Add to List", systemImage: "plus")
-                            }
-                            .tint(.blue)
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                            Button {
-                                pinToSend = pin
-                                showSendToModal = true
-                                fetchFollowingUsersIfNeeded()
-                            } label: {
-                                Label("Send To", systemImage: "paperplane")
-                            }
-                            .tint(.green)
-                        }
-                    }
-                    .refreshable {
-                        await refreshPins()
-                    }
-                    .tag(1)
-
-                    // Following Tab - Content from people you follow
-                    VStack {
-                        if authManager.isLoggedIn {
-                            if followingUsers.isEmpty {
-                                VStack(spacing: 16) {
-                                    Image(systemName: "person.3")
-                                        .font(.system(size: 50))
-                                        .foregroundColor(.gray)
-                                    Text("You're not following anyone yet")
-                                        .font(.title2)
-                                        .foregroundColor(.gray)
-                                    Text("Follow friends to see their recommendations here")
-                                        .multilineTextAlignment(.center)
-                                        .foregroundColor(.secondary)
-                                    
-                                    Button("Find Friends") {
-                                        // Navigate to find friends
-                                        selectedTab = 1
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                }
-                                .padding()
-                            } else {
-                                List {
-                                    ForEach(pinStore.masterPins.filter { pin in
-                                        followingUsers.contains { user in
-                                            pin.authorHandle.contains(user.username)
-                                        }
-                                    }.reversed()) { pin in
-                                        NavigationLink(
-                                            destination: LocationDetailView(
-                                                mapItem: pin.toMapItem(),
-                                                onAddPin: { _ in }
-                                            )
+                                    ) {
+                                        PinCardView(pin: pin)
                                             .environmentObject(pinStore)
-                                        ) {
-                                            PinCardView(pin: pin)
-                                                .environmentObject(pinStore)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                            Button {
-                                                pinToAdd = pin
-                                                showAddToListSheet = true
-                                            } label: {
-                                                Label("Add to List", systemImage: "plus")
-                                            }
-                                            .tint(.blue)
-                                        }
                                     }
+                                    .buttonStyle(.plain)
                                 }
                                 .refreshable {
                                     await refreshPins()
-                                    fetchFollowingUsersIfNeeded()
                                 }
+                            } else {
+                                Text("Please log in to view your history")
+                                    .foregroundColor(.gray)
                             }
-                        } else {
-                            Text("Please log in to see content from people you follow")
-                                .foregroundColor(.gray)
                         }
-                    }
-                    .onAppear {
-                        fetchFollowingUsersIfNeeded()
-                    }
-                    .tag(2)
-
-                    // For You Tab
+                    case 1:
+                                            // Friends Tab
                     List(pinStore.masterPins.reversed()) { pin in
                         NavigationLink(
                             destination: LocationDetailView(
@@ -203,13 +101,142 @@ struct LiveFeedView: View {
                             }
                             .tint(.green)
                         }
+                        .contentShape(Rectangle())
                     }
                     .refreshable {
                         await refreshPins()
                     }
-                    .tag(3)
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { _ in }
+                            .onEnded { _ in }
+                    )
+                    case 2:
+                        // Following Tab - Content from people you follow
+                        VStack {
+                            if authManager.isLoggedIn {
+                                if followingUsers.isEmpty {
+                                    VStack(spacing: 16) {
+                                        Image(systemName: "person.3")
+                                            .font(.system(size: 50))
+                                            .foregroundColor(.gray)
+                                        Text("You're not following anyone yet")
+                                            .font(.title2)
+                                            .foregroundColor(.gray)
+                                        Text("Follow friends to see their recommendations here")
+                                            .multilineTextAlignment(.center)
+                                            .foregroundColor(.secondary)
+                                        
+                                        Button("Find Friends") {
+                                            // Navigate to find friends
+                                            selectedTab = 1
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                    }
+                                    .padding()
+                                } else {
+                                    List {
+                                        ForEach(pinStore.masterPins.filter { pin in
+                                            followingUsers.contains { user in
+                                                pin.authorHandle.contains(user.username)
+                                            }
+                                        }.reversed()) { pin in
+                                            NavigationLink(
+                                                destination: LocationDetailView(
+                                                    mapItem: pin.toMapItem(),
+                                                    onAddPin: { _ in }
+                                                )
+                                                .environmentObject(pinStore)
+                                            ) {
+                                                PinCardView(pin: pin)
+                                                    .environmentObject(pinStore)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                                Button {
+                                                    pinToAdd = pin
+                                                    showAddToListSheet = true
+                                                } label: {
+                                                    Label("Add to List", systemImage: "plus")
+                                                }
+                                                .tint(.blue)
+                                            }
+                                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                                Button {
+                                                    pinToSend = pin
+                                                    showSendToModal = true
+                                                    fetchFollowingUsersIfNeeded()
+                                                } label: {
+                                                    Label("Send To", systemImage: "paperplane")
+                                                }
+                                                .tint(.green)
+                                            }
+                                            .contentShape(Rectangle())
+                                        }
+                                    }
+                                    .refreshable {
+                                        await refreshPins()
+                                        fetchFollowingUsersIfNeeded()
+                                    }
+                                    .simultaneousGesture(
+                                        DragGesture()
+                                            .onChanged { _ in }
+                                            .onEnded { _ in }
+                                    )
+                                }
+                            } else {
+                                Text("Please log in to see content from people you follow")
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .onAppear {
+                            fetchFollowingUsersIfNeeded()
+                        }
+                    default:
+                        // For You Tab
+                        List(pinStore.masterPins.reversed()) { pin in
+                            NavigationLink(
+                                destination: LocationDetailView(
+                                    mapItem: pin.toMapItem(),
+                                    onAddPin: { _ in }
+                                )
+                                .environmentObject(pinStore)
+                            ) {
+                                PinCardView(pin: pin)
+                                    .environmentObject(pinStore)
+                            }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    pinToAdd = pin
+                                    showAddToListSheet = true
+                                } label: {
+                                    Label("Add to List", systemImage: "plus")
+                                }
+                                .tint(.blue)
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                Button {
+                                    pinToSend = pin
+                                    showSendToModal = true
+                                    fetchFollowingUsersIfNeeded()
+                                } label: {
+                                    Label("Send To", systemImage: "paperplane")
+                                }
+                                .tint(.green)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .refreshable {
+                            await refreshPins()
+                        }
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { _ in }
+                                .onEnded { _ in }
+                        )
+                    }
                 }
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             }
             .navigationTitle("Live Feed")
             .navigationBarTitleDisplayMode(.large)
