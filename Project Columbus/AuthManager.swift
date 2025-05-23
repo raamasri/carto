@@ -39,14 +39,14 @@ class AuthManager: ObservableObject {
             self.lastUsedPassword = password
             if !biometricEnabled && !biometricPromptShown {
                 biometricPromptShown = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
                     NotificationCenter.default.post(name: .showBiometricPrompt, object: nil)
                 }
             }
             saveCredentialsToKeychain(username: username, password: password)
             return true
         } catch {
-            print("Login failed: \(error)")
             self.isLoggedIn = false
             return false
         }
@@ -64,14 +64,10 @@ class AuthManager: ObservableObject {
                 .insert(insertData)
                 .execute()
             
-            DispatchQueue.main.async {
-                self.isLoggedIn = true
-                self.currentUsername = username
-            }
+            self.isLoggedIn = true
+            self.currentUsername = username
         } catch {
-            DispatchQueue.main.async {
-                self.isLoggedIn = false
-            }
+            self.isLoggedIn = false
 
             // Check for "account already exists" type of error
             let lowercasedMessage = error.localizedDescription.lowercased()
@@ -93,7 +89,7 @@ class AuthManager: ObservableObject {
                     self.currentUserID = nil
                 }
             } catch {
-                print("Failed to log out:", error)
+                // Handle logout error silently
             }
         }
     }
@@ -143,8 +139,6 @@ class AuthManager: ObservableObject {
 
             return true
         } catch {
-            print("Apple sign-in failed:", error)
-
             let lowercasedMessage = error.localizedDescription.lowercased()
             if lowercasedMessage.contains("already registered") || lowercasedMessage.contains("already exists") {
                 self.appleSignInErrorMessage = "An account with this email already exists. Try signing in with your original method."

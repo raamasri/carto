@@ -44,45 +44,7 @@ struct AppSpacing {
 
 
 
-// MARK: - Location Manager
-class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
-    private let manager = CLLocationManager()
-    @Published var userLocation: CLLocationCoordinate2D? = nil
-    @Published var isUserManuallyMovingMap: Bool = false
-
-    override init() {
-        super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.requestWhenInUseAuthorization()
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
-        userLocation = location.coordinate
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Failed to find user's location: \(error.localizedDescription)")
-    }
-
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        switch manager.authorizationStatus {
-        case .authorizedWhenInUse, .authorizedAlways:
-            manager.startUpdatingLocation()
-        case .denied, .restricted:
-            print("Location access denied or restricted")
-        case .notDetermined:
-            print("Waiting for location permission")
-        @unknown default:
-            break
-        }
-    }
-    
-    func requestUserLocationManually() {
-        manager.startUpdatingLocation()
-    }
-}
+// MARK: - Location Manager - Using AppLocationManager from LocationManager.swift
 
 struct CollectionMapView: View {
     let pins: [Pin]
@@ -199,8 +161,7 @@ struct MainMapView: View {
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     ))
 
-    @State private var userLocation: CLLocationCoordinate2D? = nil
-    @StateObject private var locationManager = LocationManager()
+    @EnvironmentObject var locationManager: AppLocationManager
     @State private var showSideMenu = false
     @State private var selectedTab = 0
     @Binding var navigateToFeed: Bool
@@ -225,7 +186,6 @@ struct MainMapView: View {
         @EnvironmentObject var pinStore: PinStore
         @State private var showAddedAlert = false
         @State private var showAddToList = false
-        private let defaultLists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
 
         var body: some View {
             VStack {
@@ -394,7 +354,7 @@ struct MainMapView: View {
             
             selectedMapItem = item
             showPOISheet = true
-            print("Selected POI: \(item.name ?? "Unknown") at \(coordinate)")
+            // Handle POI selection
         }
     }
     
@@ -450,7 +410,7 @@ struct MainMapView: View {
 
                 Map(position: $cameraPosition) {
                     pinAnnotations
-                    if let userLoc = userLocation {
+                    if let userLoc = locationManager.location {
                         Annotation("Current Location", coordinate: userLoc) {
                             ZStack {
                                 Circle()
@@ -506,7 +466,7 @@ struct MainMapView: View {
                     if let currentUser = authManager.currentUser {
                         UserProfileView(profileUser: currentUser)
                             .onAppear {
-                                print("📍 selectedTab 4 triggered. currentUser = \(currentUser.username)")
+                                // User profile loaded
                             }
                     } else {
                         Text("Loading user profile...")
@@ -630,7 +590,7 @@ struct MainMapView: View {
                             if shouldTrackUser {
                                 requestUserLocation()
                                 withAnimation {
-                                    if let location = locationManager.userLocation {
+                                    if let location = locationManager.location {
                                         cameraPosition = .region(MKCoordinateRegion(
                                             center: location,
                                             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
@@ -696,7 +656,7 @@ struct MainMapView: View {
             .ignoresSafeArea(.container, edges: .bottom)
 
             if let mapItem = selectedMapItem, showPOISheet {
-                POIPopup(mapItem: mapItem, userLocation: userLocation, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
+                POIPopup(mapItem: mapItem, userLocation: locationManager.location, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
             }
         }
         .onAppear {
@@ -843,9 +803,8 @@ struct MainMapView: View {
                 ]
             }
         }
-        .onReceive(locationManager.$userLocation.compactMap { $0 }) { location in
+        .onReceive(locationManager.$location.compactMap { $0 }) { location in
             if shouldTrackUser && !isUserManuallyMovingMap {
-                self.userLocation = location
                 withAnimation(.easeInOut(duration: 2.0)) {
                     cameraPosition = .region(MKCoordinateRegion(
                         center: location,

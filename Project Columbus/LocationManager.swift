@@ -23,11 +23,13 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
-            print("✅ Location access granted")
+            manager.startUpdatingLocation()
         case .denied, .restricted:
-            print("❌ Location access denied or restricted")
+            // Handle permission denied
+            break
         case .notDetermined:
-            print("ℹ️ Waiting for user to grant location access")
+            // Waiting for user permission
+            break
         @unknown default:
             break
         }
@@ -45,5 +47,9 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
             center: location ?? CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
+    }
+    
+    func requestUserLocationManually() {
+        manager.startUpdatingLocation()
     }
 }

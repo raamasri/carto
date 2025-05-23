@@ -17,8 +17,7 @@ class PinStore: ObservableObject {
     /// Adds a pin to the Favorites list if it isn’t already present.
     /// - Parameter pin: The `Pin` to add.
     func addToFavorites(_ pin: Pin) {
-        guard !favoritePins.contains(where: { $0.latitude == pin.latitude &&
-                                               $0.longitude == pin.longitude }) else { return }
+        guard !favoritePins.contains(where: { $0.id == pin.id }) else { return }
         favoritePins.append(pin)
     }
     
@@ -28,16 +27,14 @@ class PinStore: ObservableObject {
     ///   - listName: The name of the list/collection.
     func addPin(_ pin: Pin, to listName: String) {
         // Keep the master list updated
-        if !masterPins.contains(where: { $0.latitude == pin.latitude &&
-                                         $0.longitude == pin.longitude }) {
+        if !masterPins.contains(where: { $0.id == pin.id }) {
             masterPins.append(pin)
         }
         
         // Check if the collection already exists
         if let index = collections.firstIndex(where: { $0.name == listName }) {
             // Append only if the pin is not already present
-            if !collections[index].pins.contains(where: { $0.latitude == pin.latitude &&
-                                                          $0.longitude == pin.longitude }) {
+            if !collections[index].pins.contains(where: { $0.id == pin.id }) {
                 collections[index].pins.append(pin)
             }
         } else {
@@ -57,7 +54,6 @@ class PinStore: ObservableObject {
     
     @MainActor
     func fetchPins() {
-        print("📡 Fetching pins from data source...")
         // TODO: Replace this with real fetch logic from your database or API
         // Example:
         // await loadPins()

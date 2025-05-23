@@ -16,14 +16,20 @@ class SupabaseManager: ObservableObject {
     let client: SupabaseClient
 
     private init() {
-        let supabaseUrl = URL(string: "https://rthgzxorsccgeztwaxnt.supabase.co")!
-        let supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0aGd6eG9yc2NjZ2V6dHdheG50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ4NTYyNTMsImV4cCI6MjA2MDQzMjI1M30.mbXmJTsBIMHdlL_lcSAX0Zd87YH-_jDkWb8H6W1wW6I"
+        // Load credentials from secure configuration
+        guard let configPath = Bundle.main.path(forResource: "Config", ofType: "plist"),
+              let config = NSDictionary(contentsOfFile: configPath),
+              let urlString = config["SupabaseURL"] as? String,
+              let key = config["SupabaseKey"] as? String,
+              let supabaseUrl = URL(string: urlString) else {
+            fatalError("Failed to load Supabase configuration. Please ensure Config.plist exists with SupabaseURL and SupabaseKey.")
+        }
         
         self.baseURL = supabaseUrl
         
         self.client = SupabaseClient(
             supabaseURL: supabaseUrl,
-            supabaseKey: supabaseKey
+            supabaseKey: key
         )
     }
 
@@ -37,28 +43,6 @@ class SupabaseManager: ObservableObject {
             guard let session = try? await client.auth.session else { return false }
             let currentUserID = session.user.id.uuidString.lowercased()
 
-            // 🔥 DEBUG: verify the method is called and parameters
-            print("🧪 currentUserID:", currentUserID)
-            print("🧪 target userID for check:", userID.uuidString)
-
-            // 🔥 DEBUG: fetch all notifications unfiltered to see what the client can access
-            let allResp: PostgrestResponse<[NotificationResponse]> = try await client
-                .from("notifications")
-                .select("id, user_id, from_user_id, type")
-                .execute()
-            print("🔁 ALL notifications unfiltered:", allResp.value)
-
-            // 🔥 DEBUG: test hardcoded filter to rule out runtime parameter mismatch
-            let hardcodedResp: PostgrestResponse<[NotificationResponse]> = try await client
-                .from("notifications")
-                .select("id")
-                .eq("user_id", value: "169d7f26-4ee7-4be9-8657-99ea61c66782")
-                .eq("from_user_id", value: "9751E517-9B49-43BB-88B4-129450B3EF41")
-                .limit(1)
-                .execute()
-            print("🔁 HARDCODED filter JSON:", String(data: hardcodedResp.data, encoding: .utf8) ?? "nil")
-            print("🔍 HARDCODED count:", hardcodedResp.value.count)
-
             // Execute and capture raw response for debugging
             let resp: PostgrestResponse<[NotificationResponse]> = try await client
                 .from("notifications")
@@ -69,44 +53,8 @@ class SupabaseManager: ObservableObject {
                 .limit(1)
                 .execute()
 
-            // 🔥 DEBUG: show dynamic query URL and JSON for troubleshooting
-            if let url = resp.response.url {
-                print("🔁 DYNAMIC filter URL:", url.absoluteString)
-            }
-            if let jsonPayload = String(data: resp.data, encoding: .utf8) {
-                print("🔁 DYNAMIC filter JSON:", jsonPayload)
-            } else {
-                print("🔁 DYNAMIC JSON conversion failed")
-            }
-            // 🔁 HTTP status code for dynamic filter
-            if let status = resp.response.statusCode as Int? {
-                print("🔁 HTTP status code:", status)
-            }
-
-            // Dump raw response to console
-            print("🔁 raw follow request response:", resp)
-            // 🔁 Detailed HTTP response headers for debugging
-            print("🔁 HTTP response headers:", resp.response.allHeaderFields)
-
-            // Print raw JSON payload
-            if let jsonString = String(data: resp.data, encoding: .utf8) {
-                print("🔁 raw follow JSON:", jsonString)
-            } else {
-                print("🔁 failed to convert raw data to string")
-            }
-
-            // Attempt manual JSON decode for troubleshooting
-            do {
-                let manualDecode = try JSONDecoder().decode([NotificationResponse].self, from: resp.data)
-                print("🔁 manual decode result:", manualDecode)
-            } catch {
-                print("🔁 manual decode error:", error)
-            }
-
             // Extract decoded value
             let notifications = resp.value
-
-            print("🔍 Follow request count: \(notifications.count)")
             return !notifications.isEmpty
         } catch {
             print("Error checking follow request: \(error)")
@@ -306,7 +254,7 @@ class SupabaseManager: ObservableObject {
                 avatarURL: user.avatar_url ?? ""
             )
         } catch {
-            print("Error fetching user profile: \(error)")
+            // Log error silently in production
             return nil
         }
     }
@@ -334,17 +282,9 @@ class SupabaseManager: ObservableObject {
             .value
 
         let followingIDs = await getFollowing(for: session.user.id)
-
-        print("📦 fetchAllUsers: fetched \(users.count) users from Supabase")
-        
-        for user in users {
-            print("🔍 User: \(user.username), lat: \(String(describing: user.latitude)), lon: \(String(describing: user.longitude)), id: \(user.id)")
-        }
         
         let filteredUsers = users
             .filter { $0.id.lowercased() != currentUserID.lowercased() }
-        
-        print("✅ Returning \(filteredUsers.count) users after filtering current user")
         
         return filteredUsers.map { user in
             AppUser(
@@ -374,10 +314,7 @@ class SupabaseManager: ObservableObject {
         bio: String,
         avatarURL: String?
     ) async throws {
-        // Debug: check if a profile row exists before update
         let existingProfile = await fetchUserProfile(userID: userID)
-        print("Supabase existing profile before update:", existingProfile as Any)
-        print("Sending bio:", bio)
         
         if existingProfile == nil {
             // Insert a new profile row since none exists
@@ -392,10 +329,9 @@ class SupabaseManager: ObservableObject {
                     "avatar_url": avatarURL ?? ""
                 ])
                 .execute()
-            print("Supabase insertUserProfile response:", insertResponse)
         } else {
             // Existing row: perform update
-            let response = try await client
+            _ = try await client
                 .from("users")
                 .update([
                     "username": username,
@@ -406,7 +342,6 @@ class SupabaseManager: ObservableObject {
                 ])
                 .eq("id", value: userID)
                 .execute()
-            print("Supabase updateUserProfile response:", response)
         }
     }
     func getFollowers(for userID: String) async -> [AppUser] {
@@ -423,7 +358,6 @@ class SupabaseManager: ObservableObject {
 
             return decodeAppUsers(from: response)
         } catch {
-            print("Error fetching followers: \(error)")
             return []
         }
     }
@@ -442,7 +376,6 @@ class SupabaseManager: ObservableObject {
 
             return decodeAppUsers(from: response)
         } catch {
-            print("Error fetching following users: \(error)")
             return []
         }
     }
@@ -460,9 +393,8 @@ class SupabaseManager: ObservableObject {
                 ])
                 .eq("id", value: userID)
                 .execute()
-            print("Successfully updated location.")
         } catch {
-            print("Error updating user location: \(error)")
+            // Handle error silently
         }
     }
 
