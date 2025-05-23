@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import UIKit
 
 @main
 struct Project_ColumbusApp: App {
@@ -21,7 +20,7 @@ struct Project_ColumbusApp: App {
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            // Item.self removed - no SwiftData models currently
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

@@ -167,6 +167,7 @@ struct MainMapView: View {
     @State private var selectedTab = 0
     @Binding var navigateToFeed: Bool
     @State private var selectedPin: Pin? = nil
+    @State private var selectedPinForPopup: UUID? = nil
     @State private var animatePulse = false
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
     @State private var showSettingsSheet = false
@@ -283,19 +284,11 @@ struct MainMapView: View {
             }
         }
 
+        @available(iOS 16.0, *)
         private var lookAroundView: some View {
-            RoundedRectangle(cornerRadius: AppSpacing.cornerRadius)
-                .fill(Color.gray.opacity(0.3))
+            LookAroundPreview(coordinate: mapItem.placemark.coordinate)
                 .frame(height: 200)
-                .overlay(
-                    VStack {
-                        Image(systemName: "camera.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(.gray)
-                        Text("Street View")
-                            .foregroundColor(.gray)
-                    }
-                )
+                .cornerRadius(AppSpacing.cornerRadius)
         }
 
         private var distanceView: some View {
@@ -321,6 +314,17 @@ struct MainMapView: View {
             }
             .padding(.top, 8)
         }
+    }
+    
+    func handlePinTap(_ pin: Pin) {
+        // Convert Pin to MKMapItem for POI popup
+        let coordinate = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+        let placemark = MKPlacemark(coordinate: coordinate)
+        let mapItem = MKMapItem(placemark: placemark)
+        mapItem.name = pin.locationName
+        
+        selectedMapItem = mapItem
+        showPOISheet = true
     }
     
     func handleSearchSelection(_ completion: MKLocalSearchCompletion) {
@@ -418,9 +422,10 @@ struct MainMapView: View {
         ZStack {
             if selectedTab == 0 {
 
-                Map(position: $cameraPosition) {
+                Map(position: $cameraPosition, selection: $selectedPinForPopup) {
                     ForEach(pinStore.masterPins, id: \.id) { pin in
                         Marker(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
+                            .tag(pin.id)
                     }
                 }
                 .mapStyle(styleForMapType(selectedMapType))
@@ -818,12 +823,18 @@ struct MainMapView: View {
             // Dismiss the POI popup and clear search results when switching tabs
             showPOISheet = false
             showFullPOIView = false
+            selectedPinForPopup = nil
             searchResults = []
             searchText = ""
         }
         .onChange(of: showFullPOIView) { oldValue, newValue in
             if !newValue {
                 showPOISheet = true
+            }
+        }
+        .onChange(of: selectedPinForPopup) { oldValue, newPinId in
+            if let pinId = newPinId, let pin = pinStore.masterPins.first(where: { $0.id == pinId }) {
+                handlePinTap(pin)
             }
         }
         .navigationDestination(isPresented: $showFullPOIView) {
