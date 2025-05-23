@@ -24,6 +24,7 @@ struct SignUpView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var phone = ""
+    
     @State private var profileImage: UIImage? = nil
     @State private var showImagePicker = false
     @State private var fadeOut = false

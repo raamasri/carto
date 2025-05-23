@@ -6,6 +6,7 @@
 //
 import Foundation
 import CoreLocation
+import MapKit
 
 // MARK: - Reaction Enum
 enum Reaction: String, CaseIterable {
@@ -51,4 +52,14 @@ struct User: Identifiable {
     var collections: [PinCollection] = []
     var favoriteSpots: [Pin] = []
     var activityFeed: [Pin] = []
+}
+
+// MARK: - Pin Extensions
+extension Pin {
+    func toMapItem() -> MKMapItem {
+        let placemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+        let item = MKMapItem(placemark: placemark)
+        item.name = locationName
+        return item
+    }
 }

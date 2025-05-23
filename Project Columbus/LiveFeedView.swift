@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import Foundation
 
 struct AlertMessage: Identifiable {
     var id: String { message }
@@ -40,9 +41,31 @@ struct LiveFeedView: View {
                 .padding()
 
                 TabView(selection: $selectedTab) {
-                    // History Tab Placeholder
-                    Text("History content goes here")
-                        .tag(0)
+                    // History Tab - User's own activity
+                    VStack {
+                        if authManager.isLoggedIn {
+                            List(pinStore.masterPins.filter { $0.authorHandle.contains(authManager.currentUsername ?? "") }.reversed()) { pin in
+                                NavigationLink(
+                                    destination: LocationDetailView(
+                                        mapItem: pin.toMapItem(),
+                                        onAddPin: { _ in }
+                                    )
+                                    .environmentObject(pinStore)
+                                ) {
+                                    PinCardView(pin: pin)
+                                        .environmentObject(pinStore)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .refreshable {
+                                await refreshPins()
+                            }
+                        } else {
+                            Text("Please log in to view your history")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .tag(0)
 
                     // Friends Tab
                     List(pinStore.masterPins.reversed()) { pin in
@@ -78,13 +101,75 @@ struct LiveFeedView: View {
                         }
                     }
                     .refreshable {
-                        refreshPins()
+                        await refreshPins()
                     }
                     .tag(1)
 
-                    // Following Tab Placeholder
-                    Text("Following content goes here")
-                        .tag(2)
+                    // Following Tab - Content from people you follow
+                    VStack {
+                        if authManager.isLoggedIn {
+                            if followingUsers.isEmpty {
+                                VStack(spacing: 16) {
+                                    Image(systemName: "person.3")
+                                        .font(.system(size: 50))
+                                        .foregroundColor(.gray)
+                                    Text("You're not following anyone yet")
+                                        .font(.title2)
+                                        .foregroundColor(.gray)
+                                    Text("Follow friends to see their recommendations here")
+                                        .multilineTextAlignment(.center)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Button("Find Friends") {
+                                        // Navigate to find friends
+                                        selectedTab = 1
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                }
+                                .padding()
+                            } else {
+                                List {
+                                    ForEach(pinStore.masterPins.filter { pin in
+                                        followingUsers.contains { user in
+                                            pin.authorHandle.contains(user.username)
+                                        }
+                                    }.reversed()) { pin in
+                                        NavigationLink(
+                                            destination: LocationDetailView(
+                                                mapItem: pin.toMapItem(),
+                                                onAddPin: { _ in }
+                                            )
+                                            .environmentObject(pinStore)
+                                        ) {
+                                            PinCardView(pin: pin)
+                                                .environmentObject(pinStore)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                            Button {
+                                                pinToAdd = pin
+                                                showAddToListSheet = true
+                                            } label: {
+                                                Label("Add to List", systemImage: "plus")
+                                            }
+                                            .tint(.blue)
+                                        }
+                                    }
+                                }
+                                .refreshable {
+                                    await refreshPins()
+                                    fetchFollowingUsersIfNeeded()
+                                }
+                            }
+                        } else {
+                            Text("Please log in to see content from people you follow")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .onAppear {
+                        fetchFollowingUsersIfNeeded()
+                    }
+                    .tag(2)
 
                     // For You Tab
                     List(pinStore.masterPins.reversed()) { pin in
@@ -120,7 +205,7 @@ struct LiveFeedView: View {
                         }
                     }
                     .refreshable {
-                        refreshPins()
+                        await refreshPins()
                     }
                     .tag(3)
                 }
@@ -195,9 +280,9 @@ struct LiveFeedView: View {
         }
     }
 
-    func refreshPins() {
-        print("🔄 Refreshing pins...")
-        pinStore.fetchPins() // Replace with actual refresh logic from your PinStore
+    func refreshPins() async {
+        await pinStore.fetchPins()
+        // TODO: Add sync when DataManager is integrated
     }
 
     func sharePin(_ pin: Pin) {

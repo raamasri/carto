@@ -67,10 +67,11 @@ struct CollectionMapView: View {
     }
     
     var body: some View {
-        Map(position: $cameraPosition) {
-            ForEach(pins, id: \.id) { pin in
-                Marker(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
-            }
+        Map(coordinateRegion: .constant(MKCoordinateRegion(
+            center: pins.first.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) } ?? CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        )), annotationItems: pins) { pin in
+            MapMarker(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude), tint: .red)
         }
         .edgesIgnoringSafeArea(.all)
         .navigationTitle("Map View")
@@ -283,9 +284,18 @@ struct MainMapView: View {
         }
 
         private var lookAroundView: some View {
-            LookAroundPreview(coordinate: mapItem.placemark.coordinate)
+            RoundedRectangle(cornerRadius: AppSpacing.cornerRadius)
+                .fill(Color.gray.opacity(0.3))
                 .frame(height: 200)
-                .cornerRadius(AppSpacing.cornerRadius)
+                .overlay(
+                    VStack {
+                        Image(systemName: "camera.fill")
+                            .font(.largeTitle)
+                            .foregroundColor(.gray)
+                        Text("Street View")
+                            .foregroundColor(.gray)
+                    }
+                )
         }
 
         private var distanceView: some View {
@@ -409,22 +419,8 @@ struct MainMapView: View {
             if selectedTab == 0 {
 
                 Map(position: $cameraPosition) {
-                    pinAnnotations
-                    if let userLoc = locationManager.location {
-                        Annotation("Current Location", coordinate: userLoc) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.blue)
-                                    .frame(width: 12, height: 12)
-                                
-                                Circle()
-                                    .stroke(Color.blue.opacity(0.6), lineWidth: 2)
-                                    .frame(width: 24, height: 24)
-                                    .scaleEffect(animatePulse ? 1.5 : 1.0)
-                                    .opacity(animatePulse ? 0.1 : 0.6)
-                                    .animation(.easeOut(duration: 1).repeatForever(autoreverses: true), value: animatePulse)
-                            }
-                        }
+                    ForEach(pinStore.masterPins, id: \.id) { pin in
+                        Marker(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
                     }
                 }
                 .mapStyle(styleForMapType(selectedMapType))
@@ -841,20 +837,7 @@ struct MainMapView: View {
         locationManager.requestUserLocationManually()
     }
     
-    private var pinAnnotations: some MapContent {
-        ForEach(pinStore.masterPins, id: \.id) { pin in
-            Annotation("Pin", coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                PinAnnotationDot(pin: pin, isSelected: pin == selectedPin) {
-                    selectedPin = pin
-                    let placemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
-                    let item = MKMapItem(placemark: placemark)
-                    item.name = pin.locationName
-                    selectedMapItem = item
-                    showFullPOIView = true  // This now shows the full POI view directly
-                }
-            }
-        }
-    }
+
 }
 
 // MARK: - Placeholder Views for Tabs
@@ -890,7 +873,7 @@ struct SideMenuView: View {
             }
             .padding()
             .frame(width: 250)
-            .background(Color(.systemBackground))
+            .background(Color(UIColor.systemBackground))
 
             Spacer()
         }
@@ -1005,15 +988,7 @@ struct ContentView: View {
         }
     }
 
-// Add this extension near your Pin model definition
-extension Pin {
-    func toMapItem() -> MKMapItem {
-        let placemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
-        let item = MKMapItem(placemark: placemark)
-        item.name = locationName
-        return item
-    }
-}
+
 
 
 
