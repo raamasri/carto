@@ -345,11 +345,24 @@ struct MessageInsert: Codable {
 
 extension ConversationDetailDB {
     func toConversation(with participants: [Any], title: String) -> Conversation {
-        // Parse dates
-        let iso8601Formatter = ISO8601DateFormatter()
-        let createdDate = iso8601Formatter.date(from: created_at) ?? Date()
-        let updatedDate = iso8601Formatter.date(from: updated_at) ?? Date()
-        let lastMessageDate = last_message_created_at != nil ? iso8601Formatter.date(from: last_message_created_at!) : nil
+        // Parse dates with multiple formatters to handle different timestamp formats
+        func parseTimestamp(_ timestamp: String) -> Date? {
+            // Try ISO8601 with fractional seconds first
+            let iso8601WithFractionsFormatter = ISO8601DateFormatter()
+            iso8601WithFractionsFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            if let date = iso8601WithFractionsFormatter.date(from: timestamp) {
+                return date
+            }
+            
+            // Fallback to standard ISO8601
+            let iso8601Formatter = ISO8601DateFormatter()
+            return iso8601Formatter.date(from: timestamp)
+        }
+        
+        let createdDate = parseTimestamp(created_at) ?? Date()
+        let updatedDate = parseTimestamp(updated_at) ?? Date()
+        let lastMessageDate = last_message_created_at != nil ? parseTimestamp(last_message_created_at!) : nil
         
         // Create last message if available
         var lastMessage: Message? = nil
@@ -364,6 +377,13 @@ extension ConversationDetailDB {
                 createdAt: messageDate,
                 messageType: MessageType(rawValue: "text") ?? .text
             )
+            print("✅ Created lastMessage: '\(content)' at \(messageDate)")
+        } else {
+            print("❌ Failed to create lastMessage:")
+            print("  - content: \(last_message_content ?? "nil")")
+            print("  - senderId: \(last_message_sender_id ?? "nil")")
+            print("  - messageDate: \(lastMessageDate?.description ?? "nil")")
+            print("  - timestamp: \(last_message_created_at ?? "nil")")
         }
         
         return Conversation(
@@ -379,8 +399,22 @@ extension ConversationDetailDB {
 
 extension MessageDetailDB {
     func toMessage() -> Message {
-        let iso8601Formatter = ISO8601DateFormatter()
-        let createdDate = iso8601Formatter.date(from: created_at) ?? Date()
+        // Parse timestamp with support for fractional seconds
+        func parseTimestamp(_ timestamp: String) -> Date? {
+            // Try ISO8601 with fractional seconds first
+            let iso8601WithFractionsFormatter = ISO8601DateFormatter()
+            iso8601WithFractionsFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            if let date = iso8601WithFractionsFormatter.date(from: timestamp) {
+                return date
+            }
+            
+            // Fallback to standard ISO8601
+            let iso8601Formatter = ISO8601DateFormatter()
+            return iso8601Formatter.date(from: timestamp)
+        }
+        
+        let createdDate = parseTimestamp(created_at) ?? Date()
         
         return Message(
             id: UUID(uuidString: message_id) ?? UUID(),

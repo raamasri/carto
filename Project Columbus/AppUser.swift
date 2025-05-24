@@ -35,11 +35,11 @@ struct AppUser: Identifiable, Codable {
         case bio
         case follower_count
         case following_count
-        case isFollowedByCurrentUser = "isfollowedbycurrentuser"
+        case isFollowedByCurrentUser
         case latitude
         case longitude
-        case isCurrentUser = "is_current_user"
-        case avatarURL
+        case isCurrentUser
+        case avatarURL = "avatar_url"
     }
 
     init(from decoder: Decoder) throws {
@@ -49,9 +49,9 @@ struct AppUser: Identifiable, Codable {
         full_name = try container.decode(String.self, forKey: .full_name)
         email = try container.decodeIfPresent(String.self, forKey: .email)
         bio = try container.decodeIfPresent(String.self, forKey: .bio)
-        follower_count = try container.decode(Int.self, forKey: .follower_count)
-        following_count = try container.decode(Int.self, forKey: .following_count)
-        isFollowedByCurrentUser = try container.decode(Bool.self, forKey: .isFollowedByCurrentUser)
+        follower_count = try container.decodeIfPresent(Int.self, forKey: .follower_count) ?? 0
+        following_count = try container.decodeIfPresent(Int.self, forKey: .following_count) ?? 0
+        isFollowedByCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isFollowedByCurrentUser) ?? false
         latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
         longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
         isCurrentUser = try container.decodeIfPresent(Bool.self, forKey: .isCurrentUser) ?? false
@@ -98,4 +98,33 @@ struct SelfUser: Codable {
     var latitude: Double?
     var longitude: Double?
     var avatarURL: String?
+}
+
+// Basic user structure for database responses without computed fields
+struct BasicUser: Codable {
+    let id: String
+    let username: String
+    let full_name: String
+    let email: String?
+    let bio: String?
+    let latitude: Double?
+    let longitude: Double?
+    let avatar_url: String?
+    
+    func toAppUser(currentUserID: String? = nil) -> AppUser {
+        return AppUser(
+            id: id,
+            username: username,
+            full_name: full_name,
+            email: email,
+            bio: bio,
+            follower_count: 0, // Will be set separately if needed
+            following_count: 0, // Will be set separately if needed
+            isFollowedByCurrentUser: false, // Will be set separately if needed
+            latitude: latitude,
+            longitude: longitude,
+            isCurrentUser: id == currentUserID,
+            avatarURL: avatar_url
+        )
+    }
 }

@@ -64,7 +64,14 @@ struct DirectMessagingView: View {
             .searchable(text: $searchText, prompt: "Search conversations")
         }
         .onAppear {
+            print("📱 DirectMessagingView appeared - loading conversations")
             loadConversations()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ConversationUpdated"))) { _ in
+            print("📱 Received ConversationUpdated notification - refreshing conversations")
+            Task {
+                await loadConversationsAsync()
+            }
         }
     }
     
@@ -96,7 +103,17 @@ struct DirectMessagingView: View {
     
     private var conversationsList: some View {
         List(filteredConversations) { conversation in
-            NavigationLink(destination: ChatView(conversation: conversation)) {
+            NavigationLink(destination: ChatView(conversation: conversation)
+                .onAppear {
+                    print("📱 Navigated to ChatView for conversation: \(conversation.title)")
+                }
+                .onDisappear {
+                    print("📱 Returned from ChatView - refreshing conversations")
+                    Task {
+                        await loadConversationsAsync()
+                    }
+                }
+            ) {
                 ConversationRowView(conversation: conversation)
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -251,12 +268,15 @@ struct NewMessageView: View {
     
     var filteredUsers: [AppUser] {
         if searchText.isEmpty {
+            print("🔍 No search text, returning all \(users.count) users")
             return users
         } else {
-            return users.filter { user in
+            let filtered = users.filter { user in
                 user.full_name.localizedCaseInsensitiveContains(searchText) ||
                 user.username.localizedCaseInsensitiveContains(searchText)
             }
+            print("🔍 Search '\(searchText)' returned \(filtered.count) results from \(users.count) total users")
+            return filtered
         }
     }
     
@@ -271,6 +291,20 @@ struct NewMessageView: View {
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                 }
                 .padding(.horizontal)
+                
+                // Info message when showing all users instead of just following
+                if users.count > 0 && !searchText.isEmpty {
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.blue)
+                        Text("Search through all users")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 4)
+                }
                 
                 // Users list
                 List(filteredUsers) { user in
@@ -347,13 +381,37 @@ struct NewMessageView: View {
     
     private func loadUsers() {
         Task {
-            guard let currentUserID = authManager.currentUserID else { return }
+            guard let currentUserID = authManager.currentUserID else { 
+                print("❌ No current user ID found")
+                return 
+            }
+            
+            print("🔄 Loading following users for: \(currentUserID)")
             
             // Load users the current user is following
             let followingUsers = await SupabaseManager.shared.getFollowingUsers(for: currentUserID)
             
+            print("✅ Loaded \(followingUsers.count) following users")
+            for user in followingUsers {
+                print("  - \(user.full_name) (@\(user.username))")
+            }
+            
+            // If no following users, load all users as fallback for testing
+            var usersToShow = followingUsers
+            if followingUsers.isEmpty {
+                print("🔄 No following users found, loading all users as fallback...")
+                do {
+                    let allUsers = try await SupabaseManager.shared.fetchAllUsers()
+                    // Filter out current user
+                    usersToShow = allUsers.filter { $0.id != currentUserID }
+                    print("✅ Loaded \(usersToShow.count) total users as fallback")
+                } catch {
+                    print("❌ Failed to load all users: \(error)")
+                }
+            }
+            
             await MainActor.run {
-                self.users = followingUsers
+                self.users = usersToShow
             }
         }
     }

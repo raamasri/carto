@@ -28,6 +28,12 @@ struct FollowDB: Codable {
     let follower_id: String
     let following_id: String
     let created_at: String
+    
+    enum CodingKeys: String, CodingKey {
+        case follower_id
+        case following_id
+        case created_at
+    }
 }
 
 class SupabaseManager: ObservableObject {
@@ -361,24 +367,45 @@ class SupabaseManager: ObservableObject {
     /// Get following users
     func getFollowingUsers(for userID: String) async -> [AppUser] {
         do {
+            print("🔄 SupabaseManager: Getting following users for \(userID)")
+            
+            // Create a simple struct for the response
+            struct FollowResponse: Codable {
+                let following_id: String
+            }
+            
             // Get the follow relationships where the user is the follower
-            let follows: [FollowDB] = try await client
+            let follows: [FollowResponse] = try await client
                 .from("follows")
                 .select("following_id")
                 .eq("follower_id", value: userID)
                 .execute()
                 .value
             
+            print("📊 Found \(follows.count) follow relationships")
+            
             let followingIds = follows.map { $0.following_id }
-            if followingIds.isEmpty { return [] }
+            if followingIds.isEmpty { 
+                print("❌ No following relationships found")
+                return [] 
+            }
+            
+            print("👥 Getting user details for IDs: \(followingIds)")
             
             // Get the user details for all following users
-            let followingUsers: [AppUser] = try await client
+            let basicUsers: [BasicUser] = try await client
                 .from("users")
-                .select("*")
+                .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
                 .in("id", value: followingIds)
                 .execute()
                 .value
+            
+            let followingUsers = basicUsers.map { $0.toAppUser(currentUserID: userID) }
+            
+            print("✅ Retrieved \(followingUsers.count) following users")
+            for user in followingUsers {
+                print("  - \(user.full_name) (@\(user.username)) ID: \(user.id)")
+            }
             
             return followingUsers
         } catch {
@@ -389,11 +416,17 @@ class SupabaseManager: ObservableObject {
     
     /// Fetch all users
     func fetchAllUsers() async throws -> [AppUser] {
-        return try await client
+        guard let session = try? await client.auth.session else {
+            throw NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let basicUsers: [BasicUser] = try await client
             .from("users")
-            .select("*")
+            .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
             .execute()
             .value
+        
+        return basicUsers.map { $0.toAppUser(currentUserID: session.user.id.uuidString) }
     }
     
     /// Update user location
@@ -412,15 +445,15 @@ class SupabaseManager: ObservableObject {
     /// Fetch user profile
     func fetchUserProfile(userID: String) async -> AppUser? {
         do {
-            let user: AppUser = try await client
+            let basicUser: BasicUser = try await client
                 .from("users")
-                .select("*")
+                .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
                 .eq("id", value: userID)
                 .single()
                 .execute()
                 .value
             
-            return user
+            return basicUser.toAppUser()
         } catch {
             print("❌ Failed to fetch user profile: \(error)")
             return nil
@@ -549,14 +582,14 @@ class SupabaseManager: ObservableObject {
             if followerIds.isEmpty { return [] }
             
             // Get the user details for all followers
-            let followers: [AppUser] = try await client
+            let basicUsers: [BasicUser] = try await client
                 .from("users")
-                .select("*")
+                .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
                 .in("id", value: followerIds)
                 .execute()
                 .value
             
-            return followers
+            return basicUsers.map { $0.toAppUser() }
         } catch {
             print("❌ Failed to fetch followers: \(error)")
             return []
@@ -568,30 +601,30 @@ class SupabaseManager: ObservableObject {
         do {
             let searchTerm = query.replacingOccurrences(of: "@", with: "").lowercased()
             
-            let users: [AppUser] = try await client
+            let basicUsers: [BasicUser] = try await client
                 .from("user_search_view")
-                .select("*")
+                .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
                 .or("username.ilike.%\(searchTerm)%,full_name.ilike.%\(searchTerm)%")
                 .limit(20)
                 .execute()
                 .value
             
-            return users
+            return basicUsers.map { $0.toAppUser() }
         } catch {
             print("❌ Failed to search users: \(error)")
             // Fallback to regular users table if view doesn't exist
             do {
                 let searchTerm = query.replacingOccurrences(of: "@", with: "").lowercased()
                 
-                let users: [AppUser] = try await client
+                let basicUsers: [BasicUser] = try await client
                     .from("users")
-                    .select("*")
+                    .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
                     .or("username.ilike.%\(searchTerm)%,full_name.ilike.%\(searchTerm)%")
                     .limit(20)
                     .execute()
                     .value
                 
-                return users
+                return basicUsers.map { $0.toAppUser() }
             } catch {
                 print("❌ Failed to search users (fallback): \(error)")
                 return []
@@ -790,6 +823,11 @@ class SupabaseManager: ObservableObject {
             
             // Convert each conversation detail to Conversation object
             for conversationDetail in conversationDetails {
+                print("🔄 Processing conversation: \(conversationDetail.conversation_id)")
+                print("  - Last message content: \(conversationDetail.last_message_content ?? "nil")")
+                print("  - Last message sender: \(conversationDetail.last_message_sender_id ?? "nil")")
+                print("  - Last message time: \(conversationDetail.last_message_created_at ?? "nil")")
+                
                 // Create AppUser objects for participants
                 let participants = zip(zip(conversationDetail.participant_ids, conversationDetail.participant_usernames), conversationDetail.participant_full_names).map { (idUsername, fullName) in
                     let (id, username) = idUsername
@@ -820,7 +858,8 @@ class SupabaseManager: ObservableObject {
                     }
                 } else {
                     // Direct conversation - show the other person's name (not current user)
-                    if let otherUser = participants.first(where: { $0.id != session.user.id.uuidString }) {
+                    let currentUserId = session.user.id.uuidString.lowercased()
+                    if let otherUser = participants.first(where: { $0.id.lowercased() != currentUserId }) {
                         title = otherUser.full_name
                     } else {
                         title = "Direct Message"
@@ -829,6 +868,8 @@ class SupabaseManager: ObservableObject {
                 
                 // Convert to Conversation object
                 let conversation = conversationDetail.toConversation(with: participants, title: title)
+                print("✅ Created conversation with title: '\(conversation.title)'")
+                print("  - Last message: \(conversation.lastMessage?.content ?? "nil")")
                 conversations.append(conversation)
             }
             
@@ -841,7 +882,13 @@ class SupabaseManager: ObservableObject {
     
     /// Get messages for a specific conversation
     func getConversationMessages(conversationId: String, limit: Int = 50, offset: Int = 0) async -> [Message] {
-        guard let session = try? await client.auth.session else { return [] }
+        guard let session = try? await client.auth.session else { 
+            print("❌ No session found for getting messages")
+            return [] 
+        }
+        
+        print("📥 SupabaseManager: Getting messages for conversation: \(conversationId)")
+        print("  - Requesting user: \(session.user.id.uuidString)")
         
         do {
             // Create parameters with proper typing
@@ -865,6 +912,11 @@ class SupabaseManager: ObservableObject {
                 .execute()
                 .value
             
+            print("📥 SupabaseManager: Retrieved \(messageDetails.count) message details")
+            for detail in messageDetails {
+                print("  - Message from \(detail.sender_id): \(detail.content)")
+            }
+            
             return messageDetails.map { messageDetail in
                 var message = messageDetail.toMessage()
                 message = Message(
@@ -885,7 +937,16 @@ class SupabaseManager: ObservableObject {
     
     /// Send a message to a conversation
     func sendMessage(conversationId: String, content: String, messageType: MessageType = .text) async -> Bool {
-        guard let session = try? await client.auth.session else { return false }
+        guard let session = try? await client.auth.session else { 
+            print("❌ No session found for sending message")
+            return false 
+        }
+        
+        print("📤 SupabaseManager: Sending message")
+        print("  - Conversation ID: \(conversationId)")
+        print("  - Sender ID: \(session.user.id.uuidString)")
+        print("  - Content: \(content)")
+        print("  - Type: \(messageType.rawValue)")
         
         do {
             // Call our custom function to send message
@@ -899,6 +960,7 @@ class SupabaseManager: ObservableObject {
                 .execute()
                 .value
             
+            print("✅ SupabaseManager: Message sent with ID: \(messageId)")
             return !messageId.isEmpty
         } catch {
             print("❌ Failed to send message: \(error)")
@@ -973,23 +1035,34 @@ class SupabaseManager: ObservableObject {
     func getOrCreateDirectConversation(with userId: String) async -> String? {
         guard let session = try? await client.auth.session else { return nil }
         
+        print("🔄 Getting or creating conversation with user: \(userId)")
+        print("  - Current user: \(session.user.id.uuidString)")
+        
         // First, try to find existing conversation
         let conversations = await getUserConversations()
+        print("📊 Found \(conversations.count) existing conversations")
         
         // Look for a direct conversation (2 participants) with this user
         for conversation in conversations {
+            print("  - Checking conversation \(conversation.id.uuidString) with \(conversation.participants.count) participants")
             if conversation.participants.count == 2 {
                 // Check if this user is in the conversation
                 if let participants = conversation.participants as? [AppUser] {
-                    if participants.contains(where: { $0.id == userId }) {
+                    let participantIds = participants.map { $0.id }
+                    print("    - Participant IDs: \(participantIds)")
+                    if participants.contains(where: { $0.id.lowercased() == userId.lowercased() }) {
+                        print("✅ Found existing conversation: \(conversation.id.uuidString)")
                         return conversation.id.uuidString
                     }
                 }
             }
         }
         
+        print("🆕 No existing conversation found, creating new one")
         // If no existing conversation found, create a new one
-        return await createConversation(with: [userId], isGroup: false)
+        let newConversationId = await createConversation(with: [userId], isGroup: false)
+        print("✅ Created new conversation: \(newConversationId ?? "FAILED")")
+        return newConversationId
     }
 }
 
