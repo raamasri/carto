@@ -76,13 +76,14 @@ struct CollectionsView: View {
                         }
                         .onDelete(perform: deleteCollections)
                     }
-                    .listStyle(.insetGrouped)
+                    .listStyle(.plain)
+                    .ignoresSafeArea(.container, edges: .bottom)
                     .refreshable {
                         await pinStore.refresh()
                     }
                 }
             }
-            .navigationTitle("My Collections")
+            .ignoresSafeArea(.container, edges: .bottom)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showCreateCollection = true }) {

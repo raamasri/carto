@@ -17,7 +17,7 @@ struct UserProfileView: View {
     @State private var bio: String
     
     // @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
-    @State private var selectedSection = "Just Added"
+    @State private var selectedSection = "My Collections"
     let sections = ["Just Added", "Loved", "Want to Go", "Recommendations"]
     
     @EnvironmentObject var authManager: AuthManager
@@ -241,27 +241,45 @@ struct UserProfileView: View {
                         }
                     }
 
-                    Map(
-                        coordinateRegion: $region,
-                        annotationItems: pinStore.masterPins
-                    ) { pin in
-                        MapAnnotation(
-                            coordinate: CLLocationCoordinate2D(
-                                latitude: pin.latitude,
-                                longitude: pin.longitude
-                            )
-                        ) {
-                            Image(systemName: "mappin.circle.fill")
-                                .resizable()
-                                .frame(width: 30, height: 30)
-                                .foregroundColor(.blue)
-                                .shadow(radius: 3)
+                    // --- Tabbed View for Map & Collections ---
+                    VStack(spacing: 0) {
+                        Picker("Profile Tabs", selection: $selectedSection) {
+                            Text("Map View").tag("Map View")
+                            Text("My Collections").tag("My Collections")
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+
+                        if selectedSection == "Map View" {
+                            Map(
+                                coordinateRegion: $region,
+                                annotationItems: pinStore.masterPins
+                            ) { pin in
+                                MapAnnotation(
+                                    coordinate: CLLocationCoordinate2D(
+                                        latitude: pin.latitude,
+                                        longitude: pin.longitude
+                                    )
+                                ) {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .resizable()
+                                        .frame(width: 30, height: 30)
+                                        .foregroundColor(.blue)
+                                        .shadow(radius: 3)
+                                }
+                            }
+                            .frame(height: 470)
+                            .cornerRadius(10)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+                        } else if selectedSection == "My Collections" {
+                            CollectionsView()
+                                .environmentObject(pinStore)
+                                .environmentObject(authManager)
+                                .padding(.top, 8)
                         }
                     }
-                    .frame(height: 470)
-                    .cornerRadius(10)
-                    .padding(.horizontal)
-                    .padding(.top, 16)
                 }
                 .padding(.vertical, 4)
             }

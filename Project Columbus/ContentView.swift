@@ -592,8 +592,6 @@ struct MainMapView: View {
                     Spacer()
                     NavBarButton(icon: "newspaper", selected: $selectedTab, index: 3)
                     Spacer()
-                    NavBarButton(icon: "folder", selected: $selectedTab, index: 5)
-                    Spacer()
                     NavBarButton(icon: "person.circle", selected: $selectedTab, index: 4)
                 }
                 .padding()
