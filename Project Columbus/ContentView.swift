@@ -429,7 +429,7 @@ struct MainMapView: View {
                     }
                 }
             } else if selectedTab == 5 {
-                CollectionsView()
+                ListsView()
                     .environmentObject(pinStore)
                     .environmentObject(authManager)
             } else if selectedTab == 1 {

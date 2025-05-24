@@ -17,7 +17,7 @@ struct UserProfileView: View {
     @State private var bio: String
     
     // @State private var bio = "✨ Travel lover. Coffee first. Exploring the world one pin at a time! 🌍"
-    @State private var selectedSection = "My Collections"
+    @State private var selectedSection = "My Lists"
     let sections = ["Just Added", "Loved", "Want to Go", "Recommendations"]
     
     @EnvironmentObject var authManager: AuthManager
@@ -47,6 +47,7 @@ struct UserProfileView: View {
     @State private var isEditingProfile = false
     @State private var tempBio = ""
     @State private var hasRequestedFollow = false
+    @State private var showFullscreenMap = false
     
     private var profileHeader: some View {
         HStack {
@@ -245,36 +246,51 @@ struct UserProfileView: View {
                     VStack(spacing: 0) {
                         Picker("Profile Tabs", selection: $selectedSection) {
                             Text("Map View").tag("Map View")
-                            Text("My Collections").tag("My Collections")
+                            Text("My Lists").tag("My Lists")
                         }
                         .pickerStyle(SegmentedPickerStyle())
                         .padding(.horizontal)
                         .padding(.top, 8)
 
                         if selectedSection == "Map View" {
-                            Map(
-                                coordinateRegion: $region,
-                                annotationItems: pinStore.masterPins
-                            ) { pin in
-                                MapAnnotation(
-                                    coordinate: CLLocationCoordinate2D(
-                                        latitude: pin.latitude,
-                                        longitude: pin.longitude
-                                    )
-                                ) {
-                                    Image(systemName: "mappin.circle.fill")
-                                        .resizable()
-                                        .frame(width: 30, height: 30)
-                                        .foregroundColor(.blue)
-                                        .shadow(radius: 3)
+                            ZStack(alignment: .topTrailing) {
+                                Map(
+                                    coordinateRegion: $region,
+                                    annotationItems: pinStore.masterPins
+                                ) { pin in
+                                    MapAnnotation(
+                                        coordinate: CLLocationCoordinate2D(
+                                            latitude: pin.latitude,
+                                            longitude: pin.longitude
+                                        )
+                                    ) {
+                                        Image(systemName: "mappin.circle.fill")
+                                            .resizable()
+                                            .frame(width: 30, height: 30)
+                                            .foregroundColor(.blue)
+                                            .shadow(radius: 3)
+                                    }
                                 }
+                                .frame(height: 400)
+                                .cornerRadius(10)
+                                .padding(.horizontal)
+                                .padding(.top, 8)
+                                .padding(.bottom, 20)
+                                
+                                Button(action: {
+                                    showFullscreenMap = true
+                                }) {
+                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                        .foregroundColor(.white)
+                                        .padding(8)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                }
+                                .padding(.top, 20)
+                                .padding(.trailing, 30)
                             }
-                            .frame(height: 470)
-                            .cornerRadius(10)
-                            .padding(.horizontal)
-                            .padding(.top, 8)
-                        } else if selectedSection == "My Collections" {
-                            CollectionsView()
+                        } else if selectedSection == "My Lists" {
+                            ListsView()
                                 .environmentObject(pinStore)
                                 .environmentObject(authManager)
                                 .padding(.top, 8)
@@ -299,6 +315,49 @@ struct UserProfileView: View {
                 }
             }
         }
+    }
+
+    private func centerMapOnPins() {
+        let pins = pinStore.masterPins
+        guard !pins.isEmpty else {
+            // Default to San Francisco if no pins
+            region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            )
+            return
+        }
+        
+        if pins.count == 1 {
+            // Single pin - center on it with reasonable zoom
+            let pin = pins[0]
+            region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            )
+            return
+        }
+        
+        // Multiple pins - calculate bounding box
+        let latitudes = pins.map { $0.latitude }
+        let longitudes = pins.map { $0.longitude }
+        
+        let minLat = latitudes.min()!
+        let maxLat = latitudes.max()!
+        let minLon = longitudes.min()!
+        let maxLon = longitudes.max()!
+        
+        let centerLat = (minLat + maxLat) / 2
+        let centerLon = (minLon + maxLon) / 2
+        
+        // Add 20% padding to the span
+        let latDelta = max((maxLat - minLat) * 1.2, 0.01)
+        let lonDelta = max((maxLon - minLon) * 1.2, 0.01)
+        
+        region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon),
+            span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
+        )
     }
 
     var body: some View {
@@ -440,11 +499,17 @@ struct UserProfileView: View {
         }
         .onAppear {
             print("👀 UserProfileView appeared for:", profileUser.username)
-
+            
+            // Center map on pins
+            centerMapOnPins()
+            
             Task {
                 if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
                     displayedUser = updated
                     bio = updated.bio ?? ""
+                    
+                    // Recenter map after loading pins
+                    centerMapOnPins()
 
                     if let avatar = updated.avatarURL {
                         if let cached = ImageCache.shared.image(forKey: profileUser.id) {
@@ -489,6 +554,16 @@ struct UserProfileView: View {
                     print("❌ Error checking follow request via helper:", error)
                 }
             }
+        }
+        .onChange(of: pinStore.masterPins) { _, _ in
+            centerMapOnPins()
+        }
+        .fullScreenCover(isPresented: $showFullscreenMap) {
+            FullscreenMapView(
+                region: $region,
+                pins: pinStore.masterPins,
+                isPresented: $showFullscreenMap
+            )
         }
     }
 }
@@ -634,5 +709,47 @@ struct FollowButton: View {
                 .cornerRadius(8)
         }
         .padding(.horizontal)
+    }
+}
+
+struct FullscreenMapView: View {
+    @Binding var region: MKCoordinateRegion
+    let pins: [Pin]
+    @Binding var isPresented: Bool
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Map(
+                coordinateRegion: $region,
+                annotationItems: pins
+            ) { pin in
+                MapAnnotation(
+                    coordinate: CLLocationCoordinate2D(
+                        latitude: pin.latitude,
+                        longitude: pin.longitude
+                    )
+                ) {
+                    Image(systemName: "mappin.circle.fill")
+                        .resizable()
+                        .frame(width: 30, height: 30)
+                        .foregroundColor(.blue)
+                        .shadow(radius: 3)
+                }
+            }
+            .ignoresSafeArea()
+            
+            // Minimize button in top-right corner
+            Button(action: {
+                isPresented = false
+            }) {
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .foregroundColor(.white)
+                    .padding(12)
+                    .background(Color.black.opacity(0.7))
+                    .clipShape(Circle())
+            }
+            .padding(.top, 60) // Account for status bar and notch
+            .padding(.trailing, 20)
+        }
     }
 }
