@@ -125,6 +125,7 @@ struct MainMapView: View {
     @State private var showFullPOIView: Bool = false
     @State private var showPOISheet: Bool = false
     @FocusState private var isSearchFieldFocused: Bool
+    @State private var showDirectMessaging = false
 
     struct POIPopup: View {
         let mapItem: MKMapItem
@@ -432,6 +433,7 @@ struct MainMapView: View {
                 ListsView()
                     .environmentObject(pinStore)
                     .environmentObject(authManager)
+                    .environmentObject(locationManager)
             } else if selectedTab == 1 {
                 FindFriendsView()
             } else if selectedTab == 2 {
@@ -790,6 +792,28 @@ struct MainMapView: View {
         .navigationDestination(isPresented: $showFullPOIView) {
             if let mapItem = selectedMapItem {
                 LocationDetailView(mapItem: mapItem, onAddPin: { _ in })
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            // Floating messaging button - only show on FindFriendsView tab
+            if selectedTab == 1 {
+                Button(action: {
+                    showDirectMessaging = true
+                }) {
+                    Image(systemName: "message.fill")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                        .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
+                }
+                .padding(.bottom, 80) // Position just above navbar
+                .padding(.trailing, 20)
+                .sheet(isPresented: $showDirectMessaging) {
+                    DirectMessagingView()
+                        .environmentObject(authManager)
+                }
             }
         }
     }

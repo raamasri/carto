@@ -153,15 +153,29 @@ struct ListRowView: View {
     
     var body: some View {
         HStack {
-            // List icon
-            RoundedRectangle(cornerRadius: 8)
-                .fill(colorForCollection(list.name))
-                .frame(width: 50, height: 50)
-                .overlay(
-                    Image(systemName: iconForCollection(list.name))
-                        .foregroundColor(.white)
-                        .font(.title2)
-                )
+            // List icon with notification dots overlay
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(colorForCollection(list.name))
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Image(systemName: iconForCollection(list.name))
+                            .foregroundColor(.white)
+                            .font(.title2)
+                    )
+                
+                // Notification dots on top corner of icon
+                if !list.pins.isEmpty {
+                    HStack(spacing: 2) {
+                        ForEach(Array(list.pins.prefix(3)), id: \.id) { pin in
+                            Circle()
+                                .fill(pin.reaction == .lovedIt ? .red : .blue)
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+                    .offset(x: 5, y: -5) // Position on top corner
+                }
+            }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(list.name)
@@ -182,21 +196,11 @@ struct ListRowView: View {
             
             Spacer()
             
-            // Preview images/pins
+            // Just the arrow now
             if !list.pins.isEmpty {
-                VStack {
-                    HStack(spacing: 2) {
-                        ForEach(Array(list.pins.prefix(3)), id: \.id) { pin in
-                            Circle()
-                                .fill(pin.reaction == .lovedIt ? .red : .blue)
-                                .frame(width: 8, height: 8)
-                        }
-                    }
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.gray)
             }
         }
         .padding(.vertical, 4)
@@ -260,7 +264,9 @@ struct ListDetailView: View {
     @EnvironmentObject var pinStore: PinStore
     @State private var searchText = ""
     @State private var selectedPin: Pin?
-    @State private var showPinDetail = false
+    @State private var showFullPOIView = false
+    @State private var selectedMapItem: MKMapItem?
+    @EnvironmentObject var locationManager: AppLocationManager
     
     var filteredPins: [Pin] {
         if searchText.isEmpty {
@@ -308,8 +314,15 @@ struct ListDetailView: View {
                     List {
                         ForEach(filteredPins, id: \.id) { pin in
                             Button(action: {
+                                // Convert Pin to MKMapItem for full page POI view
+                                let coordinate = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+                                let placemark = MKPlacemark(coordinate: coordinate)
+                                let mapItem = MKMapItem(placemark: placemark)
+                                mapItem.name = pin.locationName
+                                
+                                selectedMapItem = mapItem
                                 selectedPin = pin
-                                showPinDetail = true
+                                showFullPOIView = true
                             }) {
                                 PinRowView(pin: pin)
                             }
@@ -322,9 +335,12 @@ struct ListDetailView: View {
             }
             .navigationTitle(list.name)
             .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showPinDetail) {
-                if let pin = selectedPin {
-                    PinDetailView(pin: pin)
+            .navigationDestination(isPresented: $showFullPOIView) {
+                if let mapItem = selectedMapItem {
+                    LocationDetailView(mapItem: mapItem, onAddPin: { pin in
+                        // Add the pin to the current list if user chooses to add it
+                        pinStore.addPin(pin, to: list.name)
+                    })
                 }
             }
         }
