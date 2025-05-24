@@ -8,6 +8,29 @@
 import SwiftUI
 import MapKit
 
+// --- Add these helpers at the top-level (outside any struct) ---
+private func iconForCollection(_ name: String) -> String {
+    switch name.lowercased() {
+    case "favorites": return "heart.fill"
+    case "coffee shops": return "cup.and.saucer.fill"
+    case "restaurants": return "fork.knife"
+    case "bars": return "wineglass.fill"
+    case "shopping": return "bag.fill"
+    default: return "folder.fill"
+    }
+}
+
+private func colorForCollection(_ name: String) -> Color {
+    switch name.lowercased() {
+    case "favorites": return .red
+    case "coffee shops": return .brown
+    case "restaurants": return .orange
+    case "bars": return .purple
+    case "shopping": return .pink
+    default: return .blue
+    }
+}
+
 struct CollectionsView: View {
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
@@ -16,10 +39,11 @@ struct CollectionsView: View {
     @State private var searchText = ""
     
     var filteredCollections: [PinList] {
+        let sorted = pinStore.lists.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         if searchText.isEmpty {
-            return pinStore.lists
+            return sorted
         } else {
-            return pinStore.lists.filter { 
+            return sorted.filter { 
                 $0.name.localizedCaseInsensitiveContains(searchText) 
             }
         }
@@ -169,40 +193,6 @@ struct CollectionRowView: View {
             }
         }
         .padding(.vertical, 4)
-    }
-    
-    private func colorForCollection(_ name: String) -> Color {
-        switch name.lowercased() {
-        case "favorites":
-            return .red
-        case "coffee shops":
-            return .brown
-        case "restaurants":
-            return .orange
-        case "bars":
-            return .purple
-        case "shopping":
-            return .pink
-        default:
-            return .blue
-        }
-    }
-    
-    private func iconForCollection(_ name: String) -> String {
-        switch name.lowercased() {
-        case "favorites":
-            return "heart.fill"
-        case "coffee shops":
-            return "cup.and.saucer.fill"
-        case "restaurants":
-            return "fork.knife"
-        case "bars":
-            return "wineglass.fill"
-        case "shopping":
-            return "bag.fill"
-        default:
-            return "folder.fill"
-        }
     }
 }
 

@@ -224,59 +224,47 @@ class SupabaseManager: ObservableObject {
 
     // MARK: - List-Pin Associations (NEW SCHEMA)
     
-    /// Adds a pin to a list (creates pin if it doesn't exist)
-    func addPinToList(pin: Pin, listName: String) async -> Bool {
+    /// Adds a pin to a list by listId (creates pin if it doesn't exist)
+    func addPinToListById(pin: Pin, listId: String) async -> Bool {
         do {
-            // Find or create the list
-            let listId = try await getOrCreateList(name: listName)
-            
             // Find or create the pin
             var pinId = await findExistingPin(pin: pin)
             if pinId == nil {
                 pinId = try await createPin(pin: pin)
             }
-            
             guard let finalPinId = pinId else { return false }
-            
             // Check if already associated
             if await isPinInList(pinId: finalPinId, listId: listId) {
-                print("ℹ️ Pin already in list '\(listName)'")
+                print("ℹ️ Pin already in list with id '", listId, "'")
                 return true
             }
-            
             // Create association
             let listPin = ["list_id": listId, "pin_id": finalPinId]
-            
             _ = try await client
                 .from("list_pins")
                 .insert(listPin)
                 .execute()
-            
             return true
         } catch {
-            print("❌ Failed to add pin to list: \(error)")
+            print("❌ Failed to add pin to list by id: \(error)")
             return false
         }
     }
-    
-    /// Removes a pin from a list
-    func removePinFromList(pin: Pin, listName: String) async -> Bool {
+
+    /// Removes a pin from a list by listId
+    func removePinFromListById(pin: Pin, listId: String) async -> Bool {
         do {
-            let listId = try await getOrCreateList(name: listName)
             let pinId = await findExistingPin(pin: pin)
-            
             guard let finalPinId = pinId else { return false }
-            
             _ = try await client
                 .from("list_pins")
                 .delete()
                 .eq("list_id", value: listId)
                 .eq("pin_id", value: finalPinId)
                 .execute()
-            
             return true
         } catch {
-            print("❌ Failed to remove pin from list: \(error)")
+            print("❌ Failed to remove pin from list by id: \(error)")
             return false
         }
     }
@@ -556,6 +544,24 @@ class SupabaseManager: ObservableObject {
             print("❌ Failed to fetch followers: \(error)")
             return []
         }
+    }
+
+    @available(*, deprecated, message: "Use addPinToListById(pin:listId:) instead")
+    func addPinToList(pin: Pin, listName: String) async -> Bool {
+        let lists = await getUserLists()
+        if let list = lists.first(where: { $0.name.lowercased() == listName.lowercased() }) {
+            return await addPinToListById(pin: pin, listId: list.id.uuidString)
+        }
+        return false
+    }
+
+    @available(*, deprecated, message: "Use removePinFromListById(pin:listId:) instead")
+    func removePinFromList(pin: Pin, listName: String) async -> Bool {
+        let lists = await getUserLists()
+        if let list = lists.first(where: { $0.name.lowercased() == listName.lowercased() }) {
+            return await removePinFromListById(pin: pin, listId: list.id.uuidString)
+        }
+        return false
     }
 }
 

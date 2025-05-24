@@ -68,16 +68,17 @@ class PinStore: ObservableObject {
     /// Creates default lists for new users
     private func createDefaultLists() {
         let defaultListNames = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
-        
         Task {
             for listName in defaultListNames {
-                do {
-                    _ = try await supabaseManager.createList(name: listName)
-                } catch {
-                    print("❌ Failed to create default list '\(listName)': \(error)")
+                // Prevent duplicate default lists (case-insensitive)
+                if !lists.contains(where: { $0.name.lowercased() == listName.lowercased() }) {
+                    do {
+                        _ = try await supabaseManager.createList(name: listName)
+                    } catch {
+                        print("❌ Failed to create default list '\(listName)': \(error)")
+                    }
                 }
             }
-            
             // Reload after creating defaults
             await loadFromDatabase()
         }
@@ -127,46 +128,58 @@ class PinStore: ObservableObject {
         if !masterPins.contains(where: { $0.id == pin.id }) {
             masterPins.append(pin)
         }
-        
         // Special handling for Favorites
         if listName == "Favorites" {
             addToFavorites(pin)
             return
         }
-        
-        // Update local lists
-        if let index = lists.firstIndex(where: { $0.name == listName }) {
+        // Find the list by name (case-insensitive)
+        if let index = lists.firstIndex(where: { $0.name.lowercased() == listName.lowercased() }) {
             // Append only if the pin is not already present
             if !lists[index].pins.contains(where: { $0.id == pin.id }) {
                 lists[index].pins.append(pin)
             }
-        } else {
-            // Create a new list locally (will be created in database automatically)
-            lists.append(PinList(name: listName, pins: [pin]))
-        }
-        
-        // Save to database
-        Task {
-            let success = await supabaseManager.addPinToList(pin: pin, listName: listName)
-            if success {
-                print("✅ Pin added to list '\(listName)' in database")
-            } else {
-                print("❌ Failed to add pin to list '\(listName)' in database")
-                // Revert local changes on failure
-                await MainActor.run {
-                    if let index = lists.firstIndex(where: { $0.name == listName }) {
+            // Save to database using list ID
+            let listId = lists[index].id.uuidString
+            Task {
+                let success = await supabaseManager.addPinToListById(pin: pin, listId: listId)
+                if success {
+                    print("✅ Pin added to list '\(listName)' in database")
+                    await refresh()
+                } else {
+                    print("❌ Failed to add pin to list '\(listName)' in database")
+                    // Revert local changes on failure
+                    await MainActor.run {
                         lists[index].pins.removeAll { $0.id == pin.id }
                         // Remove empty lists that were just created
                         if lists[index].pins.isEmpty && !["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"].contains(listName) {
                             lists.remove(at: index)
                         }
                     }
-                    // Remove from master if not in any other list
-                    let isInAnyList = lists.contains { list in
-                        list.pins.contains { $0.id == pin.id }
+                }
+            }
+        } else {
+            // Create a new list locally (will be created in database automatically)
+            let newList = PinList(name: listName, pins: [pin])
+            lists.append(newList)
+            // Save to database
+            Task {
+                do {
+                    let newListId = try await supabaseManager.createList(name: listName)
+                    let success = await supabaseManager.addPinToListById(pin: pin, listId: newListId)
+                    if success {
+                        print("✅ Pin added to new list '\(listName)' in database")
+                        await refresh()
+                    } else {
+                        print("❌ Failed to add pin to new list '\(listName)' in database")
+                        await MainActor.run {
+                            lists.removeAll { $0.name == listName }
+                        }
                     }
-                    if !isInAnyList {
-                        masterPins.removeAll { $0.id == pin.id }
+                } catch {
+                    print("❌ Failed to create new list '\(listName)': \(error)")
+                    await MainActor.run {
+                        lists.removeAll { $0.name == listName }
                     }
                 }
             }
@@ -182,40 +195,30 @@ class PinStore: ObservableObject {
         if listName == "Favorites" {
             favoritePins.removeAll { $0.id == pin.id }
         }
-        
-        if let index = lists.firstIndex(where: { $0.name == listName }) {
+        if let index = lists.firstIndex(where: { $0.name.lowercased() == listName.lowercased() }) {
             lists[index].pins.removeAll { $0.id == pin.id }
+            // Remove from database using list ID
+            let listId = lists[index].id.uuidString
+            Task {
+                let success = await supabaseManager.removePinFromListById(pin: pin, listId: listId)
+                if success {
+                    print("✅ Pin removed from list '\(listName)' in database")
+                    await refresh()
+                } else {
+                    print("❌ Failed to remove pin from list '\(listName)' in database")
+                    // Revert local changes on failure
+                    await MainActor.run {
+                        lists[index].pins.append(pin)
+                    }
+                }
+            }
         }
-        
         // Remove from master list if not in any other list
         let isInAnyList = lists.contains { list in
             list.pins.contains { $0.id == pin.id }
         }
-        
         if !isInAnyList {
             masterPins.removeAll { $0.id == pin.id }
-        }
-        
-        // Remove from database
-        Task {
-            let success = await supabaseManager.removePinFromList(pin: pin, listName: listName)
-            if success {
-                print("✅ Pin removed from list '\(listName)' in database")
-            } else {
-                print("❌ Failed to remove pin from list '\(listName)' in database")
-                // Revert local changes on failure
-                await MainActor.run {
-                    if listName == "Favorites" {
-                        favoritePins.append(pin)
-                    }
-                    if let index = lists.firstIndex(where: { $0.name == listName }) {
-                        lists[index].pins.append(pin)
-                    }
-                    if !masterPins.contains(where: { $0.id == pin.id }) {
-                        masterPins.append(pin)
-                    }
-                }
-            }
         }
     }
     
@@ -226,20 +229,19 @@ class PinStore: ObservableObject {
     
     /// Creates a new custom list
     func createCustomList(name: String) {
-        // Check if list already exists
-        guard !lists.contains(where: { $0.name == name }) else {
+        // Prevent duplicate custom lists (case-insensitive)
+        guard !lists.contains(where: { $0.name.lowercased() == name.lowercased() }) else {
             print("⚠️ List '\(name)' already exists")
             return
         }
-        
         // Add locally
         lists.append(PinList(name: name, pins: []))
-        
         // Save to database
         Task {
             do {
                 _ = try await supabaseManager.createList(name: name)
                 print("✅ Created list '\(name)' in database")
+                await refresh() // Always refresh after add
             } catch {
                 print("❌ Failed to create list '\(name)': \(error)")
                 // Revert local changes on failure

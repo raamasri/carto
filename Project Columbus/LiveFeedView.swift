@@ -134,6 +134,7 @@ struct LiveFeedView: View {
                                         .buttonStyle(.borderedProminent)
                                     }
                                     .padding()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 } else {
                                     List {
                                         ForEach(pinStore.masterPins.filter { pin in
@@ -431,6 +432,28 @@ struct POIView: View {
     }
 }
 
+private func iconForCollection(_ name: String) -> String {
+    switch name.lowercased() {
+    case "favorites": return "heart.fill"
+    case "coffee shops": return "cup.and.saucer.fill"
+    case "restaurants": return "fork.knife"
+    case "bars": return "wineglass.fill"
+    case "shopping": return "bag.fill"
+    default: return "folder.fill"
+    }
+}
+
+private func colorForCollection(_ name: String) -> Color {
+    switch name.lowercased() {
+    case "favorites": return .red
+    case "coffee shops": return .brown
+    case "restaurants": return .orange
+    case "bars": return .purple
+    case "shopping": return .pink
+    default: return .blue
+    }
+}
+
 struct AddToListSheetDynamic: View {
     let pin: Pin
     @EnvironmentObject var pinStore: PinStore
@@ -443,17 +466,28 @@ struct AddToListSheetDynamic: View {
                 .font(.title2)
                 .bold()
                 .padding(.top)
-            ForEach(pinStore.lists, id: \.name) { list in
+            ForEach(pinStore.lists.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }, id: \.name) { list in
                 Button(action: {
                     onSelect(list.name)
                     dismiss()
                 }) {
-                    Text(list.name)
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
+                    HStack {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(colorForCollection(list.name))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: iconForCollection(list.name))
+                                .foregroundColor(.white)
+                                .font(.system(size: 18, weight: .bold))
+                        }
+                        Text(list.name)
+                            .font(.headline)
+                            .foregroundColor(.blue)
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
                 }
             }
             Button("Cancel", role: .cancel) { dismiss() }
