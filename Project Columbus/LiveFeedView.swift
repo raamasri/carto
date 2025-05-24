@@ -309,8 +309,40 @@ struct LiveFeedView: View {
     }
 
     func refreshPins() async {
-        await pinStore.fetchPins()
-        // TODO: Add sync when DataManager is integrated
+        guard let userID = authManager.currentUserID else { return }
+        
+        // Load different types of pins based on the selected tab
+        switch selectedTab {
+        case 0: // History - User's own pins
+            await pinStore.loadFromDatabase()
+        case 1: // Friends - All public pins for discovery
+            let publicPins = await SupabaseManager.shared.getPublicPins(limit: 100)
+            await MainActor.run {
+                // Merge with existing pins, avoiding duplicates
+                let existingIds = Set(pinStore.masterPins.map { $0.id })
+                let newPins = publicPins.filter { !existingIds.contains($0.id) }
+                pinStore.masterPins.append(contentsOf: newPins)
+            }
+        case 2: // Following - Pins from users you follow
+            let feedPins = await SupabaseManager.shared.getFeedPins(for: userID, limit: 50)
+            await MainActor.run {
+                // Update pins from following users
+                let existingIds = Set(pinStore.masterPins.map { $0.id })
+                let newPins = feedPins.filter { !existingIds.contains($0.id) }
+                pinStore.masterPins.append(contentsOf: newPins)
+            }
+        case 3: // For You - Curated/recommended content
+            let publicPins = await SupabaseManager.shared.getPublicPins(limit: 50)
+            await MainActor.run {
+                // For now, use public pins as "For You" content
+                // TODO: Implement proper recommendation algorithm
+                let existingIds = Set(pinStore.masterPins.map { $0.id })
+                let newPins = publicPins.filter { !existingIds.contains($0.id) }
+                pinStore.masterPins.append(contentsOf: newPins)
+            }
+        default:
+            await pinStore.loadFromDatabase()
+        }
     }
 
     func sharePin(_ pin: Pin) {

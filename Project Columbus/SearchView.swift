@@ -10,8 +10,10 @@ struct SearchView: View {
     @State private var completions: [MKLocalSearchCompletion] = []
     @State private var searchText = ""
     @State private var searchResults: [String] = []
+    @State private var userSearchResults: [AppUser] = []
     @State private var locationResults: [MKMapItem] = []
     @State private var cancellables = Set<AnyCancellable>()
+    @State private var isSearchingUsers = false
 
     @State private var selectedMapItem: MKMapItem? = nil
     @EnvironmentObject var pinStore: PinStore
@@ -44,9 +46,38 @@ struct SearchView: View {
                     }
 
                 if searchText.starts(with: "@") {
-                    List {
-                        ForEach(searchResults, id: \.self) { user in
-                            Text("User: \(user)")
+                    if isSearchingUsers {
+                        ProgressView("Searching users...")
+                            .padding()
+                    } else {
+                        List(userSearchResults) { user in
+                            NavigationLink(destination: UserProfileView(profileUser: user)) {
+                                HStack {
+                                    AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        Image(systemName: "person.circle.fill")
+                                            .resizable()
+                                            .foregroundColor(.gray)
+                                    }
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(Circle())
+                                    
+                                    VStack(alignment: .leading) {
+                                        Text("@\(user.username)")
+                                            .font(.headline)
+                                        if !user.full_name.isEmpty {
+                                            Text(user.full_name)
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                }
+                            }
                         }
                     }
                 } else if searchText.starts(with: "#") {
@@ -90,9 +121,17 @@ struct SearchView: View {
 
     func performSearch(for query: String) {
         if query.starts(with: "@") {
-            let users = ["@alice", "@bob", "@charlie", "@explorer123"]
-            searchResults = users.filter { $0.contains(query.lowercased()) }
+            isSearchingUsers = true
+            userSearchResults = []
             locationResults = []
+            
+            Task {
+                let results = await SupabaseManager.shared.searchUsers(query: query)
+                await MainActor.run {
+                    userSearchResults = results
+                    isSearchingUsers = false
+                }
+            }
         } else if query.starts(with: "#") {
             let tags = ["#coffee", "#parks", "#museums", "#hiking"]
             searchResults = tags.filter { $0.contains(query.lowercased()) }

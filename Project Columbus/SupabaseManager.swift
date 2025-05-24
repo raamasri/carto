@@ -569,7 +569,7 @@ class SupabaseManager: ObservableObject {
             let searchTerm = query.replacingOccurrences(of: "@", with: "").lowercased()
             
             let users: [AppUser] = try await client
-                .from("users")
+                .from("user_search_view")
                 .select("*")
                 .or("username.ilike.%\(searchTerm)%,full_name.ilike.%\(searchTerm)%")
                 .limit(20)
@@ -579,7 +579,23 @@ class SupabaseManager: ObservableObject {
             return users
         } catch {
             print("❌ Failed to search users: \(error)")
-            return []
+            // Fallback to regular users table if view doesn't exist
+            do {
+                let searchTerm = query.replacingOccurrences(of: "@", with: "").lowercased()
+                
+                let users: [AppUser] = try await client
+                    .from("users")
+                    .select("*")
+                    .or("username.ilike.%\(searchTerm)%,full_name.ilike.%\(searchTerm)%")
+                    .limit(20)
+                    .execute()
+                    .value
+                
+                return users
+            } catch {
+                print("❌ Failed to search users (fallback): \(error)")
+                return []
+            }
         }
     }
     
@@ -644,6 +660,118 @@ class SupabaseManager: ObservableObject {
         }
         return false
     }
+
+    // MARK: - Enhanced Notification Management
+    
+    /// Send a follow request notification
+    func sendFollowRequestNotification(to userID: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            // Create a proper codable structure for the notification
+            struct FollowRequestNotificationData: Codable {
+                let user_id: String
+                let from_user_id: String
+                let type: String
+            }
+            
+            let notificationData = FollowRequestNotificationData(
+                user_id: userID,
+                from_user_id: session.user.id.uuidString,
+                type: "follow_request"
+            )
+            
+            _ = try await client
+                .from("notifications")
+                .insert(notificationData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to send follow request notification: \(error)")
+            return false
+        }
+    }
+    
+    /// Send a pin recommendation notification
+    func sendPinRecommendationNotification(pinID: String, to userID: String, message: String? = nil) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            // Create a proper codable structure for the notification
+            struct NotificationData: Codable {
+                let user_id: String
+                let from_user_id: String
+                let type: String
+                let pin_id: String
+                let message: String?
+            }
+            
+            let notificationData = NotificationData(
+                user_id: userID,
+                from_user_id: session.user.id.uuidString,
+                type: "pin_recommendation",
+                pin_id: pinID,
+                message: message
+            )
+            
+            _ = try await client
+                .from("notifications")
+                .insert(notificationData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to send pin recommendation notification: \(error)")
+            return false
+        }
+    }
+    
+    /// Mark notification as read
+    func markNotificationAsRead(notificationID: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            // Create a proper codable structure for the update
+            struct NotificationUpdate: Codable {
+                let is_read: Bool
+            }
+            
+            let updateData = NotificationUpdate(is_read: true)
+            
+            _ = try await client
+                .from("notifications")
+                .update(updateData)
+                .eq("id", value: notificationID)
+                .eq("user_id", value: session.user.id.uuidString)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to mark notification as read: \(error)")
+            return false
+        }
+    }
+    
+    /// Get unread notification count
+    func getUnreadNotificationCount() async -> Int {
+        guard let session = try? await client.auth.session else { return 0 }
+        
+        do {
+            let count: Int = try await client
+                .from("notifications")
+                .select("id", head: true, count: .exact)
+                .eq("user_id", value: session.user.id.uuidString)
+                .eq("is_read", value: false)
+                .execute()
+                .count ?? 0
+            
+            return count
+        } catch {
+            print("❌ Failed to get unread notification count: \(error)")
+            return 0
+        }
+    }
 }
 
 // MARK: - Apple Sign In Crypto Helper Extension
@@ -682,5 +810,46 @@ extension SupabaseManager {
         let inputData = Data(input.utf8)
         let hashed = SHA256.hash(data: inputData)
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
+    }
+}
+
+// MARK: - Image Storage Extension
+
+extension SupabaseManager {
+    
+    /// Upload an image to Supabase Storage
+    func uploadImage(_ imageData: Data, to bucket: String, path: String) async throws -> String {
+        let response = try await client.storage
+            .from(bucket)
+            .upload(path: path, file: imageData, options: FileOptions(contentType: "image/jpeg"))
+        
+        // Get the public URL for the uploaded image
+        return try client.storage
+            .from(bucket)
+            .getPublicURL(path: path)
+            .absoluteString
+    }
+    
+    /// Upload profile image
+    func uploadProfileImage(_ imageData: Data, for userID: String) async throws -> String {
+        let fileName = "\(userID)_\(Date().timeIntervalSince1970).jpg"
+        let path = "profile-images/\(fileName)"
+        
+        return try await uploadImage(imageData, to: "profile-images", path: path)
+    }
+    
+    /// Upload pin media image
+    func uploadPinImage(_ imageData: Data, for pinID: String) async throws -> String {
+        let fileName = "\(pinID)_\(Date().timeIntervalSince1970).jpg"
+        let path = "pin-images/\(fileName)"
+        
+        return try await uploadImage(imageData, to: "pin-images", path: path)
+    }
+    
+    /// Delete an image from storage
+    func deleteImage(from bucket: String, path: String) async throws {
+        _ = try await client.storage
+            .from(bucket)
+            .remove(paths: [path])
     }
 }

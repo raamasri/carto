@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import MapKit
+import Foundation
 
 struct SendToFriendsView: View {
     let pin: Pin
@@ -155,20 +157,19 @@ struct SendToFriendsView: View {
         
         Task {
             do {
-                // Create notifications for each selected user
+                // Create notifications for each selected user using the enhanced notification system
                 let selectedUsernames = followingUsers.filter { selectedUsers.contains($0.id) }.map { $0.username }
                 
                 for userId in selectedUsers {
-                    let notificationData = [
-                        "user_id": userId,
-                        "from_user_id": authManager.currentUserID ?? "",
-                        "type": "pin_recommendation"
-                    ]
+                    let success = await SupabaseManager.shared.sendPinRecommendationNotification(
+                        pinID: pin.id.uuidString,
+                        to: userId,
+                        message: message.isEmpty ? nil : message
+                    )
                     
-                    _ = try await SupabaseManager.shared.client
-                        .from("notifications")
-                        .insert(notificationData)
-                        .execute()
+                    if !success {
+                        print("❌ Failed to send notification to user: \(userId)")
+                    }
                 }
                 
                 await MainActor.run {
@@ -185,4 +186,52 @@ struct SendToFriendsView: View {
             }
         }
     }
-} 
+}
+
+// Test preview to see if types are accessible
+#if DEBUG
+struct SendToFriendsView_Previews: PreviewProvider {
+    static var previews: some View {
+        let samplePin = Pin(
+            locationName: "Test Place",
+            city: "Test City",
+            date: "Today",
+            latitude: 37.7749,
+            longitude: -122.4194,
+            reaction: .lovedIt,
+            reviewText: nil,
+            mediaURLs: nil,
+            mentionedFriends: [],
+            starRating: nil,
+            distance: nil,
+            authorHandle: "@test",
+            createdAt: Date(),
+            tripName: nil
+        )
+        
+        let sampleUsers = [
+            AppUser(
+                id: "1",
+                username: "testuser",
+                full_name: "Test User",
+                email: nil,
+                bio: nil,
+                follower_count: 0,
+                following_count: 0,
+                isFollowedByCurrentUser: false,
+                latitude: nil,
+                longitude: nil,
+                isCurrentUser: false,
+                avatarURL: nil
+            )
+        ]
+        
+        SendToFriendsView(
+            pin: samplePin,
+            followingUsers: sampleUsers,
+            onSent: { _ in }
+        )
+        .environmentObject(AuthManager())
+    }
+}
+#endif 
