@@ -26,7 +26,7 @@ struct PinCollectionItemDB: Codable {
 
 struct FollowDB: Codable {
     let follower_id: String
-    let followed_id: String
+    let following_id: String
     let created_at: String
 }
 
@@ -361,9 +361,26 @@ class SupabaseManager: ObservableObject {
     /// Get following users
     func getFollowingUsers(for userID: String) async -> [AppUser] {
         do {
-            // Need to implement proper join query or separate queries
-            // For now, return empty array until proper database schema is set up
-            return []
+            // Get the follow relationships where the user is the follower
+            let follows: [FollowDB] = try await client
+                .from("follows")
+                .select("following_id")
+                .eq("follower_id", value: userID)
+                .execute()
+                .value
+            
+            let followingIds = follows.map { $0.following_id }
+            if followingIds.isEmpty { return [] }
+            
+            // Get the user details for all following users
+            let followingUsers: [AppUser] = try await client
+                .from("users")
+                .select("*")
+                .in("id", value: followingIds)
+                .execute()
+                .value
+            
+            return followingUsers
         } catch {
             print("❌ Failed to fetch following users: \(error)")
             return []
@@ -432,7 +449,7 @@ class SupabaseManager: ObservableObject {
         do {
             let follow = FollowDB(
                 follower_id: session.user.id.uuidString,
-                followed_id: followingID.uuidString,
+                following_id: followingID.uuidString,
                 created_at: ISO8601DateFormatter().string(from: Date())
             )
             
@@ -457,7 +474,7 @@ class SupabaseManager: ObservableObject {
                 .from("follows")
                 .delete()
                 .eq("follower_id", value: session.user.id.uuidString)
-                .eq("followed_id", value: followingID.uuidString)
+                .eq("following_id", value: followingID.uuidString)
                 .execute()
             
             return true
@@ -476,7 +493,7 @@ class SupabaseManager: ObservableObject {
                 .from("follows")
                 .select("*")
                 .eq("follower_id", value: session.user.id.uuidString)
-                .eq("followed_id", value: userID.uuidString)
+                .eq("following_id", value: userID.uuidString)
                 .limit(1)
                 .execute()
                 .value
@@ -524,7 +541,7 @@ class SupabaseManager: ObservableObject {
             let follows: [FollowDB] = try await client
                 .from("follows")
                 .select("follower_id")
-                .eq("followed_id", value: userID)
+                .eq("following_id", value: userID)
                 .execute()
                 .value
             
@@ -542,6 +559,70 @@ class SupabaseManager: ObservableObject {
             return followers
         } catch {
             print("❌ Failed to fetch followers: \(error)")
+            return []
+        }
+    }
+
+    /// Search for users by username or full name
+    func searchUsers(query: String) async -> [AppUser] {
+        do {
+            let searchTerm = query.replacingOccurrences(of: "@", with: "").lowercased()
+            
+            let users: [AppUser] = try await client
+                .from("users")
+                .select("*")
+                .or("username.ilike.%\(searchTerm)%,full_name.ilike.%\(searchTerm)%")
+                .limit(20)
+                .execute()
+                .value
+            
+            return users
+        } catch {
+            print("❌ Failed to search users: \(error)")
+            return []
+        }
+    }
+    
+    /// Get public pins from all users for discovery feed
+    func getPublicPins(limit: Int = 50) async -> [Pin] {
+        do {
+            let pinsDB: [PinDB] = try await client
+                .from("pins")
+                .select("*")
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute()
+                .value
+            
+            return pinsDB.map { $0.toPin() }
+        } catch {
+            print("❌ Failed to fetch public pins: \(error)")
+            return []
+        }
+    }
+    
+    /// Get pins from users that the current user follows
+    func getFeedPins(for userID: String, limit: Int = 50) async -> [Pin] {
+        do {
+            // First get the users that this user follows
+            let followingUsers = await getFollowingUsers(for: userID)
+            let followingIds = followingUsers.map { $0.id }
+            
+            if followingIds.isEmpty { return [] }
+            
+            // Get pins from those users
+            let pinsDB: [PinDB] = try await client
+                .from("pins")
+                .select("*")
+                .in("user_id", value: followingIds)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute()
+                .value
+            
+            return pinsDB.map { $0.toPin() }
+        } catch {
+            print("❌ Failed to fetch feed pins: \(error)")
             return []
         }
     }
