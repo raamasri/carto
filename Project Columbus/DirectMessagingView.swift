@@ -13,6 +13,19 @@ struct DirectMessagingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var conversations: [Conversation] = []
     @State private var isLoading = false
+    @State private var searchText = ""
+    @State private var showNewMessageView = false
+    
+    var filteredConversations: [Conversation] {
+        if searchText.isEmpty {
+            return conversations
+        } else {
+            return conversations.filter { conversation in
+                conversation.title.localizedCaseInsensitiveContains(searchText) ||
+                (conversation.lastMessage?.content.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
+        }
+    }
     
     var body: some View {
         NavigationView {
@@ -21,30 +34,9 @@ struct DirectMessagingView: View {
                     ProgressView("Loading conversations...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if conversations.isEmpty {
-                    // Empty state
-                    VStack(spacing: 20) {
-                        Image(systemName: "message.circle")
-                            .font(.system(size: 80))
-                            .foregroundColor(.gray)
-                        
-                        Text("No messages yet")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                        
-                        Text("Start a conversation by sending a pin to a friend!")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    emptyStateView
                 } else {
-                    // Conversations list
-                    List(conversations) { conversation in
-                        NavigationLink(destination: ChatView(conversation: conversation)) {
-                            ConversationRowView(conversation: conversation)
-                        }
-                    }
+                    conversationsList
                 }
             }
             .navigationTitle("Messages")
@@ -57,284 +49,316 @@ struct DirectMessagingView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        // TODO: Add compose new message functionality
-                    }) {
+                    Button(action: { showNewMessageView = true }) {
                         Image(systemName: "square.and.pencil")
                     }
                 }
             }
+            .sheet(isPresented: $showNewMessageView) {
+                NewMessageView { selectedUsers in
+                    createConversationWithUsers(selectedUsers)
+                    showNewMessageView = false
+                }
+                .environmentObject(authManager)
+            }
+            .searchable(text: $searchText, prompt: "Search conversations")
         }
         .onAppear {
             loadConversations()
         }
     }
     
-    private func loadConversations() {
-        isLoading = true
-        // TODO: Load conversations from Supabase
-        // For now, using mock data
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            conversations = mockConversations
-            isLoading = false
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "message.circle")
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
+            
+            Text("No Messages Yet")
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            Text("Start a conversation with your friends to share pins and recommendations!")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            
+            Button("Start New Message") {
+                showNewMessageView = true
+            }
+            .buttonStyle(.borderedProminent)
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var conversationsList: some View {
+        List(filteredConversations) { conversation in
+            NavigationLink(destination: ChatView(conversation: conversation)) {
+                ConversationRowView(conversation: conversation)
+            }
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        }
+        .listStyle(.plain)
+        .refreshable {
+            await loadConversationsAsync()
         }
     }
+    
+    private func loadConversations() {
+        isLoading = true
+        
+        Task {
+            let loadedConversations = await SupabaseManager.shared.getUserConversations()
+            
+            await MainActor.run {
+                self.conversations = loadedConversations
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func loadConversationsAsync() async {
+        let loadedConversations = await SupabaseManager.shared.getUserConversations()
+        
+        await MainActor.run {
+            self.conversations = loadedConversations
+        }
+        }
+    
+    private func createConversationWithUsers(_ selectedUsers: [AppUser]) {
+        guard !selectedUsers.isEmpty else { return }
+        
+        Task {
+            let userIds = selectedUsers.map { $0.id }
+            
+            if selectedUsers.count == 1 {
+                // Direct conversation
+                if let conversationId = await SupabaseManager.shared.getOrCreateDirectConversation(with: userIds.first!) {
+                    await MainActor.run {
+                        // Find the conversation in our local list or create a new one
+                        if let existingConversation = self.conversations.first(where: { $0.id.uuidString == conversationId }) {
+                            // Navigate to existing conversation
+                            print("Existing conversation found")
+                        } else {
+                            // Create a new conversation object and add it to our list
+                            let newConversation = Conversation(
+                                id: UUID(uuidString: conversationId) ?? UUID(),
+                                participants: selectedUsers,
+                                lastMessage: nil,
+                                updatedAt: Date(),
+                                unreadCount: 0,
+                                title: selectedUsers.first?.full_name ?? "Direct Message"
+                            )
+                            self.conversations.insert(newConversation, at: 0)
+                        }
+                    }
+                }
+            } else {
+                // Group conversation
+                if let conversationId = await SupabaseManager.shared.createConversation(with: userIds, isGroup: true) {
+                    await MainActor.run {
+                        let groupTitle = selectedUsers.prefix(2).map { $0.full_name }.joined(separator: ", ") + (selectedUsers.count > 2 ? "..." : "")
+                        let newConversation = Conversation(
+                            id: UUID(uuidString: conversationId) ?? UUID(),
+                            participants: selectedUsers,
+                            lastMessage: nil,
+                            updatedAt: Date(),
+                            unreadCount: 0,
+                            title: groupTitle
+                        )
+                        self.conversations.insert(newConversation, at: 0)
+                    }
+                }
+            }
+        }
+    }
+ 
 }
-
-// MARK: - Supporting Views
 
 struct ConversationRowView: View {
     let conversation: Conversation
     
     var body: some View {
-        HStack {
-            // Profile picture
-            AsyncImage(url: URL(string: conversation.otherUser.avatarURL ?? "")) { image in
+        HStack(spacing: 12) {
+            // Profile image
+            AsyncImage(url: URL(string: (conversation.participants.first as? AppUser)?.avatarURL ?? "")) { image in
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } placeholder: {
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .foregroundColor(.gray)
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.gray)
+                    )
             }
             .frame(width: 50, height: 50)
             .clipShape(Circle())
             
+            // Conversation details
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(conversation.otherUser.full_name.isEmpty ? "@\(conversation.otherUser.username)" : conversation.otherUser.full_name)
+                    Text(conversation.title)
                         .font(.headline)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
                     
                     Spacer()
                     
-                    Text(conversation.lastMessage.timestamp, style: .relative)
+                    Text(conversation.timeString)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 
-                Text(conversation.lastMessage.preview)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-            
-            Spacer()
-            
-            if conversation.unreadCount > 0 {
-                Text("\(conversation.unreadCount)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.blue)
-                    .clipShape(Capsule())
+                HStack {
+                    Text(conversation.subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                    
+                    Spacer()
+                    
+                    if conversation.unreadCount > 0 {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 20, height: 20)
+                            .overlay(
+                                Text("\(conversation.unreadCount)")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                            )
+                    }
+                }
             }
         }
         .padding(.vertical, 4)
     }
 }
 
-struct ChatView: View {
-    let conversation: Conversation
-    @State private var messages: [Message] = []
-    @State private var newMessageText = ""
+struct NewMessageView: View {
+    @EnvironmentObject var authManager: AuthManager
     @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    @State private var selectedUsers: Set<String> = []
+    @State private var users: [AppUser] = []
+    
+    let onUsersSelected: ([AppUser]) -> Void
+    
+    var filteredUsers: [AppUser] {
+        if searchText.isEmpty {
+            return users
+        } else {
+            return users.filter { user in
+                user.full_name.localizedCaseInsensitiveContains(searchText) ||
+                user.username.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+    }
     
     var body: some View {
-        VStack {
-            // Messages list
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(messages) { message in
-                            MessageBubbleView(message: message)
+        NavigationView {
+            VStack {
+                // Search bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search users...", text: $searchText)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding(.horizontal)
+                
+                // Users list
+                List(filteredUsers) { user in
+                    Button(action: {
+                        if selectedUsers.contains(user.id) {
+                            selectedUsers.remove(user.id)
+                        } else {
+                            selectedUsers.insert(user.id)
+                        }
+                    }) {
+                        HStack {
+                            // Profile image
+                            AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .overlay(
+                                        Image(systemName: "person.fill")
+                                            .foregroundColor(.gray)
+                                    )
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                            
+                            VStack(alignment: .leading) {
+                                Text(user.full_name)
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("@\(user.username)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            if selectedUsers.contains(user.id) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.blue)
+                            } else {
+                                Image(systemName: "circle")
+                                    .foregroundColor(.gray)
+                            }
                         }
                     }
-                    .padding()
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .onAppear {
-                    loadMessages()
-                }
+                .listStyle(.plain)
             }
-            
-            // Message input
-            HStack {
-                TextField("Type a message...", text: $newMessageText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+            .navigationTitle("New Message")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
                 
-                Button("Send") {
-                    sendMessage()
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Next") {
+                        let selected = users.filter { selectedUsers.contains($0.id) }
+                        onUsersSelected(selected)
+                    }
+                    .disabled(selectedUsers.isEmpty)
                 }
-                .disabled(newMessageText.trim().isEmpty)
             }
-            .padding()
         }
-        .navigationTitle(conversation.otherUser.username)
-        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            loadUsers()
+        }
     }
     
-    private func loadMessages() {
-        // TODO: Load messages from Supabase
-        messages = mockMessages
-    }
-    
-    private func sendMessage() {
-        guard !newMessageText.trim().isEmpty else { return }
-        
-        // TODO: Send message via Supabase
-        let message = Message(
-            id: UUID().uuidString,
-            senderId: "current_user_id", // Replace with actual current user ID
-            text: newMessageText,
-            timestamp: Date(),
-            type: .text
-        )
-        
-        messages.append(message)
-        newMessageText = ""
-    }
-}
-
-struct MessageBubbleView: View {
-    let message: Message
-    
-    var isFromCurrentUser: Bool {
-        // TODO: Compare with actual current user ID
-        return message.senderId == "current_user_id"
-    }
-    
-    var body: some View {
-        HStack {
-            if isFromCurrentUser {
-                Spacer()
-            }
+    private func loadUsers() {
+        Task {
+            guard let currentUserID = authManager.currentUserID else { return }
             
-            VStack(alignment: isFromCurrentUser ? .trailing : .leading) {
-                Text(message.text)
-                    .padding()
-                    .background(isFromCurrentUser ? Color.blue : Color.gray.opacity(0.2))
-                    .foregroundColor(isFromCurrentUser ? .white : .primary)
-                    .cornerRadius(16)
-                
-                Text(message.timestamp, style: .time)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+            // Load users the current user is following
+            let followingUsers = await SupabaseManager.shared.getFollowingUsers(for: currentUserID)
             
-            if !isFromCurrentUser {
-                Spacer()
+            await MainActor.run {
+                self.users = followingUsers
             }
         }
     }
+    
 }
 
-// MARK: - Data Models
-
-struct Conversation: Identifiable, Codable {
-    let id: String
-    let otherUser: AppUser
-    let lastMessage: MessagePreview
-    let unreadCount: Int
-}
-
-struct MessagePreview: Codable {
-    let preview: String
-    let timestamp: Date
-}
-
-struct Message: Identifiable, Codable {
-    let id: String
-    let senderId: String
-    let text: String
-    let timestamp: Date
-    let type: MessageType
-}
-
-enum MessageType: String, Codable {
-    case text
-    case pin
-    case image
-}
-
-// MARK: - Mock Data (Remove when implementing real data)
-
-private let mockConversations: [Conversation] = [
-    Conversation(
-        id: "1",
-        otherUser: AppUser(
-            id: "user1",
-            username: "alice_travels",
-            full_name: "Alice Johnson",
-            email: nil,
-            bio: nil,
-            follower_count: 45,
-            following_count: 67,
-            isFollowedByCurrentUser: true,
-            latitude: nil,
-            longitude: nil,
-            isCurrentUser: false,
-            avatarURL: nil
-        ),
-        lastMessage: MessagePreview(
-            preview: "That coffee shop you recommended was amazing! ☕️",
-            timestamp: Date().addingTimeInterval(-3600)
-        ),
-        unreadCount: 2
-    ),
-    Conversation(
-        id: "2",
-        otherUser: AppUser(
-            id: "user2",
-            username: "foodie_explorer",
-            full_name: "Bob Chen",
-            email: nil,
-            bio: nil,
-            follower_count: 128,
-            following_count: 89,
-            isFollowedByCurrentUser: true,
-            latitude: nil,
-            longitude: nil,
-            isCurrentUser: false,
-            avatarURL: nil
-        ),
-        lastMessage: MessagePreview(
-            preview: "Check out this new restaurant I found!",
-            timestamp: Date().addingTimeInterval(-7200)
-        ),
-        unreadCount: 0
-    )
-]
-
-private let mockMessages: [Message] = [
-    Message(
-        id: "1",
-        senderId: "user1",
-        text: "Hey! How was your trip to that café?",
-        timestamp: Date().addingTimeInterval(-7200),
-        type: .text
-    ),
-    Message(
-        id: "2",
-        senderId: "current_user_id",
-        text: "It was incredible! The matcha latte was perfect ☕️",
-        timestamp: Date().addingTimeInterval(-7000),
-        type: .text
-    ),
-    Message(
-        id: "3",
-        senderId: "user1",
-        text: "I knew you'd love it! That's my go-to spot",
-        timestamp: Date().addingTimeInterval(-6800),
-        type: .text
-    )
-]
-
-// MARK: - String Extension
-
-extension String {
-    func trim() -> String {
-        return self.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-} 
+// Note: ChatView and MessageBubbleView are now in ChatView.swift
+// Note: Data models are now in Models.swift 

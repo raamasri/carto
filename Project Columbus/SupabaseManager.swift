@@ -772,6 +772,225 @@ class SupabaseManager: ObservableObject {
             return 0
         }
     }
+    
+    // MARK: - Messaging Functions
+    
+    /// Get all conversations for the current user
+    func getUserConversations() async -> [Conversation] {
+        guard let session = try? await client.auth.session else { return [] }
+        
+        do {
+            // Call our custom function to get conversations with details
+            let conversationDetails: [ConversationDetailDB] = try await client
+                .rpc("get_user_conversations", params: ["user_uuid": session.user.id])
+                .execute()
+                .value
+            
+            var conversations: [Conversation] = []
+            
+            // Convert each conversation detail to Conversation object
+            for conversationDetail in conversationDetails {
+                // Create AppUser objects for participants
+                let participants = zip(zip(conversationDetail.participant_ids, conversationDetail.participant_usernames), conversationDetail.participant_full_names).map { (idUsername, fullName) in
+                    let (id, username) = idUsername
+                    return AppUser(
+                        id: id,
+                        username: username,
+                        full_name: fullName,
+                        email: nil,
+                        bio: nil,
+                        follower_count: 0,
+                        following_count: 0,
+                        isFollowedByCurrentUser: false,
+                        latitude: nil,
+                        longitude: nil,
+                        isCurrentUser: false,
+                        avatarURL: nil
+                    )
+                }
+                
+                // Create conversation title
+                let title: String
+                if conversationDetail.is_group {
+                    if let groupName = conversationDetail.conversation_name {
+                        title = groupName
+                    } else {
+                        let names = participants.prefix(2).map { $0.full_name }
+                        title = names.joined(separator: ", ") + (participants.count > 2 ? "..." : "")
+                    }
+                } else {
+                    // Direct conversation - show the other person's name (not current user)
+                    if let otherUser = participants.first(where: { $0.id != session.user.id.uuidString }) {
+                        title = otherUser.full_name
+                    } else {
+                        title = "Direct Message"
+                    }
+                }
+                
+                // Convert to Conversation object
+                let conversation = conversationDetail.toConversation(with: participants, title: title)
+                conversations.append(conversation)
+            }
+            
+            return conversations
+        } catch {
+            print("❌ Failed to fetch user conversations: \(error)")
+            return []
+        }
+    }
+    
+    /// Get messages for a specific conversation
+    func getConversationMessages(conversationId: String, limit: Int = 50, offset: Int = 0) async -> [Message] {
+        guard let session = try? await client.auth.session else { return [] }
+        
+        do {
+            // Create parameters with proper typing
+            struct MessageParams: Codable {
+                let conversation_uuid: String
+                let requesting_user_id: String
+                let limit_count: Int
+                let offset_count: Int
+            }
+            
+            let params = MessageParams(
+                conversation_uuid: conversationId,
+                requesting_user_id: session.user.id.uuidString,
+                limit_count: limit,
+                offset_count: offset
+            )
+            
+            // Call our custom function to get messages
+            let messageDetails: [MessageDetailDB] = try await client
+                .rpc("get_conversation_messages", params: params)
+                .execute()
+                .value
+            
+            return messageDetails.map { messageDetail in
+                var message = messageDetail.toMessage()
+                message = Message(
+                    id: message.id,
+                    conversationId: conversationId,
+                    senderId: message.senderId,
+                    content: message.content,
+                    createdAt: message.createdAt,
+                    messageType: message.messageType
+                )
+                return message
+            }
+        } catch {
+            print("❌ Failed to fetch conversation messages: \(error)")
+            return []
+        }
+    }
+    
+    /// Send a message to a conversation
+    func sendMessage(conversationId: String, content: String, messageType: MessageType = .text) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            // Call our custom function to send message
+            let messageId: String = try await client
+                .rpc("send_message", params: [
+                    "conversation_uuid": conversationId,
+                    "sender_uuid": session.user.id.uuidString,
+                    "message_content": content,
+                    "msg_type": messageType.rawValue
+                ])
+                .execute()
+                .value
+            
+            return !messageId.isEmpty
+        } catch {
+            print("❌ Failed to send message: \(error)")
+            return false
+        }
+    }
+    
+    /// Create a new conversation with specific users
+    func createConversation(with userIds: [String], isGroup: Bool = false, name: String? = nil) async -> String? {
+        guard let session = try? await client.auth.session else { return nil }
+        
+        do {
+            // Include current user in participants
+            var allParticipants = [session.user.id.uuidString]
+            allParticipants.append(contentsOf: userIds)
+            
+            // Create parameters with proper typing
+            struct ConversationParams: Codable {
+                let participant_ids: [String]
+                let is_group_chat: Bool
+                let conversation_name: String?
+            }
+            
+            let params = ConversationParams(
+                participant_ids: allParticipants,
+                is_group_chat: isGroup,
+                conversation_name: name
+            )
+            
+            // Call our custom function to create conversation
+            let conversationId: String = try await client
+                .rpc("create_conversation", params: params)
+                .execute()
+                .value
+            
+            return conversationId
+        } catch {
+            print("❌ Failed to create conversation: \(error)")
+            return nil
+        }
+    }
+    
+    /// Mark a conversation as read
+    func markConversationAsRead(conversationId: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            // Create parameters with proper typing
+            struct MarkReadParams: Codable {
+                let conversation_uuid: String
+                let user_uuid: String
+            }
+            
+            let params = MarkReadParams(
+                conversation_uuid: conversationId,
+                user_uuid: session.user.id.uuidString
+            )
+            
+            // Call our custom function to mark conversation as read
+            try await client
+                .rpc("mark_conversation_read", params: params)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to mark conversation as read: \(error)")
+            return false
+        }
+    }
+    
+    /// Get or create a direct conversation between current user and another user
+    func getOrCreateDirectConversation(with userId: String) async -> String? {
+        guard let session = try? await client.auth.session else { return nil }
+        
+        // First, try to find existing conversation
+        let conversations = await getUserConversations()
+        
+        // Look for a direct conversation (2 participants) with this user
+        for conversation in conversations {
+            if conversation.participants.count == 2 {
+                // Check if this user is in the conversation
+                if let participants = conversation.participants as? [AppUser] {
+                    if participants.contains(where: { $0.id == userId }) {
+                        return conversation.id.uuidString
+                    }
+                }
+            }
+        }
+        
+        // If no existing conversation found, create a new one
+        return await createConversation(with: [userId], isGroup: false)
+    }
 }
 
 // MARK: - Apple Sign In Crypto Helper Extension

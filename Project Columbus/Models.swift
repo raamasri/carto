@@ -199,3 +199,196 @@ extension ListDB {
         )
     }
 }
+
+// MARK: - Messaging Models
+
+struct Message: Identifiable, Codable {
+    let id: UUID
+    let conversationId: String
+    let senderId: String
+    let content: String
+    let createdAt: Date
+    let messageType: MessageType
+    
+    // Computed properties for UI
+    var isFromCurrentUser: Bool {
+        // This will be set based on the current user context
+        return false // Placeholder - will be updated in UI
+    }
+    
+    init(id: UUID = UUID(), conversationId: String, senderId: String, content: String, createdAt: Date = Date(), messageType: MessageType = .text) {
+        self.id = id
+        self.conversationId = conversationId
+        self.senderId = senderId
+        self.content = content
+        self.createdAt = createdAt
+        self.messageType = messageType
+    }
+}
+
+enum MessageType: String, Codable, CaseIterable {
+    case text = "text"
+    case image = "image"
+    case location = "location"
+    case pin = "pin"
+}
+
+struct Conversation: Identifiable {
+    let id: UUID
+    let participants: [Any] // AppUser - using Any to avoid scope issues
+    let lastMessage: Message?
+    let updatedAt: Date
+    let unreadCount: Int
+    let title: String // Set by SupabaseManager where AppUser is available
+    
+    // Computed properties for UI
+    
+    var subtitle: String {
+        return lastMessage?.content ?? "No messages yet"
+    }
+    
+    var timeString: String {
+        let formatter = DateFormatter()
+        let now = Date()
+        let calendar = Calendar.current
+        
+        if calendar.isDate(updatedAt, inSameDayAs: now) {
+            formatter.dateFormat = "h:mm a"
+            return formatter.string(from: updatedAt)
+        } else if calendar.isDate(updatedAt, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: now) ?? now) {
+            return "Yesterday"
+        } else if calendar.isDate(updatedAt, equalTo: now, toGranularity: .weekOfYear) {
+            formatter.dateFormat = "EEEE"
+            return formatter.string(from: updatedAt)
+        } else {
+            formatter.dateFormat = "M/d/yy"
+            return formatter.string(from: updatedAt)
+        }
+    }
+    
+    init(id: UUID = UUID(), participants: [Any], lastMessage: Message? = nil, updatedAt: Date = Date(), unreadCount: Int = 0, title: String = "Conversation") {
+        self.id = id
+        self.participants = participants
+        self.lastMessage = lastMessage
+        self.updatedAt = updatedAt
+        self.unreadCount = unreadCount
+        self.title = title
+    }
+}
+
+// MARK: - Messaging Database Models
+
+struct ConversationDB: Codable {
+    let id: String
+    let created_at: String
+    let updated_at: String
+    let is_group: Bool
+    let name: String?
+}
+
+struct MessageDB: Codable {
+    let id: String
+    let conversation_id: String
+    let sender_id: String
+    let content: String
+    let message_type: String
+    let created_at: String
+    let edited_at: String?
+    let is_deleted: Bool
+}
+
+struct ConversationParticipantDB: Codable {
+    let id: String
+    let conversation_id: String
+    let user_id: String
+    let joined_at: String
+    let last_read_at: String?
+    let is_active: Bool
+}
+
+// Response models for our custom functions
+struct ConversationDetailDB: Codable {
+    let conversation_id: String
+    let is_group: Bool
+    let conversation_name: String?
+    let created_at: String
+    let updated_at: String
+    let last_message_content: String?
+    let last_message_sender_id: String?
+    let last_message_created_at: String?
+    let unread_count: Int
+    let participant_ids: [String]
+    let participant_usernames: [String]
+    let participant_full_names: [String]
+}
+
+struct MessageDetailDB: Codable {
+    let message_id: String
+    let sender_id: String
+    let sender_username: String
+    let sender_full_name: String
+    let content: String
+    let message_type: String
+    let created_at: String
+    let edited_at: String?
+}
+
+// Insert models
+struct MessageInsert: Codable {
+    let conversation_id: String
+    let sender_id: String
+    let content: String
+    let message_type: String
+}
+
+// MARK: - Conversion Extensions for Messaging
+
+extension ConversationDetailDB {
+    func toConversation(with participants: [Any], title: String) -> Conversation {
+        // Parse dates
+        let iso8601Formatter = ISO8601DateFormatter()
+        let createdDate = iso8601Formatter.date(from: created_at) ?? Date()
+        let updatedDate = iso8601Formatter.date(from: updated_at) ?? Date()
+        let lastMessageDate = last_message_created_at != nil ? iso8601Formatter.date(from: last_message_created_at!) : nil
+        
+        // Create last message if available
+        var lastMessage: Message? = nil
+        if let content = last_message_content,
+           let senderId = last_message_sender_id,
+           let messageDate = lastMessageDate {
+            lastMessage = Message(
+                id: UUID(),
+                conversationId: conversation_id,
+                senderId: senderId,
+                content: content,
+                createdAt: messageDate,
+                messageType: MessageType(rawValue: "text") ?? .text
+            )
+        }
+        
+        return Conversation(
+            id: UUID(uuidString: conversation_id) ?? UUID(),
+            participants: participants,
+            lastMessage: lastMessage,
+            updatedAt: updatedDate,
+            unreadCount: unread_count,
+            title: title
+        )
+    }
+}
+
+extension MessageDetailDB {
+    func toMessage() -> Message {
+        let iso8601Formatter = ISO8601DateFormatter()
+        let createdDate = iso8601Formatter.date(from: created_at) ?? Date()
+        
+        return Message(
+            id: UUID(uuidString: message_id) ?? UUID(),
+            conversationId: "", // Will be set by the calling context
+            senderId: sender_id,
+            content: content,
+            createdAt: createdDate,
+            messageType: MessageType(rawValue: message_type) ?? .text
+        )
+    }
+}
