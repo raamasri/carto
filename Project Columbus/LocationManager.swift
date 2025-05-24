@@ -41,6 +41,10 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
             self.currentLocation = newLocation
         }
     }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("📍 Location manager error: \(error.localizedDescription)")
+    }
 
     var region: MKCoordinateRegion {
         MKCoordinateRegion(
@@ -51,5 +55,15 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
     
     func requestUserLocationManually() {
         manager.startUpdatingLocation()
+    }
+    
+    /// Request a fresh location update (for auto-update functionality)
+    func requestFreshLocation() {
+        guard manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways else {
+            print("📍 Location permission not granted")
+            return
+        }
+        
+        manager.requestLocation()
     }
 }

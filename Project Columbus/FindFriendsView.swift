@@ -24,47 +24,65 @@ struct PinTail: Shape {
 /// with a small tail underneath so it looks like a real map pin.
 struct FriendPinView: View {
     let imageName: String            // system symbol or asset name
+    let username: String             // username to display
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Circular profile image
-            Image(systemName: imageName)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(Color.white, lineWidth: 3)
-                )
-                .background(
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.white, Color.gray]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 50, height: 50)
-                )
-                .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
-            
-            // Pin tail
-            PinTail()
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.white, Color.gray]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+        VStack(spacing: 2) {
+            // Pin with circular profile image and tail
+            VStack(spacing: 0) {
+                // Circular profile image
+                Image(systemName: imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white, lineWidth: 3)
                     )
+                    .background(
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.white, Color.gray]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 50, height: 50)
+                    )
+                    .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+                
+                // Pin tail
+                PinTail()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white, Color.gray]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 14, height: 10)
+                    .offset(y: -2)
+            }
+            
+            // Username label positioned close to the pin
+            Text(username)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Color(.systemBackground)
+                        .opacity(0.9)
+                        .cornerRadius(4)
                 )
-                .frame(width: 14, height: 10)
-                .offset(y: -2)
+                .shadow(color: Color.black.opacity(0.2), radius: 1, x: 0, y: 1)
         }
         // Align annotation so that the tip of the tail is placed exactly
         // at the coordinate point.
-        .offset(y: -20)
+        .offset(y: -25)  // Adjusted offset to account for the label
     }
 }
 
@@ -86,11 +104,11 @@ struct FriendHistoryView: View {
 
     var body: some View {
         Map(position: $cameraPosition) {
-            Annotation(user.username, coordinate: CLLocationCoordinate2D(
+            Annotation("", coordinate: CLLocationCoordinate2D(
                 latitude: user.latitude ?? 0,
                 longitude: user.longitude ?? 0
             )) {
-                FriendPinView(imageName: "person.circle.fill")
+                FriendPinView(imageName: "person.circle.fill", username: user.username)
             }
         }
         .ignoresSafeArea()
@@ -188,8 +206,8 @@ struct FindFriendsView: View {
                 Map(position: $cameraPosition) {
                     ForEach(allUsers) { user in
                         if let coordinate = user.location {
-                            Annotation(user.username, coordinate: coordinate) {
-                                FriendPinView(imageName: "person.circle.fill")
+                            Annotation("", coordinate: coordinate) {
+                                FriendPinView(imageName: "person.circle.fill", username: user.username)
                             }
                         }
                     }
