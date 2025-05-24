@@ -10,44 +10,120 @@ import SwiftUI
 
 @MainActor
 class PinStore: ObservableObject {
-    // All pins (master list)
+    // All pins (master list) - now loaded from database
     @Published var masterPins: [Pin] = []
     // Pins the user has marked as favorites
     @Published var favoritePins: [Pin] = []
     @Published var isLoading: Bool = false
     // @Published var lastError: AppError?
     
-    // Named collections of pins (default 5 lists shown to the user)
-    @Published var collections: [PinCollection] = [
-        PinCollection(name: "Favorites", pins: []),
-        PinCollection(name: "Coffee Shops", pins: []),
-        PinCollection(name: "Restaurants", pins: []),
-        PinCollection(name: "Bars", pins: []),
-        PinCollection(name: "Shopping", pins: [])
-    ]
+    // Named lists of pins - loaded from database
+    @Published var lists: [PinList] = []
     
-    // TODO: Re-enable when infrastructure is properly integrated
-    // private let dataManager = DataManager.shared
-    // private let errorManager = ErrorManager()
+    // Legacy support
+    var collections: [PinCollection] { lists }
+    
+    private let supabaseManager = SupabaseManager.shared
+    
+    init() {
+        // Initialize with loading from database
+        loadFromDatabase()
+    }
+    
+    /// Loads all user data from database (lists, pins, etc.)
+    func loadFromDatabase() {
+        Task {
+            isLoading = true
+            
+            // Load all user pins
+            let allPins = await supabaseManager.getAllUserPins()
+            
+            // Load all user lists with their pins
+            let userLists = await supabaseManager.getUserLists()
+            
+            await MainActor.run {
+                // Update master pins
+                masterPins = allPins
+                
+                // Update lists
+                if userLists.isEmpty {
+                    // Create default lists if none exist
+                    createDefaultLists()
+                } else {
+                    lists = userLists
+                }
+                
+                // Update favorites (pins in "Favorites" list)
+                if let favoritesList = lists.first(where: { $0.name == "Favorites" }) {
+                    favoritePins = favoritesList.pins
+                } else {
+                    favoritePins = []
+                }
+                
+                isLoading = false
+            }
+        }
+    }
+    
+    /// Creates default lists for new users
+    private func createDefaultLists() {
+        let defaultListNames = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
+        
+        Task {
+            for listName in defaultListNames {
+                do {
+                    _ = try await supabaseManager.createList(name: listName)
+                } catch {
+                    print("❌ Failed to create default list '\(listName)': \(error)")
+                }
+            }
+            
+            // Reload after creating defaults
+            await loadFromDatabase()
+        }
+    }
+    
+    /// Loads lists from database (legacy method name for backward compatibility)
+    @available(*, deprecated, message: "Use loadFromDatabase() instead")
+    func loadCollectionsFromDatabase() {
+        loadFromDatabase()
+    }
     
     /// Adds a pin to the Favorites list if it isn't already present.
     /// - Parameter pin: The `Pin` to add.
     func addToFavorites(_ pin: Pin) {
         guard !favoritePins.contains(where: { $0.id == pin.id }) else { return }
-        favoritePins.append(pin)
         
-        // TODO: Re-enable when DataManager is integrated
-        // Task {
-        //     await dataManager.savePinOffline(pin)
-        // }
+        // Update local state
+        favoritePins.append(pin)
+        if let index = lists.firstIndex(where: { $0.name == "Favorites" }) {
+            lists[index].pins.append(pin)
+        }
+        
+        // Save to database
+        Task {
+            let success = await supabaseManager.addPinToList(pin: pin, listName: "Favorites")
+            if success {
+                print("✅ Pin added to Favorites in database")
+            } else {
+                print("❌ Failed to add pin to Favorites in database")
+                // Revert local changes on failure
+                await MainActor.run {
+                    favoritePins.removeAll { $0.id == pin.id }
+                    if let index = lists.firstIndex(where: { $0.name == "Favorites" }) {
+                        lists[index].pins.removeAll { $0.id == pin.id }
+                    }
+                }
+            }
+        }
     }
     
     /// Adds a pin to the specified list, creating the list if it doesn't exist.
     /// - Parameters:
     ///   - pin: The `Pin` to save.
-    ///   - listName: The name of the list/collection.
+    ///   - listName: The name of the list.
     func addPin(_ pin: Pin, to listName: String) {
-        // Keep the master list updated
+        // Update master list locally if not present
         if !masterPins.contains(where: { $0.id == pin.id }) {
             masterPins.append(pin)
         }
@@ -58,52 +134,180 @@ class PinStore: ObservableObject {
             return
         }
         
-        // Check if the collection already exists
-        if let index = collections.firstIndex(where: { $0.name == listName }) {
+        // Update local lists
+        if let index = lists.firstIndex(where: { $0.name == listName }) {
             // Append only if the pin is not already present
-            if !collections[index].pins.contains(where: { $0.id == pin.id }) {
-                collections[index].pins.append(pin)
+            if !lists[index].pins.contains(where: { $0.id == pin.id }) {
+                lists[index].pins.append(pin)
             }
         } else {
-            // Create a new collection with the pin
-            collections.append(PinCollection(name: listName, pins: [pin]))
+            // Create a new list locally (will be created in database automatically)
+            lists.append(PinList(name: listName, pins: [pin]))
         }
         
-        // TODO: Re-enable when DataManager is integrated
-        // Task {
-        //     await dataManager.savePinOffline(pin)
-        // }
+        // Save to database
+        Task {
+            let success = await supabaseManager.addPinToList(pin: pin, listName: listName)
+            if success {
+                print("✅ Pin added to list '\(listName)' in database")
+            } else {
+                print("❌ Failed to add pin to list '\(listName)' in database")
+                // Revert local changes on failure
+                await MainActor.run {
+                    if let index = lists.firstIndex(where: { $0.name == listName }) {
+                        lists[index].pins.removeAll { $0.id == pin.id }
+                        // Remove empty lists that were just created
+                        if lists[index].pins.isEmpty && !["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"].contains(listName) {
+                            lists.remove(at: index)
+                        }
+                    }
+                    // Remove from master if not in any other list
+                    let isInAnyList = lists.contains { list in
+                        list.pins.contains { $0.id == pin.id }
+                    }
+                    if !isInAnyList {
+                        masterPins.removeAll { $0.id == pin.id }
+                    }
+                }
+            }
+        }
     }
     
+    /// Removes a pin from a specific list
+    /// - Parameters:
+    ///   - pin: The pin to remove
+    ///   - listName: The name of the list to remove from
     func removePin(_ pin: Pin, from listName: String) {
+        // Update local state
         if listName == "Favorites" {
             favoritePins.removeAll { $0.id == pin.id }
         }
         
-        if let index = collections.firstIndex(where: { $0.name == listName }) {
-            collections[index].pins.removeAll { $0.id == pin.id }
+        if let index = lists.firstIndex(where: { $0.name == listName }) {
+            lists[index].pins.removeAll { $0.id == pin.id }
         }
         
-        // Remove from master list if not in any collection
-        let isInAnyCollection = collections.contains { collection in
-            collection.pins.contains { $0.id == pin.id }
+        // Remove from master list if not in any other list
+        let isInAnyList = lists.contains { list in
+            list.pins.contains { $0.id == pin.id }
         }
-        let isInFavorites = favoritePins.contains { $0.id == pin.id }
         
-        if !isInAnyCollection && !isInFavorites {
+        if !isInAnyList {
             masterPins.removeAll { $0.id == pin.id }
+        }
+        
+        // Remove from database
+        Task {
+            let success = await supabaseManager.removePinFromList(pin: pin, listName: listName)
+            if success {
+                print("✅ Pin removed from list '\(listName)' in database")
+            } else {
+                print("❌ Failed to remove pin from list '\(listName)' in database")
+                // Revert local changes on failure
+                await MainActor.run {
+                    if listName == "Favorites" {
+                        favoritePins.append(pin)
+                    }
+                    if let index = lists.firstIndex(where: { $0.name == listName }) {
+                        lists[index].pins.append(pin)
+                    }
+                    if !masterPins.contains(where: { $0.id == pin.id }) {
+                        masterPins.append(pin)
+                    }
+                }
+            }
         }
     }
     
+    /// Fetches fresh data from database
     func fetchPins() async {
-        isLoading = true
-        // lastError = nil
+        await loadFromDatabase()
+    }
+    
+    /// Creates a new custom list
+    func createCustomList(name: String) {
+        // Check if list already exists
+        guard !lists.contains(where: { $0.name == name }) else {
+            print("⚠️ List '\(name)' already exists")
+            return
+        }
         
-        // TODO: Replace with real fetch logic from your database or API
-        // Example:
-        // await loadPins()
+        // Add locally
+        lists.append(PinList(name: name, pins: []))
         
-        isLoading = false
+        // Save to database
+        Task {
+            do {
+                _ = try await supabaseManager.createList(name: name)
+                print("✅ Created list '\(name)' in database")
+            } catch {
+                print("❌ Failed to create list '\(name)': \(error)")
+                // Revert local changes on failure
+                await MainActor.run {
+                    lists.removeAll { $0.name == name }
+                }
+            }
+        }
+    }
+    
+    /// Legacy method name for backward compatibility
+    @available(*, deprecated, message: "Use createCustomList(name:) instead")
+    func createCustomCollection(name: String) {
+        createCustomList(name: name)
+    }
+    
+    /// Deletes a custom list (won't delete default lists)
+    func deleteList(named listName: String) {
+        // Don't allow deletion of default lists
+        let defaultLists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
+        guard !defaultLists.contains(listName) else {
+            print("⚠️ Cannot delete default list '\(listName)'")
+            return
+        }
+        
+        // Find the list to delete
+        guard let listToDelete = lists.first(where: { $0.name == listName }) else {
+            print("⚠️ List '\(listName)' not found")
+            return
+        }
+        
+        // Remove locally
+        lists.removeAll { $0.name == listName }
+        
+        // Remove from database
+        Task {
+            let success = await supabaseManager.deleteList(listId: listToDelete.id.uuidString)
+            if success {
+                print("✅ Deleted list '\(listName)' from database")
+            } else {
+                print("❌ Failed to delete list '\(listName)' from database")
+                // Revert local changes on failure
+                await MainActor.run {
+                    lists.append(listToDelete)
+                }
+            }
+        }
+    }
+    
+    /// Refreshes all data from database
+    func refresh() async {
+        await loadFromDatabase()
+    }
+    
+    /// Legacy method name for backward compatibility
+    @available(*, deprecated, message: "Use refresh() instead")
+    func refreshCollections() async {
+        await refresh()
+    }
+    
+    /// Gets pins for a specific list by name
+    func getPins(for listName: String) -> [Pin] {
+        return lists.first(where: { $0.name == listName })?.pins ?? []
+    }
+    
+    /// Gets a list by name
+    func getList(named listName: String) -> PinList? {
+        return lists.first(where: { $0.name == listName })
     }
     
     // TODO: Implement when DataManager is integrated

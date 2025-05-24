@@ -79,60 +79,6 @@ struct CollectionMapView: View {
 
 }
 
-// MARK: - Collection Detail View
-struct CollectionDetailView: View {
-    let collection: PinCollection
-    @State private var selectedCategory: String = "All"
-    let categories = ["All", "Hotel", "Restaurant", "Bar", "Shopping"]
-
-    var filteredPins: [Pin] {
-        if selectedCategory == "All" {
-            return collection.pins
-        } else {
-            return collection.pins.filter { $0.locationName.localizedCaseInsensitiveContains(selectedCategory) }
-        }
-    }
-
-    var body: some View {
-        NavigationView {
-            VStack {
-                HStack {
-                    Picker("Category", selection: $selectedCategory) {
-                        ForEach(categories, id: \.self) { category in
-                            Text(category).tag(category)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    .padding(.leading)
-
-                    Spacer()
-
-                    NavigationLink(destination: CollectionMapView(pins: filteredPins)) {
-                        Image(systemName: "map")
-                            .font(.title2)
-                            .padding(.trailing)
-                    }
-                }
-
-                List(filteredPins) { pin in
-                    VStack(alignment: .leading) {
-                        Text(pin.locationName)
-                            .font(.headline)
-                        Text("\(pin.city) • \(pin.date)")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-            .navigationTitle(collection.name)
-        }
-    }
-}
-
-
-
-
 // MARK: - Utility Functions
 
 func formattedDate() -> String {
@@ -482,6 +428,10 @@ struct MainMapView: View {
                         await authManager.fetchCurrentUser()
                     }
                 }
+            } else if selectedTab == 5 {
+                CollectionsView()
+                    .environmentObject(pinStore)
+                    .environmentObject(authManager)
             } else if selectedTab == 1 {
                 FindFriendsView()
             } else if selectedTab == 2 {
@@ -641,6 +591,8 @@ struct MainMapView: View {
                     NavBarButton(icon: "plus.circle", selected: $selectedTab, index: 2)
                     Spacer()
                     NavBarButton(icon: "newspaper", selected: $selectedTab, index: 3)
+                    Spacer()
+                    NavBarButton(icon: "folder", selected: $selectedTab, index: 5)
                     Spacer()
                     NavBarButton(icon: "person.circle", selected: $selectedTab, index: 4)
                 }

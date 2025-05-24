@@ -44,12 +44,16 @@ struct SearchView: View {
                     }
 
                 if searchText.starts(with: "@") {
-                    List(searchResults, id: \.self) { user in
-                        Text("User: \(user)")
+                    List {
+                        ForEach(searchResults, id: \.self) { user in
+                            Text("User: \(user)")
+                        }
                     }
                 } else if searchText.starts(with: "#") {
-                    List(searchResults, id: \.self) { tag in
-                        Text("Tag: \(tag)")
+                    List {
+                        ForEach(searchResults, id: \.self) { tag in
+                            Text("Tag: \(tag)")
+                        }
                     }
                 } else if !searchText.isEmpty {
                     List {

@@ -227,7 +227,7 @@ struct ChangePasswordView: View {
                 
                 // Update to new password
                 try await SupabaseManager.shared.client.auth.update(
-                    user: UserAttributes(password: newPassword)
+                    user: .init(password: newPassword)
                 )
                 
                 // Update the stored password for biometric auth

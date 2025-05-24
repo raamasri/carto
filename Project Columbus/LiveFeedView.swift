@@ -443,12 +443,12 @@ struct AddToListSheetDynamic: View {
                 .font(.title2)
                 .bold()
                 .padding(.top)
-            ForEach(pinStore.collections, id: \.name) { collection in
+            ForEach(pinStore.lists, id: \.name) { list in
                 Button(action: {
-                    onSelect(collection.name)
+                    onSelect(list.name)
                     dismiss()
                 }) {
-                    Text(collection.name)
+                    Text(list.name)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()

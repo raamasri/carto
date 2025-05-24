@@ -8,6 +8,27 @@
 import Supabase
 import Foundation
 import CryptoKit
+import SwiftUI
+
+// MARK: - Legacy Database Models (to be removed after migration)
+struct PinCollectionDB: Codable {
+    let id: String?
+    let name: String
+    let user_id: String
+    let created_at: String
+}
+
+struct PinCollectionItemDB: Codable {
+    let collection_id: String
+    let pin_id: String
+    let created_at: String
+}
+
+struct FollowDB: Codable {
+    let follower_id: String
+    let followed_id: String
+    let created_at: String
+}
 
 class SupabaseManager: ObservableObject {
     static let shared = SupabaseManager()
@@ -33,390 +54,512 @@ class SupabaseManager: ObservableObject {
         )
     }
 
-    /// Checks if a follow request exists between the current user and a target user
-    func hasFollowRequestSent(to userID: UUID) async -> Bool {
-        do {
-            // Define a simple decodable struct for the notification response
-            struct NotificationResponse: Decodable {
-                let id: UUID
-            }
-            guard let session = try? await client.auth.session else { return false }
-            let currentUserID = session.user.id.uuidString.lowercased()
-
-            // Execute and capture raw response for debugging
-            let resp: PostgrestResponse<[NotificationResponse]> = try await client
-                .from("notifications")
-                .select("id")
-                .eq("user_id", value: userID.uuidString.lowercased())
-                .eq("from_user_id", value: currentUserID)
-                .eq("type", value: "follow_request")
-                .limit(1)
-                .execute()
-
-            // Extract decoded value
-            let notifications = resp.value
-            return !notifications.isEmpty
-        } catch {
-            print("Error checking follow request: \(error)")
-            return false
-        }
-    }
-    
-    func getCurrentUsername() async -> String? {
-        do {
-            let session = try await client.auth.session
-            let userId = session.user.id
-
-            struct UserResponse: Decodable {
-                let username: String
-            }
-
-            let user: UserResponse = try await client
-                .from("users")
-                .select("username")
-                .eq("id", value: userId)
-                .single()
-                .execute()
-                .value
-
-            return user.username
-        } catch {
-            print("Error fetching username: \(error)")
-        }
-
-        return nil
-    }
-    
-    /// Signs up a new user and creates their profile record
-    func signUp(username: String, email: String, password: String) async throws -> Session {
-        // 1. Create the auth user
-        let authResponse = try await client.auth.signUp(email: email, password: password)
-        guard let session = authResponse.session else {
-            throw NSError(domain: "SupabaseManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Sign-up failed"])
-        }
-        let user = authResponse.user
-
-        // 2. Check for existing user
-        struct ExistingUserResponse: Decodable {
-            let id: String
-        }
-
-        let existingRows: [ExistingUserResponse] = try await client
-            .from("users")
-            .select("id")
-            .eq("id", value: user.id.uuidString)
-            .limit(1)
-            .execute()
-            .value
-        if !existingRows.isEmpty {
-            print("User already exists in users table, skipping insert.")
-        } else {
-            // 3. Insert into your public users table
-            _ = try await client
-                .from("users")
-                .insert([
-                    "id": user.id.uuidString,
-                    "username": username,
-                    "email": email
-                ])
-                .execute()
-        }
-
-        return session
-    }
+    // MARK: - Apple Sign In Integration
     
     func signInWithApple(idToken: String, nonce: String) async throws -> Session {
-        let response = try await client.auth.signInWithIdToken(
+        return try await client.auth.signInWithIdToken(
             credentials: OpenIDConnectCredentials(
                 provider: .apple,
                 idToken: idToken,
                 nonce: nonce
             )
         )
-        
-        let session = response
-    
-        let userId = response.user.id.uuidString
-        struct ExistingUserResponse: Decodable {
-            let id: String
-        }
-
-        let existing: [ExistingUserResponse] = try await client
-            .from("users")
-            .select("id")
-            .eq("id", value: userId)
-            .limit(1)
-            .execute()
-            .value
-
-        if existing.isEmpty {
-            _ = try await client
-                .from("users")
-                .insert([
-                    "id": userId,
-                    "username": "new_user_\(Int.random(in: 1000...9999))",
-                    "email": response.user.email ?? ""
-                ])
-                .execute()
-        }
-    
-        return session
     }
 
-    func searchUsers(byUsername username: String) async -> [AppUser] {
+    // MARK: - Lists Management (NEW SCHEMA)
+    
+    /// Creates a new list for the user
+    func createList(name: String) async throws -> String {
+        guard let session = try? await client.auth.session else {
+            throw NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let list = ["user_id": session.user.id.uuidString, "name": name]
+        
+        let response: [ListDB] = try await client
+            .from("lists")
+            .insert(list)
+            .select()
+            .execute()
+            .value
+        
+        return response.first?.id ?? ""
+    }
+    
+    /// Fetches all lists for the current user
+    func getUserLists() async -> [PinList] {
+        guard let session = try? await client.auth.session else { return [] }
+        
         do {
-            let session = try await client.auth.session
-            let currentUserID = session.user.id.uuidString
-
-            struct SupabaseUser: Decodable {
-                let id: String
-                let username: String
-                let full_name: String
-                let email: String
-                let bio: String?
-                let follower_count: Int
-                let following_count: Int
-                let latitude: Double?
-                let longitude: Double?
-            }
-
-            let users: [SupabaseUser] = try await client
-                .from("users")
-                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude")
-                .filter("username", operator: "ilike", value: "%\(username)%")
+            let listsDB: [ListDB] = try await client
+                .from("lists")
+                .select("*")
+                .eq("user_id", value: session.user.id.uuidString)
                 .execute()
                 .value
-
-            let followingIDs = await getFollowing(for: session.user.id)
-
-            return users.map { user in
-                AppUser(
-                    id: user.id,
-                    username: user.username,
-                    full_name: user.full_name,
-                    email: user.email,
-                    bio: user.bio ?? "",
-                    follower_count: user.follower_count,
-                    following_count: user.following_count,
-                    isFollowedByCurrentUser: followingIDs.contains(UUID(uuidString: user.id) ?? UUID()),
-                    latitude: user.latitude ?? 0.0,
-                    longitude: user.longitude ?? 0.0,
-                    isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
-                    avatarURL: ""
-                )
+            
+            var lists: [PinList] = []
+            
+            // Fetch pins for each list
+            for listDB in listsDB {
+                let pins = await getPinsForList(listId: listDB.id)
+                let list = listDB.toPinList(pins: pins)
+                lists.append(list)
             }
+            
+            return lists
         } catch {
-            print("Error searching users: \(error)")
+            print("❌ Failed to fetch lists: \(error)")
             return []
         }
     }
-
-    func fetchUserProfile(userID: String) async -> AppUser? {
+    
+    /// Deletes a list
+    func deleteList(listId: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
         do {
-            let session = try await client.auth.session
-            let currentUserID = session.user.id.uuidString
-            struct SupabaseUser: Decodable {
-                let id: String
-                let username: String
-                let full_name: String?
-                let email: String
-                let bio: String?
-                let follower_count: Int
-                let following_count: Int
-                let latitude: Double?
-                let longitude: Double?
-                let avatar_url: String?
-            }
+            _ = try await client
+                .from("lists")
+                .delete()
+                .eq("id", value: listId)
+                .eq("user_id", value: session.user.id.uuidString)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to delete list: \(error)")
+            return false
+        }
+    }
 
-            let users: [SupabaseUser] = try await client
-                .from("users")
-                .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude, avatar_url")
-                .eq("id", value: userID)
+    // MARK: - Pins Management (NEW SCHEMA)
+    
+    /// Creates a new pin in the database
+    func createPin(pin: Pin) async throws -> String {
+        guard let session = try? await client.auth.session else {
+            throw NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let pinInsert = pin.toPinDB(userId: session.user.id.uuidString)
+        
+        let response: [PinDB] = try await client
+            .from("pins")
+            .insert(pinInsert)
+            .select()
+            .execute()
+            .value
+        
+        return response.first?.id ?? ""
+    }
+    
+    /// Fetches pins for a specific list
+    func getPinsForList(listId: String) async -> [Pin] {
+        do {
+            let listPins: [ListPinDB] = try await client
+                .from("list_pins")
+                .select("*")
+                .eq("list_id", value: listId)
                 .execute()
                 .value
-
-            guard let user = users.first else { return nil }
-
-            let isFollowing = await isFollowing(userID: UUID(uuidString: user.id) ?? UUID())
-
-            return AppUser(
-                id: user.id,
-                username: user.username,
-                full_name: user.full_name ?? "",
-                email: user.email,
-                bio: user.bio ?? "",
-                follower_count: user.follower_count,
-                following_count: user.following_count,
-                isFollowedByCurrentUser: isFollowing,
-                latitude: user.latitude ?? 0.0,
-                longitude: user.longitude ?? 0.0,
-                isCurrentUser: user.id.lowercased() == currentUserID.lowercased(),
-                avatarURL: user.avatar_url ?? ""
-            )
+            
+            let pinIds = listPins.map { $0.pin_id }
+            if pinIds.isEmpty { return [] }
+            
+            let pinsDB: [PinDB] = try await client
+                .from("pins")
+                .select("*")
+                .in("id", value: pinIds)
+                .execute()
+                .value
+            
+            return pinsDB.map { $0.toPin() }
         } catch {
-            // Log error silently in production
+            print("❌ Failed to fetch pins for list: \(error)")
+            return []
+        }
+    }
+    
+    /// Fetches all pins for the current user
+    func getAllUserPins() async -> [Pin] {
+        guard let session = try? await client.auth.session else { return [] }
+        
+        do {
+            let pinsDB: [PinDB] = try await client
+                .from("pins")
+                .select("*")
+                .eq("user_id", value: session.user.id.uuidString)
+                .execute()
+                .value
+            
+            return pinsDB.map { $0.toPin() }
+        } catch {
+            print("❌ Failed to fetch user pins: \(error)")
+            return []
+        }
+    }
+    
+    /// Checks if a pin exists in the database (by coordinates and location name)
+    func findExistingPin(pin: Pin) async -> String? {
+        guard let session = try? await client.auth.session else { return nil }
+        
+        do {
+            let existingPins: [PinDB] = try await client
+                .from("pins")
+                .select("id")
+                .eq("user_id", value: session.user.id.uuidString)
+                .eq("location_name", value: pin.locationName)
+                .eq("latitude", value: pin.latitude)
+                .eq("longitude", value: pin.longitude)
+                .limit(1)
+                .execute()
+                .value
+            
+            return existingPins.first?.id
+        } catch {
+            print("❌ Failed to find existing pin: \(error)")
             return nil
         }
     }
 
-    func fetchAllUsers() async throws -> [AppUser] {
-        let session = try await client.auth.session
-        let currentUserID = session.user.id.uuidString
-
-        struct SupabaseUser: Decodable {
-            let id: String
-            let username: String
-            let full_name: String
-            let email: String
-            let bio: String?
-            let follower_count: Int
-            let following_count: Int
-            let latitude: Double?
-            let longitude: Double?
+    // MARK: - List-Pin Associations (NEW SCHEMA)
+    
+    /// Adds a pin to a list (creates pin if it doesn't exist)
+    func addPinToList(pin: Pin, listName: String) async -> Bool {
+        do {
+            // Find or create the list
+            let listId = try await getOrCreateList(name: listName)
+            
+            // Find or create the pin
+            var pinId = await findExistingPin(pin: pin)
+            if pinId == nil {
+                pinId = try await createPin(pin: pin)
+            }
+            
+            guard let finalPinId = pinId else { return false }
+            
+            // Check if already associated
+            if await isPinInList(pinId: finalPinId, listId: listId) {
+                print("ℹ️ Pin already in list '\(listName)'")
+                return true
+            }
+            
+            // Create association
+            let listPin = ["list_id": listId, "pin_id": finalPinId]
+            
+            _ = try await client
+                .from("list_pins")
+                .insert(listPin)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to add pin to list: \(error)")
+            return false
         }
+    }
+    
+    /// Removes a pin from a list
+    func removePinFromList(pin: Pin, listName: String) async -> Bool {
+        do {
+            let listId = try await getOrCreateList(name: listName)
+            let pinId = await findExistingPin(pin: pin)
+            
+            guard let finalPinId = pinId else { return false }
+            
+            _ = try await client
+                .from("list_pins")
+                .delete()
+                .eq("list_id", value: listId)
+                .eq("pin_id", value: finalPinId)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to remove pin from list: \(error)")
+            return false
+        }
+    }
+    
+    /// Checks if a pin is already in a list
+    private func isPinInList(pinId: String, listId: String) async -> Bool {
+        do {
+            let existing: [ListPinDB] = try await client
+                .from("list_pins")
+                .select("*")
+                .eq("list_id", value: listId)
+                .eq("pin_id", value: pinId)
+                .limit(1)
+                .execute()
+                .value
+            
+            return !existing.isEmpty
+        } catch {
+            return false
+        }
+    }
 
-        let users: [SupabaseUser] = try await client
-            .from("users")
-            .select("id, username, full_name, email, bio, follower_count, following_count, latitude, longitude")
+    // MARK: - Private List Helpers
+    
+    private func getOrCreateList(name: String) async throws -> String {
+        guard let session = try? await client.auth.session else {
+            throw NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        // Try to find existing list
+        let existing: [ListDB] = try await client
+            .from("lists")
+            .select("id")
+            .eq("user_id", value: session.user.id.uuidString)
+            .eq("name", value: name)
+            .limit(1)
             .execute()
             .value
-
-        let followingIDs = await getFollowing(for: session.user.id)
         
-        let filteredUsers = users
-            .filter { $0.id.lowercased() != currentUserID.lowercased() }
+        if let existingList = existing.first {
+            return existingList.id
+        }
         
-        return filteredUsers.map { user in
-            AppUser(
-                id: user.id,
-                username: user.username,
-                full_name: user.full_name,
-                email: user.email,
-                bio: user.bio ?? "",
-                follower_count: user.follower_count,
-                following_count: user.following_count,
-                isFollowedByCurrentUser: followingIDs.contains(UUID(uuidString: user.id) ?? UUID()),
-                latitude: user.latitude ?? 0.0,
-                longitude: user.longitude ?? 0.0,
-                isCurrentUser: false,
-                avatarURL: ""
-            )
-        }
+        // Create new list if it doesn't exist
+        return try await createList(name: name)
     }
 
-    /// Updates the user's profile fields on the backend.
-    /// Updates the user's profile fields on the backend.
-    func updateUserProfile(
-        userID: String,
-        username: String,
-        fullName: String,
-        email: String,
-        bio: String,
-        avatarURL: String?
-    ) async throws {
-        let existingProfile = await fetchUserProfile(userID: userID)
-        
-        if existingProfile == nil {
-            // Insert a new profile row since none exists
-            let insertResponse = try await client
-                .from("users")
-                .insert([
-                    "id": userID,
-                    "username": username,
-                    "full_name": fullName,
-                    "email": email,
-                    "bio": bio,
-                    "avatar_url": avatarURL ?? ""
-                ])
-                .execute()
-        } else {
-            // Existing row: perform update
-            _ = try await client
-                .from("users")
-                .update([
-                    "username": username,
-                    "full_name": fullName,
-                    "email": email,
-                    "bio": bio,
-                    "avatar_url": avatarURL ?? ""
-                ])
-                .eq("id", value: userID)
-                .execute()
-        }
+    // MARK: - Legacy Collections Management (DEPRECATED - For backward compatibility)
+    
+    /// Creates a new collection for the user (DEPRECATED)
+    @available(*, deprecated, message: "Use createList(name:) instead")
+    func createCollection(name: String) async throws -> String {
+        return try await createList(name: name)
     }
-    func getFollowers(for userID: String) async -> [AppUser] {
-        do {
-            let session = try await client.auth.session
-            let currentUserID = session.user.id.uuidString
-
-            let response: PostgrestResponse<[AppUser]> = try await client
-                .rpc("get_followers_with_status", params: [
-                    "current_user_id": currentUserID,
-                    "viewed_user_id": userID
-                ])
-                .execute()
-
-            return decodeAppUsers(from: response)
-        } catch {
-            return []
-        }
+    
+    /// Fetches all collections for the current user (DEPRECATED)
+    @available(*, deprecated, message: "Use getUserLists() instead")
+    func getUserCollections() async -> [PinList] {
+        return await getUserLists()
+    }
+    
+    /// Adds a pin to a specific collection (DEPRECATED)
+    @available(*, deprecated, message: "Use addPinToList(pin:listName:) instead")
+    func addPinToCollection(pin: Pin, collectionName: String) async -> Bool {
+        return await addPinToList(pin: pin, listName: collectionName)
+    }
+    
+    /// Removes a pin from a collection (DEPRECATED)
+    @available(*, deprecated, message: "Use removePinFromList(pin:listName:) instead")
+    func removePinFromCollection(pin: Pin, collectionName: String) async -> Bool {
+        return await removePinFromList(pin: pin, listName: collectionName)
     }
 
-    func getFollowingUsers(for userID: String) async -> [AppUser] {
-        do {
-            let session = try await client.auth.session
-            let currentUserID = session.user.id.uuidString
-
-            let response: PostgrestResponse<[AppUser]> = try await client
-                .rpc("get_following_users_with_status", params: [
-                    "current_user_id": currentUserID,
-                    "viewed_user_id": userID
-                ])
-                .execute()
-
-            return decodeAppUsers(from: response)
-        } catch {
-            return []
-        }
-    }
-
-    private func decodeAppUsers(from response: PostgrestResponse<[AppUser]>) -> [AppUser] {
-        return (try? response.value) ?? []
-    }
-    func updateUserLocation(userID: String, latitude: Double, longitude: Double) async {
-        do {
-            let _ = try await client
-                .from("users")
-                .update([
-                    "latitude": latitude,
-                    "longitude": longitude
-                ])
-                .eq("id", value: userID)
-                .execute()
-        } catch {
-            // Handle error silently
-        }
-    }
-
-    /// Checks if a username is available (not already taken)
+    // MARK: - User Management
+    
+    /// Check if username is available
     func isUsernameAvailable(username: String) async -> Bool {
         do {
-            let result: [[String: String]] = try await client
+            let existing: [AppUser] = try await client
                 .from("users")
                 .select("id")
                 .eq("username", value: username)
                 .limit(1)
                 .execute()
                 .value
-            return result.isEmpty
+            
+            return existing.isEmpty
         } catch {
-            print("Error checking username availability: \(error)")
-            return false // Assume not available on error
+            print("❌ Failed to check username availability: \(error)")
+            return false
+        }
+    }
+    
+    /// Get following users
+    func getFollowingUsers(for userID: String) async -> [AppUser] {
+        do {
+            // Need to implement proper join query or separate queries
+            // For now, return empty array until proper database schema is set up
+            return []
+        } catch {
+            print("❌ Failed to fetch following users: \(error)")
+            return []
+        }
+    }
+    
+    /// Fetch all users
+    func fetchAllUsers() async throws -> [AppUser] {
+        return try await client
+            .from("users")
+            .select("*")
+            .execute()
+            .value
+    }
+    
+    /// Update user location
+    func updateUserLocation(userID: String, latitude: Double, longitude: Double) async {
+        do {
+            _ = try await client
+                .from("users")
+                .update(["latitude": latitude, "longitude": longitude])
+                .eq("id", value: userID)
+                .execute()
+        } catch {
+            print("❌ Failed to update user location: \(error)")
+        }
+    }
+    
+    /// Fetch user profile
+    func fetchUserProfile(userID: String) async -> AppUser? {
+        do {
+            let user: AppUser = try await client
+                .from("users")
+                .select("*")
+                .eq("id", value: userID)
+                .single()
+                .execute()
+                .value
+            
+            return user
+        } catch {
+            print("❌ Failed to fetch user profile: \(error)")
+            return nil
+        }
+    }
+    
+    /// Update user profile
+    func updateUserProfile(userID: String, username: String, fullName: String, email: String, bio: String, avatarURL: String) async throws {
+        _ = try await client
+            .from("users")
+            .update([
+                "username": username,
+                "full_name": fullName,
+                "email": email,
+                "bio": bio,
+                "avatar_url": avatarURL
+            ])
+            .eq("id", value: userID)
+            .execute()
+    }
+    
+    /// Follow a user
+    func followUser(followingID: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            let follow = FollowDB(
+                follower_id: session.user.id.uuidString,
+                followed_id: followingID.uuidString,
+                created_at: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            _ = try await client
+                .from("follows")
+                .insert(follow)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to follow user: \(error)")
+            return false
+        }
+    }
+    
+    /// Unfollow a user
+    func unfollowUser(followingID: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            _ = try await client
+                .from("follows")
+                .delete()
+                .eq("follower_id", value: session.user.id.uuidString)
+                .eq("followed_id", value: followingID.uuidString)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to unfollow user: \(error)")
+            return false
+        }
+    }
+    
+    /// Check if following a user
+    func isFollowing(userID: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            let follows: [FollowDB] = try await client
+                .from("follows")
+                .select("*")
+                .eq("follower_id", value: session.user.id.uuidString)
+                .eq("followed_id", value: userID.uuidString)
+                .limit(1)
+                .execute()
+                .value
+            
+            return !follows.isEmpty
+        } catch {
+            print("❌ Failed to check follow status: \(error)")
+            return false
+        }
+    }
+    
+    /// Toggle follow status for a user by their string ID, returning true if now following.
+    func toggleFollowForUser(with userID: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+
+        guard let targetUUID = UUID(uuidString: userID) else { return false }
+
+        let isCurrentlyFollowing = await isFollowing(userID: targetUUID)
+
+        if isCurrentlyFollowing {
+            return await unfollowUser(followingID: targetUUID)
+        } else {
+            return await followUser(followingID: targetUUID)
+        }
+    }
+    
+    /// Check if a follow request has been sent to a user
+    func hasFollowRequestSent(to userID: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            // For now, return false since we don't have a follow_requests table
+            // This would need to be implemented when the follow request system is added
+            return false
+        } catch {
+            print("❌ Failed to check follow request status: \(error)")
+            return false
+        }
+    }
+    
+    /// Get followers for a user
+    func getFollowers(for userID: String) async throws -> [AppUser] {
+        do {
+            // Get the follow relationships where the target user is being followed
+            let follows: [FollowDB] = try await client
+                .from("follows")
+                .select("follower_id")
+                .eq("followed_id", value: userID)
+                .execute()
+                .value
+            
+            let followerIds = follows.map { $0.follower_id }
+            if followerIds.isEmpty { return [] }
+            
+            // Get the user details for all followers
+            let followers: [AppUser] = try await client
+                .from("users")
+                .select("*")
+                .in("id", value: followerIds)
+                .execute()
+                .value
+            
+            return followers
+        } catch {
+            print("❌ Failed to fetch followers: \(error)")
+            return []
         }
     }
 }
 
-import CryptoKit
+// MARK: - Apple Sign In Crypto Helper Extension
 
 extension SupabaseManager {
     func generateNonce(length: Int = 32) -> String {
@@ -452,142 +595,5 @@ extension SupabaseManager {
         let inputData = Data(input.utf8)
         let hashed = SHA256.hash(data: inputData)
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
-    }
-
-    
-    
-    // MARK: - Follow Logic
-
-    func followUser(followingID: UUID) async -> Bool {
-        guard let session = try? await client.auth.session else { return false }
-        let followerID = session.user.id
-
-        do {
-            let rpcResponse: PostgrestResponse<Void> = try await client
-                .rpc("rpc_follow_and_notify", params: [
-                    "p_follower": followerID.uuidString,
-                    "p_following": followingID.uuidString
-                ])
-                .execute()
-
-            print("🚀 rpc_follow_and_notify response:", rpcResponse)
-            return true
-        } catch {
-            print("❌ rpc_follow_and_notify failed:", error)
-            return false
-        }
-    }
-
-    func unfollowUser(followingID: UUID) async -> Bool {
-        guard let session = try? await client.auth.session else { return false }
-        let followerID = session.user.id
-
-        let result = try? await client
-            .from("follows")
-            .delete()
-            .eq("follower_id", value: followerID.uuidString)
-            .eq("following_id", value: followingID.uuidString)
-            .execute()
-
-        return result != nil
-    }
-
-    func getFollowers(of userID: UUID) async -> [UUID] {
-        let result = try? await client
-            .from("follows")
-            .select("follower_id")
-            .eq("following_id", value: userID.uuidString)
-            .execute()
-
-        guard let rows = result?.value as? [[String: Any]] else { return [] }
-        return rows.compactMap { UUID(uuidString: $0["follower_id"] as? String ?? "") }
-    }
-
-    func getFollowing(for userID: UUID) async -> [UUID] {
-        let result = try? await client
-            .from("follows")
-            .select("following_id")
-            .eq("follower_id", value: userID.uuidString)
-            .execute()
-
-        guard let rows = result?.value as? [[String: Any]] else { return [] }
-        return rows.compactMap { UUID(uuidString: $0["following_id"] as? String ?? "") }
-    }
-
-    func isFollowing(userID: UUID) async -> Bool {
-        guard let session = try? await client.auth.session else { return false }
-        let followerID = session.user.id
-
-        let result = try? await client
-            .from("follows")
-            .select("id")
-            .eq("follower_id", value: followerID.uuidString)
-            .eq("following_id", value: userID.uuidString)
-            .limit(1)
-            .execute()
-
-        guard let rows = result?.value as? [[String: Any]] else { return false }
-        return !rows.isEmpty
-    }
-    
-    /// Toggles follow status for a user by their string ID, returning true if now following.
-    func toggleFollowStatus(targetUserID: String) async -> Bool {
-        guard let uuid = UUID(uuidString: targetUserID) else { return false }
-        if await isFollowing(userID: uuid) {
-            // Currently following, so unfollow
-            let didUnfollow = await unfollowUser(followingID: uuid)
-            return !didUnfollow
-        } else {
-            // Not following yet, so follow
-            let didFollow = await followUser(followingID: uuid)
-            return didFollow
-        }
-    }
-    
-    func uploadProfileImage(_ imageData: Data, for userID: String) async throws -> URL {
-        let fileName = "\(userID)-avatar.jpg"
-        print("Uploading profile image with fileName: \(fileName)")
-
-        let session = try await client.auth.session
-        let currentUserID = session.user.id.uuidString
-        print("Current authenticated user ID: \(currentUserID)")
-        print("Target user ID for upload: \(userID)")
-
-        let uploadOptions = FileOptions(
-            contentType: "image/jpeg",
-            upsert: true,
-            metadata: ["owner": AnyJSON.string(currentUserID)]
-        )
-        print("Upload options: \(uploadOptions)")
-        print("🔍 Uploading avatar with fileName:", fileName)
-        print("🔍 Upload options metadata:", uploadOptions.metadata!)
-
-        do {
-            let uploadResponse = try await client.storage
-                .from("profile-images")
-                .upload(
-                    fileName,
-                    data: imageData,
-                    options: uploadOptions
-                )
-            print("✅ Upload succeeded:", uploadResponse)
-        } catch let storageError as StorageError {
-            print("❌ StorageError uploading avatar - statusCode:", storageError.statusCode ?? "nil",
-                  "message:", storageError.message ?? "nil",
-                  "error:", storageError.error ?? "nil")
-            throw storageError
-        } catch {
-            print("❌ Unexpected error uploading avatar:", error)
-            throw error
-        }
-
-        // Build public URL
-        let urlString = "https://rthgzxorsccgeztwaxnt.supabase.co/storage/v1/object/public/profile-images/\(fileName)"
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
-        }
-
-        print("Generated public URL: \(url)")
-        return url
     }
 }
