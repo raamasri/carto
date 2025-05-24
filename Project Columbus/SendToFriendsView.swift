@@ -9,6 +9,11 @@ import SwiftUI
 import MapKit
 import Foundation
 
+// Explicit references to ensure types are available
+typealias ProjectPin = Pin
+typealias ProjectAppUser = AppUser
+typealias ProjectAuthManager = AuthManager
+
 struct SendToFriendsView: View {
     let pin: Pin
     let followingUsers: [AppUser]
