@@ -290,10 +290,17 @@ struct UserProfileView: View {
                                 .padding(.trailing, 30)
                             }
                         } else if selectedSection == "My Lists" {
-                            ListsView()
-                                .environmentObject(pinStore)
-                                .environmentObject(authManager)
-                                .padding(.top, 8)
+                            UserListsView(
+                                userID: profileUser.id,
+                                isCurrentUser: profileUser.isCurrentUser ?? false
+                            )
+                            .padding(.top, 8)
+                            .onAppear {
+                                print("🔍 UserProfileView: Creating UserListsView with:")
+                                print("  - profileUser.id: \(profileUser.id)")
+                                print("  - profileUser.isCurrentUser: \(String(describing: profileUser.isCurrentUser))")
+                                print("  - final isCurrentUser value: \(profileUser.isCurrentUser ?? false)")
+                            }
                         }
                     }
                 }
@@ -751,5 +758,218 @@ struct FullscreenMapView: View {
             .padding(.top, 60) // Account for status bar and notch
             .padding(.trailing, 20)
         }
+    }
+}
+
+struct UserListsView: View {
+    let userID: String
+    let isCurrentUser: Bool
+    @State private var userLists: [PinList] = []
+    @State private var isLoading = false
+    @State private var searchText = ""
+    
+    // Deduplicate lists by name (case-insensitive)
+    var filteredLists: [PinList] {
+        print("🎯 filteredLists: Starting with \(userLists.count) lists")
+        let sorted = userLists.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        print("🎯 filteredLists: After sorting: \(sorted.count) lists")
+        var seen = Set<String>()
+        let deduped = sorted.filter { list in
+            let lower = list.name.lowercased()
+            if seen.contains(lower) { 
+                print("🎯 filteredLists: Filtering out duplicate '\(list.name)'")
+                return false 
+            }
+            seen.insert(lower)
+            print("🎯 filteredLists: Keeping '\(list.name)'")
+            return true
+        }
+        print("🎯 filteredLists: After deduplication: \(deduped.count) lists")
+        
+        if searchText.isEmpty {
+            print("🎯 filteredLists: No search text, returning \(deduped.count) lists")
+            return deduped
+        } else {
+            let filtered = deduped.filter { 
+                $0.name.localizedCaseInsensitiveContains(searchText) 
+            }
+            print("🎯 filteredLists: After search filtering: \(filtered.count) lists")
+            return filtered
+        }
+    }
+    
+    var body: some View {
+        let _ = print("🖼️ UserListsView body rendering - isLoading: \(isLoading), filteredLists.count: \(filteredLists.count), userLists.count: \(userLists.count)")
+        return VStack {
+            // Search bar (only for current user)
+            if isCurrentUser {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search lists...", text: $searchText)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding(.horizontal)
+            }
+            
+            if isLoading {
+                let _ = print("🔄 Showing loading state")
+                VStack {
+                    ProgressView("Loading lists...")
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredLists.isEmpty {
+                let _ = print("📂 Showing empty state")
+                VStack(spacing: 20) {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                    
+                    Text(isCurrentUser ? "No Lists Yet" : "No Public Lists")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text(isCurrentUser ? "Start organizing your pins by creating lists!" : "This user hasn't created any public lists yet.")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                let _ = print("📋 Showing list state with \(filteredLists.count) lists")
+                List {
+                    ForEach(filteredLists, id: \.id) { list in
+                        NavigationLink(destination: ListDetailView(list: list)) {
+                            UserListRowView(list: list)
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .ignoresSafeArea(.container, edges: .bottom)
+                .refreshable {
+                    await loadUserLists()
+                }
+                .onAppear {
+                    print("📱 List view appeared with \(filteredLists.count) filtered lists")
+                    for list in filteredLists {
+                        print("  📋 \(list.name) (\(list.pins.count) pins)")
+                    }
+                }
+            }
+        }
+        .onAppear {
+            Task {
+                await loadUserLists()
+            }
+        }
+    }
+    
+    private func loadUserLists() async {
+        isLoading = true
+        print("🔄 UserListsView: Loading lists for userID: \(userID), isCurrentUser: \(isCurrentUser)")
+        let lists: [PinList]
+        if isCurrentUser {
+            // For current user, use the authenticated method
+            print("📱 Using authenticated getUserLists() for current user")
+            lists = await SupabaseManager.shared.getUserLists()
+        } else {
+            // For other users, use the method that takes a user ID
+            print("👤 Using getUserLists(for:) for user: \(userID)")
+            lists = await SupabaseManager.shared.getUserLists(for: userID)
+        }
+        print("📊 UserListsView: Retrieved \(lists.count) lists")
+        for list in lists {
+            print("  - \(list.name) (\(list.pins.count) pins)")
+        }
+        await MainActor.run {
+            userLists = lists
+            isLoading = false
+        }
+    }
+}
+
+struct UserListRowView: View {
+    let list: PinList
+    
+    var body: some View {
+        HStack {
+            // List icon with notification dots overlay
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(colorForCollection(list.name))
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Image(systemName: iconForCollection(list.name))
+                            .foregroundColor(.white)
+                            .font(.title2)
+                    )
+                
+                // Notification dots on top corner of icon
+                if !list.pins.isEmpty {
+                    HStack(spacing: 2) {
+                        ForEach(Array(list.pins.prefix(3)), id: \.id) { pin in
+                            Circle()
+                                .fill(pin.reaction == .lovedIt ? .red : .blue)
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+                    .offset(x: 5, y: -5) // Position on top corner
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(list.name)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Text("\(list.pins.count) pin\(list.pins.count == 1 ? "" : "s")")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                if !list.pins.isEmpty {
+                    Text("Latest: \(list.pins.first?.locationName ?? "")")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer()
+            
+            // Just the arrow now
+            if !list.pins.isEmpty {
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.gray)
+                    .font(.caption)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+// Helper functions for UserListRowView
+private func iconForCollection(_ name: String) -> String {
+    switch name.lowercased() {
+    case "favorites": return "heart.fill"
+    case "coffee shops": return "cup.and.saucer.fill"
+    case "restaurants": return "fork.knife"
+    case "bars": return "wineglass.fill"
+    case "shopping": return "bag.fill"
+    default: return "folder.fill"
+    }
+}
+
+private func colorForCollection(_ name: String) -> Color {
+    switch name.lowercased() {
+    case "favorites": return .red
+    case "coffee shops": return .brown
+    case "restaurants": return .orange
+    case "bars": return .purple
+    case "shopping": return .pink
+    default: return .blue
     }
 }

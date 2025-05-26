@@ -120,6 +120,32 @@ class SupabaseManager: ObservableObject {
         }
     }
     
+    /// Fetches all lists for a specific user
+    func getUserLists(for userID: String) async -> [PinList] {
+        do {
+            let listsDB: [ListDB] = try await client
+                .from("lists")
+                .select("*")
+                .eq("user_id", value: userID)
+                .execute()
+                .value
+            
+            var lists: [PinList] = []
+            
+            // Fetch pins for each list
+            for listDB in listsDB {
+                let pins = await getPinsForList(listId: listDB.id)
+                let list = listDB.toPinList(pins: pins)
+                lists.append(list)
+            }
+            
+            return lists
+        } catch {
+            print("❌ Failed to fetch lists for user \(userID): \(error)")
+            return []
+        }
+    }
+    
     /// Deletes a list
     func deleteList(listId: String) async -> Bool {
         guard let session = try? await client.auth.session else { return false }
