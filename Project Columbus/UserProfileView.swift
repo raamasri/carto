@@ -48,6 +48,11 @@ struct UserProfileView: View {
     @State private var tempBio = ""
     @State private var hasRequestedFollow = false
     @State private var showFullscreenMap = false
+    @State private var showBlockReportSheet = false
+    @State private var showReportSheet = false
+    @State private var isBlocked = false
+    @State private var blockReportMessage = ""
+    @State private var showBlockReportAlert = false
     
     private var profileHeader: some View {
         HStack {
@@ -239,6 +244,27 @@ struct UserProfileView: View {
                                     print("❌ Full error details:", error.localizedDescription)
                                 }
                             }
+                        }
+                        
+                        // Block/Report Menu
+                        Menu {
+                            Button(action: {
+                                showBlockReportSheet = true
+                            }) {
+                                Label("Block User", systemImage: "hand.raised")
+                            }
+                            
+                            Button(action: {
+                                showReportSheet = true
+                            }) {
+                                Label("Report User", systemImage: "exclamationmark.triangle")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .foregroundColor(.primary)
+                                .padding(8)
+                                .background(Color(.systemGray6))
+                                .clipShape(Circle())
                         }
                     }
 
@@ -557,6 +583,12 @@ struct UserProfileView: View {
                     } else {
                         print("❌ Failed to convert profileUser.id to UUID:", profileUser.id)
                     }
+                    
+                    // Check if user is blocked
+                    let blocked = await SupabaseManager.shared.isUserBlocked(userID: profileUser.id)
+                    await MainActor.run {
+                        isBlocked = blocked
+                    }
                 } catch {
                     print("❌ Error checking follow request via helper:", error)
                 }
@@ -571,6 +603,66 @@ struct UserProfileView: View {
                 pins: pinStore.masterPins,
                 isPresented: $showFullscreenMap
             )
+        }
+        .sheet(isPresented: $showBlockReportSheet) {
+            BlockUserSheet(
+                user: profileUser,
+                isBlocked: $isBlocked,
+                onBlock: { reason in
+                    Task {
+                        let success = await SupabaseManager.shared.blockUser(userID: profileUser.id, reason: reason)
+                        await MainActor.run {
+                            if success {
+                                isBlocked = true
+                                blockReportMessage = "User blocked successfully"
+                                showBlockReportAlert = true
+                            } else {
+                                blockReportMessage = "Failed to block user"
+                                showBlockReportAlert = true
+                            }
+                        }
+                    }
+                },
+                onUnblock: {
+                    Task {
+                        let success = await SupabaseManager.shared.unblockUser(userID: profileUser.id)
+                        await MainActor.run {
+                            if success {
+                                isBlocked = false
+                                blockReportMessage = "User unblocked successfully"
+                                showBlockReportAlert = true
+                            } else {
+                                blockReportMessage = "Failed to unblock user"
+                                showBlockReportAlert = true
+                            }
+                        }
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showReportSheet) {
+            ReportUserSheet(
+                user: profileUser,
+                onReport: { reason in
+                    Task {
+                        let success = await SupabaseManager.shared.reportUser(userID: profileUser.id, reason: reason)
+                        await MainActor.run {
+                            if success {
+                                blockReportMessage = "User reported successfully"
+                                showBlockReportAlert = true
+                            } else {
+                                blockReportMessage = "Failed to report user"
+                                showBlockReportAlert = true
+                            }
+                        }
+                    }
+                }
+            )
+        }
+        .alert("Block/Report Status", isPresented: $showBlockReportAlert) {
+            Button("OK") { }
+        } message: {
+            Text(blockReportMessage)
         }
     }
 }
@@ -716,6 +808,192 @@ struct FollowButton: View {
                 .cornerRadius(8)
         }
         .padding(.horizontal)
+    }
+}
+
+struct BlockUserSheet: View {
+    let user: AppUser
+    @Binding var isBlocked: Bool
+    let onBlock: (String?) -> Void
+    let onUnblock: () -> Void
+    
+    @State private var blockReason = ""
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                VStack(spacing: 16) {
+                    Image(systemName: isBlocked ? "hand.raised.slash" : "hand.raised")
+                        .font(.system(size: 50))
+                        .foregroundColor(isBlocked ? .orange : .red)
+                    
+                    Text(isBlocked ? "Unblock @\(user.username)?" : "Block @\(user.username)?")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    if isBlocked {
+                        Text("You will see their content again and they can message you.")
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("You won't see their content and they won't be able to message you.")
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Reason (optional)")
+                                .font(.headline)
+                            TextField("Why are you blocking this user?", text: $blockReason, axis: .vertical)
+                                .textFieldStyle(.roundedBorder)
+                                .lineLimit(3...6)
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                VStack(spacing: 12) {
+                    Button(action: {
+                        if isBlocked {
+                            onUnblock()
+                        } else {
+                            onBlock(blockReason.isEmpty ? nil : blockReason)
+                        }
+                        dismiss()
+                    }) {
+                        Text(isBlocked ? "Unblock User" : "Block User")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(isBlocked ? Color.orange : Color.red)
+                            .cornerRadius(12)
+                    }
+                    
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(.secondary)
+                }
+            }
+            .padding()
+            .navigationTitle(isBlocked ? "Unblock User" : "Block User")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ReportUserSheet: View {
+    let user: AppUser
+    let onReport: (String) -> Void
+    
+    @State private var selectedReason = "Inappropriate content"
+    @State private var customReason = ""
+    @State private var showCustomReason = false
+    @Environment(\.dismiss) private var dismiss
+    
+    private let reportReasons = [
+        "Inappropriate content",
+        "Harassment or bullying",
+        "Spam or fake account",
+        "Hate speech",
+        "Violence or dangerous behavior",
+        "Intellectual property violation",
+        "Other"
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 50))
+                        .foregroundColor(.orange)
+                    
+                    Text("Report @\(user.username)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Text("Help us understand what's happening. Your report is anonymous.")
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                }
+                
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("What's the issue?")
+                        .font(.headline)
+                    
+                    ForEach(reportReasons, id: \.self) { reason in
+                        Button(action: {
+                            selectedReason = reason
+                            showCustomReason = (reason == "Other")
+                        }) {
+                            HStack {
+                                Image(systemName: selectedReason == reason ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(selectedReason == reason ? .blue : .gray)
+                                Text(reason)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    }
+                    
+                    if showCustomReason {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Please specify")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            TextField("Describe the issue...", text: $customReason, axis: .vertical)
+                                .textFieldStyle(.roundedBorder)
+                                .lineLimit(3...6)
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                VStack(spacing: 12) {
+                    Button(action: {
+                        let reason = showCustomReason && !customReason.isEmpty ? customReason : selectedReason
+                        onReport(reason)
+                        dismiss()
+                    }) {
+                        Text("Submit Report")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red)
+                            .cornerRadius(12)
+                    }
+                    .disabled(showCustomReason && customReason.isEmpty)
+                    
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(.secondary)
+                }
+            }
+            .padding()
+            .navigationTitle("Report User")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 

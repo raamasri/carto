@@ -441,7 +441,7 @@ class SupabaseManager: ObservableObject {
         }
     }
     
-    /// Fetch all users
+    /// Fetch all users (excluding blocked users)
     func fetchAllUsers() async throws -> [AppUser] {
         guard let session = try? await client.auth.session else {
             throw NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
@@ -453,7 +453,13 @@ class SupabaseManager: ObservableObject {
             .execute()
             .value
         
-        return basicUsers.map { $0.toAppUser(currentUserID: session.user.id.uuidString) }
+        // Filter out blocked users
+        let blockedUsers = await getBlockedUsers()
+        let blockedIds = Set(blockedUsers.map { $0.id })
+        
+        return basicUsers
+            .filter { !blockedIds.contains($0.id) }
+            .map { $0.toAppUser(currentUserID: session.user.id.uuidString) }
     }
     
     /// Update user location
@@ -585,9 +591,23 @@ class SupabaseManager: ObservableObject {
         guard let session = try? await client.auth.session else { return false }
         
         do {
-            // For now, return false since we don't have a follow_requests table
-            // This would need to be implemented when the follow request system is added
-            return false
+            // Check if there's an active follow request notification
+            struct NotificationCheck: Codable {
+                let id: String
+            }
+            
+            let notifications: [NotificationCheck] = try await client
+                .from("notifications")
+                .select("id")
+                .eq("user_id", value: userID.uuidString)
+                .eq("from_user_id", value: session.user.id.uuidString)
+                .eq("type", value: "follow_request")
+                .eq("is_read", value: false)
+                .limit(1)
+                .execute()
+                .value
+            
+            return !notifications.isEmpty
         } catch {
             print("❌ Failed to check follow request status: \(error)")
             return false
@@ -830,6 +850,141 @@ class SupabaseManager: ObservableObject {
         } catch {
             print("❌ Failed to get unread notification count: \(error)")
             return 0
+        }
+    }
+    
+    // MARK: - User Blocking & Reporting
+    
+    /// Block a user
+    func blockUser(userID: String, reason: String? = nil) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            struct BlockData: Codable {
+                let blocker_id: String
+                let blocked_id: String
+                let reason: String?
+                let block_type: String
+            }
+            
+            let blockData = BlockData(
+                blocker_id: session.user.id.uuidString,
+                blocked_id: userID,
+                reason: reason,
+                block_type: "block"
+            )
+            
+            _ = try await client
+                .from("user_blocks")
+                .insert(blockData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to block user: \(error)")
+            return false
+        }
+    }
+    
+    /// Report a user
+    func reportUser(userID: String, reason: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            struct ReportData: Codable {
+                let blocker_id: String
+                let blocked_id: String
+                let reason: String
+                let block_type: String
+            }
+            
+            let reportData = ReportData(
+                blocker_id: session.user.id.uuidString,
+                blocked_id: userID,
+                reason: reason,
+                block_type: "report"
+            )
+            
+            _ = try await client
+                .from("user_blocks")
+                .insert(reportData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to report user: \(error)")
+            return false
+        }
+    }
+    
+    /// Unblock a user
+    func unblockUser(userID: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            _ = try await client
+                .from("user_blocks")
+                .delete()
+                .eq("blocker_id", value: session.user.id.uuidString)
+                .eq("blocked_id", value: userID)
+                .eq("block_type", value: "block")
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to unblock user: \(error)")
+            return false
+        }
+    }
+    
+    /// Check if a user is blocked
+    func isUserBlocked(userID: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            struct BlockCheck: Codable {
+                let id: String
+            }
+            
+            let blocks: [BlockCheck] = try await client
+                .from("user_blocks")
+                .select("id")
+                .eq("blocker_id", value: session.user.id.uuidString)
+                .eq("blocked_id", value: userID)
+                .eq("block_type", value: "block")
+                .limit(1)
+                .execute()
+                .value
+            
+            return !blocks.isEmpty
+        } catch {
+            print("❌ Failed to check block status: \(error)")
+            return false
+        }
+    }
+    
+    /// Get blocked users
+    func getBlockedUsers() async -> [AppUser] {
+        guard let session = try? await client.auth.session else { return [] }
+        
+        do {
+            struct BlockedUserData: Codable {
+                let blocked_id: String
+                let users: BasicUser
+            }
+            
+            let blockedData: [BlockedUserData] = try await client
+                .from("user_blocks")
+                .select("blocked_id, users!user_blocks_blocked_id_fkey(id, username, full_name, email, bio, latitude, longitude, avatar_url)")
+                .eq("blocker_id", value: session.user.id.uuidString)
+                .eq("block_type", value: "block")
+                .execute()
+                .value
+            
+            return blockedData.map { $0.users.toAppUser() }
+        } catch {
+            print("❌ Failed to fetch blocked users: \(error)")
+            return []
         }
     }
     

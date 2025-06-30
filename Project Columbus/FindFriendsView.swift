@@ -186,6 +186,10 @@ struct FindFriendsView: View {
     @State private var isEditing: Bool = false
     @State private var allUsers: [AppUser] = []
     @State private var searchText: String = ""
+    @State private var recommendedUsers: [AppUser] = []
+    @State private var nearbyUsers: [AppUser] = []
+    @State private var mutualFriendUsers: [AppUser] = []
+    @State private var isLoadingRecommendations = false
 
     var filteredUsers: [AppUser] {
         guard isEditing else { return [] }
@@ -227,11 +231,13 @@ struct FindFriendsView: View {
                         let users = try await SupabaseManager.shared.fetchAllUsers()
                         allUsers = users
                         print("FindFriendsView: fetched allUsers (\(allUsers.count)):", allUsers)
+                        
+                        // Load recommendations
+                        await loadRecommendations()
                     } catch {
                         print("Error fetching users: \(error)")
                     }
                 }
-                
                 .overlay(alignment: .top) {
                     ZStack(alignment: .top) {
                         VStack(spacing: 0) {
@@ -259,6 +265,63 @@ struct FindFriendsView: View {
                                         }
                                     }
                                     .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .background(.ultraThinMaterial)
+                                .cornerRadius(20)
+                                .padding(.horizontal)
+                            } else if !isEditing && searchText.isEmpty {
+                                // Show recommendations when not searching
+                                ZStack {
+                                    ScrollView {
+                                        VStack(spacing: 20) {
+                                            if !nearbyUsers.isEmpty {
+                                                RecommendationSection(
+                                                    title: "People Nearby",
+                                                    subtitle: "Based on your location",
+                                                    users: nearbyUsers,
+                                                    onUserTap: { user in
+                                                        selectedUser = user
+                                                        showProfile = true
+                                                    }
+                                                )
+                                            }
+                                            
+                                            if !mutualFriendUsers.isEmpty {
+                                                RecommendationSection(
+                                                    title: "Mutual Friends",
+                                                    subtitle: "People you might know",
+                                                    users: mutualFriendUsers,
+                                                    onUserTap: { user in
+                                                        selectedUser = user
+                                                        showProfile = true
+                                                    }
+                                                )
+                                            }
+                                            
+                                            if !recommendedUsers.isEmpty {
+                                                RecommendationSection(
+                                                    title: "Suggested for You",
+                                                    subtitle: "Based on your activity",
+                                                    users: recommendedUsers,
+                                                    onUserTap: { user in
+                                                        selectedUser = user
+                                                        showProfile = true
+                                                    }
+                                                )
+                                            }
+                                            
+                                            if isLoadingRecommendations {
+                                                VStack(spacing: 12) {
+                                                    ProgressView()
+                                                    Text("Finding people you might know...")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                .padding()
+                                            }
+                                        }
+                                        .padding(.top, 20)
+                                    }
                                 }
                                 .background(.ultraThinMaterial)
                                 .cornerRadius(20)
@@ -299,5 +362,131 @@ struct FindFriendsView: View {
                 }
             }
         }
+    }
+    
+    private func loadRecommendations() async {
+        guard let currentUserID = authManager.currentUserID,
+              let currentLocation = locationManager.currentLocation else { return }
+        
+        isLoadingRecommendations = true
+        defer { isLoadingRecommendations = false }
+        
+        // Filter out current user and blocked users
+        let availableUsers = allUsers.filter { user in
+            user.id != currentUserID && !user.isCurrentUser
+        }
+        
+        // 1. Nearby Users (within 50km)
+        let nearby = availableUsers.filter { user in
+            guard let userLat = user.latitude, let userLng = user.longitude else { return false }
+            let userLocation = CLLocation(latitude: userLat, longitude: userLng)
+            let distance = currentLocation.distance(from: userLocation)
+            return distance <= 50000 // 50km in meters
+        }.sorted { user1, user2 in
+            guard let lat1 = user1.latitude, let lng1 = user1.longitude,
+                  let lat2 = user2.latitude, let lng2 = user2.longitude else { return false }
+            let loc1 = CLLocation(latitude: lat1, longitude: lng1)
+            let loc2 = CLLocation(latitude: lat2, longitude: lng2)
+            return currentLocation.distance(from: loc1) < currentLocation.distance(from: loc2)
+        }.prefix(5)
+        
+        // 2. Mutual Friends (users who follow people you follow)
+        let followingUsers = await SupabaseManager.shared.getFollowingUsers(for: currentUserID)
+        let followingIds = Set(followingUsers.map { $0.id })
+        
+        var mutualFriendCounts: [String: Int] = [:]
+        for followingUser in followingUsers {
+            let theirFollowing = await SupabaseManager.shared.getFollowingUsers(for: followingUser.id)
+            for mutual in theirFollowing {
+                if !followingIds.contains(mutual.id) && mutual.id != currentUserID {
+                    mutualFriendCounts[mutual.id, default: 0] += 1
+                }
+            }
+        }
+        
+        let mutual = availableUsers.filter { user in
+            mutualFriendCounts[user.id] != nil
+        }.sorted { user1, user2 in
+            mutualFriendCounts[user1.id, default: 0] > mutualFriendCounts[user2.id, default: 0]
+        }.prefix(5)
+        
+        // 3. Activity-based recommendations (users with similar pin activity)
+        let recommended = availableUsers.filter { user in
+            !nearby.contains(where: { $0.id == user.id }) &&
+            !mutual.contains(where: { $0.id == user.id })
+        }.shuffled().prefix(5)
+        
+        await MainActor.run {
+            nearbyUsers = Array(nearby)
+            mutualFriendUsers = Array(mutual)
+            recommendedUsers = Array(recommended)
+        }
+    }
+}
+
+struct RecommendationSection: View {
+    let title: String
+    let subtitle: String
+    let users: [AppUser]
+    let onUserTap: (AppUser) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(users) { user in
+                        Button(action: {
+                            onUserTap(user)
+                        }) {
+                            VStack(spacing: 8) {
+                                if let avatarURL = user.avatarURL, !avatarURL.isEmpty,
+                                   let url = URL(string: avatarURL) {
+                                    AsyncImage(url: url) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(Color.gray.opacity(0.3))
+                                    }
+                                    .frame(width: 60, height: 60)
+                                    .clipShape(Circle())
+                                } else {
+                                    Image(systemName: "person.circle.fill")
+                                        .font(.system(size: 60))
+                                        .foregroundColor(.gray)
+                                }
+                                
+                                VStack(spacing: 2) {
+                                    Text(user.username)
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .lineLimit(1)
+                                    if !user.full_name.isEmpty {
+                                        Text(user.full_name)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
+                            .frame(width: 80)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+        .padding(.horizontal)
     }
 }

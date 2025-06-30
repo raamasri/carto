@@ -194,8 +194,8 @@ struct LiveFeedView: View {
                             fetchFollowingUsersIfNeeded()
                         }
                     default:
-                        // For You Tab
-                        List(pinStore.masterPins.reversed()) { pin in
+                        // For You Tab - Smart algorithm
+                        List(getRecommendedPins().reversed()) { pin in
                             NavigationLink(
                                 destination: LocationDetailView(
                                     mapItem: pin.toMapItem(),
@@ -370,6 +370,61 @@ struct LiveFeedView: View {
                 isLoadingFollowing = false
             }
         }
+    }
+    
+    /// Smart recommendation algorithm for "For You" feed
+    func getRecommendedPins() -> [Pin] {
+        guard authManager.isLoggedIn else { return pinStore.masterPins }
+        
+        let currentUsername = authManager.currentUsername ?? ""
+        let allPins = pinStore.masterPins
+        
+        // Score each pin based on multiple factors
+        let scoredPins = allPins.map { pin -> (Pin, Double) in
+            var score: Double = 0.0
+            
+            // 1. Recency score (newer pins get higher scores)
+            let pinDate = pin.createdAt ?? Date()
+            let daysSinceCreated = Date().timeIntervalSince(pinDate) / (24 * 60 * 60)
+            let recencyScore = max(0, 10 - daysSinceCreated) // Decays over 10 days
+            score += recencyScore * 0.3
+            
+            // 2. Following score (pins from people you follow get higher scores)
+            if followingUsers.contains(where: { pin.authorHandle.contains($0.username) }) {
+                score += 15.0
+            }
+            
+            // 3. Star rating score (higher rated places get preference)
+            if let starRating = pin.starRating {
+                score += starRating * 2.0 // 0-10 points from star rating
+            }
+            
+            // 4. Interaction score (pins with reviews/reactions get bonus)
+            if let reviewText = pin.reviewText, !reviewText.isEmpty {
+                score += 5.0
+            }
+            // All pins have reactions, so give a small bonus for engagement
+            score += 2.0
+            
+            // 5. Location relevance (if user has location, prefer nearby pins)
+            // This would require user location data which we don't have readily available
+            
+            // 6. Diversity penalty (avoid showing too many pins from same author)
+            let authorPinCount = allPins.filter { $0.authorHandle == pin.authorHandle }.count
+            if authorPinCount > 3 {
+                score -= Double(authorPinCount - 3) * 1.0
+            }
+            
+            // 7. Random factor for discovery (small random boost)
+            score += Double.random(in: 0...2)
+            
+            return (pin, score)
+        }
+        
+        // Sort by score and return the pins
+        return scoredPins
+            .sorted { $0.1 > $1.1 } // Sort by score descending
+            .map { $0.0 } // Extract just the pins
     }
 }
 
