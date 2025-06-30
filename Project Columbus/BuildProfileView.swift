@@ -12,7 +12,18 @@ struct BuildProfileView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.presentationMode) var presentationMode
 
-    @State private var username: String = ""
+    // Enhanced validation using ValidationManager infrastructure
+    @StateObject private var usernameValidator = FieldValidator(rules: [
+        RequiredRule(fieldName: "Username"),
+        UsernameRule()
+    ], validateOnChange: true)
+    
+    @StateObject private var bioValidator = FieldValidator(rules: [
+        MaxLengthRule(maxLength: 150, fieldName: "Bio")
+    ])
+    
+    @StateObject private var errorManager = ErrorManager()
+    
     @State private var bio: String = ""
     @State private var selectedInterests: Set<String> = []
     @State private var profileImage: Image? = nil
@@ -20,12 +31,10 @@ struct BuildProfileView: View {
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var profileImageData: Data? = nil
     
-    // Validation and UI states
+    // UI states
     @State private var isValidatingUsername = false
     @State private var isUsernameAvailable: Bool? = nil
-    @State private var usernameError: String? = nil
     @State private var isSaving = false
-    @State private var saveError: String? = nil
     @State private var isUploadingAvatar = false
 
     let interests = ["Food", "Travel", "Nature", "Art", "Sports", "History"]
@@ -83,16 +92,27 @@ struct BuildProfileView: View {
                         }
                     }
 
-                    // Username field with validation
+                    // Username field with enhanced validation
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            TextField("Username", text: $username)
-                                .padding()
-                                .background(Color.white)
-                                .cornerRadius(8)
-                                .onChange(of: username) { _, newValue in
-                                    validateUsername(newValue)
+                            VStack(alignment: .leading, spacing: 4) {
+                                TextField("Username", text: $usernameValidator.value)
+                                    .padding()
+                                    .background(Color.white)
+                                    .cornerRadius(8)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled(true)
+                                    .onChange(of: usernameValidator.value) { _, newValue in
+                                        validateUsernameAvailability(newValue)
+                                    }
+                                
+                                // Show validation errors from ValidationManager
+                                if let errorMessage = usernameValidator.errorMessage, usernameValidator.hasBeenValidated {
+                                    Text(errorMessage)
+                                        .font(.caption)
+                                        .foregroundColor(.red)
                                 }
+                            }
                             
                             if isValidatingUsername {
                                 ProgressView()
@@ -104,21 +124,29 @@ struct BuildProfileView: View {
                             }
                         }
                         
-                        if let error = usernameError {
-                            Text(error)
-                                .foregroundColor(.red)
-                                .font(.caption)
-                        } else if let isAvailable = isUsernameAvailable {
+                        // Show availability status
+                        if let isAvailable = isUsernameAvailable, usernameValidator.validationResult.isValid {
                             Text(isAvailable ? "Username is available" : "Username is taken")
                                 .foregroundColor(isAvailable ? .green : .red)
                                 .font(.caption)
                         }
                     }
 
-                    TextField("Bio (optional)", text: $bio)
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(8)
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextField("Bio (optional)", text: $bioValidator.value)
+                            .padding()
+                            .background(Color.white)
+                            .cornerRadius(8)
+                            .onChange(of: bioValidator.value) { _, _ in
+                                bioValidator.validate()
+                            }
+                        
+                        if let errorMessage = bioValidator.errorMessage, bioValidator.hasBeenValidated {
+                            Text(errorMessage)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                    }
 
                     Text("Select Your Interests")
                         .foregroundColor(.white)
@@ -142,39 +170,17 @@ struct BuildProfileView: View {
                         }
                     }
 
-                    // Error message
-                    if let error = saveError {
-                        Text(error)
-                            .foregroundColor(.red)
+                    AsyncButton(action: {
+                        try await saveProfile()
+                    }) {
+                        Text("Finish")
+                            .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.red.opacity(0.1))
-                            .cornerRadius(8)
                     }
-
-                    Button("Finish") {
-                        Task {
-                            await saveProfile()
-                        }
-                    }
-                    .disabled(isSaving || !isValidInput)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(isValidInput && !isSaving ? Color.white : Color.gray)
+                    .disabled(!isValidInput)
+                    .background(isValidInput ? Color.white : Color.gray)
                     .foregroundColor(.black)
                     .cornerRadius(12)
-                    .overlay(
-                        Group {
-                            if isSaving {
-                                HStack {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .black))
-                                        .scaleEffect(0.7)
-                                    Text("Saving...")
-                                        .foregroundColor(.black)
-                                }
-                            }
-                        }
-                    )
                 }
                 .padding()
             }
@@ -184,47 +190,32 @@ struct BuildProfileView: View {
                 await loadSelectedPhoto(newItem)
             }
         }
+        .errorAlert(errorManager)
+        .environmentObject(errorManager)
     }
     
     // MARK: - Computed Properties
     
     private var isValidInput: Bool {
-        !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        isUsernameAvailable == true &&
-        usernameError == nil
+        usernameValidator.validationResult.isValid &&
+        bioValidator.validationResult.isValid &&
+        isUsernameAvailable == true
     }
     
     // MARK: - Username Validation
     
-    private func validateUsername(_ newUsername: String) {
+    private func validateUsernameAvailability(_ newUsername: String) {
         let trimmed = newUsername.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Reset states
-        usernameError = nil
+        // Reset availability state
         isUsernameAvailable = nil
         
-        // Basic validation
-        guard !trimmed.isEmpty else { return }
-        
-        // Check length
-        guard trimmed.count >= 3 else {
-            usernameError = "Username must be at least 3 characters"
-            return
+        // Only check availability if basic validation passes
+        guard usernameValidator.validationResult.isValid && !trimmed.isEmpty else { 
+            return 
         }
         
-        guard trimmed.count <= 20 else {
-            usernameError = "Username must be 20 characters or less"
-            return
-        }
-        
-        // Check format (alphanumeric and underscores only)
-        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
-        guard trimmed.unicodeScalars.allSatisfy({ allowedCharacters.contains($0) }) else {
-            usernameError = "Username can only contain letters, numbers, and underscores"
-            return
-        }
-        
-        // Check availability
+        // Check availability with Supabase
         checkUsernameAvailability(trimmed)
     }
     
@@ -259,77 +250,56 @@ struct BuildProfileView: View {
             }
         } catch {
             await MainActor.run {
-                self.saveError = "Failed to load selected image: \(error.localizedDescription)"
+                self.errorManager.handle(AppError.unknown("Failed to load selected image: \(error.localizedDescription)"))
             }
         }
     }
     
     // MARK: - Profile Save
     
-    private func saveProfile() async {
+    private func saveProfile() async throws {
         guard let session = try? await SupabaseManager.shared.client.auth.session else {
+            throw AppError.sessionExpired
+        }
+        
+        var avatarURL = ""
+        
+        // Upload avatar if selected
+        if let imageData = profileImageData {
             await MainActor.run {
-                self.saveError = "Authentication error. Please try logging in again."
+                self.isUploadingAvatar = true
             }
-            return
-        }
-        
-        await MainActor.run {
-            self.isSaving = true
-            self.saveError = nil
-        }
-        
-        do {
-            var avatarURL = ""
             
-            // Upload avatar if selected
-            if let imageData = profileImageData {
-                await MainActor.run {
-                    self.isUploadingAvatar = true
-                }
-                
-                do {
-                    avatarURL = try await SupabaseManager.shared.uploadProfileImage(imageData, for: session.user.id.uuidString)
-                    print("✅ Avatar uploaded successfully: \(avatarURL)")
-                } catch {
-                    print("❌ Avatar upload failed: \(error)")
-                    await MainActor.run {
-                        self.saveError = "Failed to upload profile image: \(error.localizedDescription)"
-                        self.isUploadingAvatar = false
-                        self.isSaving = false
-                    }
-                    return
-                }
-                
+            do {
+                avatarURL = try await SupabaseManager.shared.uploadProfileImage(imageData, for: session.user.id.uuidString)
+                print("✅ Avatar uploaded successfully: \(avatarURL)")
+            } catch {
                 await MainActor.run {
                     self.isUploadingAvatar = false
                 }
+                throw AppError.unknown("Failed to upload profile image: \(error.localizedDescription)")
             }
-            
-            // Save profile to database
-            try await SupabaseManager.shared.updateUserProfile(
-                userID: session.user.id.uuidString,
-                username: username.trimmingCharacters(in: .whitespacesAndNewlines),
-                fullName: session.user.userMetadata["full_name"] as? String ?? "",
-                email: session.user.email ?? "",
-                bio: bio.trimmingCharacters(in: .whitespacesAndNewlines),
-                avatarURL: avatarURL
-            )
-            
-            print("✅ Profile saved successfully")
             
             await MainActor.run {
-                self.isSaving = false
-                // Mark as logged in and dismiss
-                self.authManager.isLoggedIn = true
+                self.isUploadingAvatar = false
             }
-            
-        } catch {
-            print("❌ Profile save failed: \(error)")
-            await MainActor.run {
-                self.isSaving = false
-                self.saveError = "Failed to save profile: \(error.localizedDescription)"
-            }
+        }
+        
+        // Save profile to database
+        try await SupabaseManager.shared.updateUserProfile(
+            userID: session.user.id.uuidString,
+            username: usernameValidator.value.trimmingCharacters(in: .whitespacesAndNewlines),
+            fullName: (session.user.userMetadata["full_name"]?.stringValue) ?? "",
+            email: session.user.email ?? "",
+            bio: bioValidator.value.trimmingCharacters(in: .whitespacesAndNewlines),
+            avatarURL: avatarURL
+        )
+        
+        print("✅ Profile saved successfully")
+        
+        await MainActor.run {
+            // Mark as logged in and dismiss
+            self.authManager.isLoggedIn = true
         }
     }
 }

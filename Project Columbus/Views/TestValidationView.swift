@@ -8,84 +8,166 @@
 import SwiftUI
 
 struct TestValidationView: View {
-    @State private var email = ""
-    @State private var password = ""
-    @State private var isFormValid = false
+    // Using the actual ValidationManager infrastructure
+    @StateObject private var emailValidator = FieldValidator(rules: [
+        RequiredRule(fieldName: "Email"),
+        EmailRule()
+    ], validateOnChange: true)
     
-    // TODO: Re-enable when ValidationManager infrastructure is fully integrated
-    // @StateObject private var emailValidator = FieldValidator(rules: [
-    //     RequiredRule(fieldName: "Email"),
-    //     EmailRule()
-    // ], validateOnChange: true)
-    // 
-    // @StateObject private var passwordValidator = FieldValidator(rules: [
-    //     RequiredRule(fieldName: "Password"),
-    //     PasswordRule(minLength: 8)
-    // ])
-    // 
-    // @StateObject private var formValidator: FormValidator
-    // @EnvironmentObject var errorManager: ErrorManager
-    // @EnvironmentObject var dataManager: DataManager
+    @StateObject private var passwordValidator = FieldValidator(rules: [
+        RequiredRule(fieldName: "Password"),
+        PasswordRule(minLength: 8)
+    ])
+    
+    @StateObject private var usernameValidator = FieldValidator(rules: [
+        RequiredRule(fieldName: "Username"),
+        UsernameRule()
+    ], validateOnChange: true)
+    
+    @StateObject private var formValidator: FormValidator
+    @StateObject private var errorManager = ErrorManager()
+    
+    init() {
+        let emailValidator = FieldValidator(rules: [
+            RequiredRule(fieldName: "Email"),
+            EmailRule()
+        ], validateOnChange: true)
+        
+        let passwordValidator = FieldValidator(rules: [
+            RequiredRule(fieldName: "Password"),
+            PasswordRule(minLength: 8)
+        ])
+        
+        let usernameValidator = FieldValidator(rules: [
+            RequiredRule(fieldName: "Username"),
+            UsernameRule()
+        ], validateOnChange: true)
+        
+        self._emailValidator = StateObject(wrappedValue: emailValidator)
+        self._passwordValidator = StateObject(wrappedValue: passwordValidator)
+        self._usernameValidator = StateObject(wrappedValue: usernameValidator)
+        self._formValidator = StateObject(wrappedValue: FormValidator(validators: [emailValidator, passwordValidator, usernameValidator]))
+        self._errorManager = StateObject(wrappedValue: ErrorManager())
+    }
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                Text("Infrastructure Demo")
-                    .font(.title)
-                    .padding()
+            Form {
+                Section(header: Text("User Information")) {
+                    ValidatedTextField(
+                        title: "Email",
+                        placeholder: "Enter your email",
+                        validator: emailValidator,
+                        keyboardType: .emailAddress,
+                        textContentType: .emailAddress,
+                        autocapitalization: .never
+                    )
+                    
+                    ValidatedTextField(
+                        title: "Username",
+                        placeholder: "Choose a username",
+                        validator: usernameValidator,
+                        textContentType: .username,
+                        autocapitalization: .never
+                    )
+                    
+                    ValidatedTextField(
+                        title: "Password",
+                        placeholder: "Enter a secure password",
+                        validator: passwordValidator,
+                        isSecure: true,
+                        textContentType: .newPassword
+                    )
+                }
                 
-                Text("New validation and error handling infrastructure is ready!")
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
-                    .padding()
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Basic Form Demo:")
-                        .font(.headline)
-                    
-                    TextField("Email", text: $email)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .keyboardType(.emailAddress)
-                        .textContentType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                    
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .textContentType(.newPassword)
-                    
+                Section(header: Text("Form Status")) {
                     HStack {
                         Text("Form Valid:")
                         Spacer()
-                        Image(systemName: isFormValid ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundColor(isFormValid ? .green : .red)
+                        Image(systemName: formValidator.isValid ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(formValidator.isValid ? .green : .red)
                     }
                     
-                    Button("Submit") {
-                        // Basic validation
-                        isFormValid = !email.isEmpty && !password.isEmpty && email.contains("@")
+                    HStack {
+                        Text("Email Valid:")
+                        Spacer()
+                        Image(systemName: emailValidator.validationResult.isValid ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(emailValidator.validationResult.isValid ? .green : .red)
+                    }
+                    
+                    HStack {
+                        Text("Username Valid:")
+                        Spacer()
+                        Image(systemName: usernameValidator.validationResult.isValid ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(usernameValidator.validationResult.isValid ? .green : .red)
+                    }
+                    
+                    HStack {
+                        Text("Password Valid:")
+                        Spacer()
+                        Image(systemName: passwordValidator.validationResult.isValid ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(passwordValidator.validationResult.isValid ? .green : .red)
+                    }
+                }
+                
+                Section {
+                    AsyncButton(action: {
+                        // Simulate an async operation that might fail
+                        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        
+                        if !formValidator.validateAll() {
+                            throw AppError.invalidInput("Please fix the validation errors above")
+                        }
+                        
+                        // Simulate a random error for demonstration
+                        if Bool.random() {
+                            throw AppError.serverError(500)
+                        }
+                        
+                        print("✅ Form submitted successfully!")
+                        print("Email: \(emailValidator.value)")
+                        print("Username: \(usernameValidator.value)")
+                        print("Password: [HIDDEN]")
+                        
+                    }) {
+                        Text("Submit Form")
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                }
-                .padding()
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(12)
-                
-                Text("TODO: Integrate ValidationManager, ErrorManager, and DataManager when infrastructure is fully connected")
-                    .font(.caption)
+                    .disabled(!formValidator.isValid)
+                    
+                    Button("Reset Form") {
+                        emailValidator.value = ""
+                        usernameValidator.value = ""
+                        passwordValidator.value = ""
+                        formValidator.resetValidation()
+                    }
                     .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding()
+                }
                 
-                Spacer()
+                Section(header: Text("Infrastructure Status")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("✅ ValidationManager: Fully integrated")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        
+                        Text("✅ ErrorManager: Fully integrated")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        
+                        Text("✅ Real-time validation working")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        
+                        Text("✅ Async error handling working")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                }
             }
-            .padding()
-            .navigationTitle("Infrastructure Test")
+            .navigationTitle("Infrastructure Demo")
+            .errorAlert(errorManager)
         }
-        .onChange(of: email) { _, _ in
-            isFormValid = !email.isEmpty && !password.isEmpty && email.contains("@")
-        }
-        .onChange(of: password) { _, _ in
-            isFormValid = !email.isEmpty && !password.isEmpty && email.contains("@")
-        }
+        .environmentObject(errorManager)
     }
 } 
