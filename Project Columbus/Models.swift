@@ -210,10 +210,38 @@ struct Message: Identifiable, Codable {
     let createdAt: Date
     let messageType: MessageType
     
+    // Enhanced status tracking
+    var status: MessageStatus = .sending
+    var readBy: [String] = []
+    var editedAt: Date?
+    var isDeleted: Bool = false
+    
+    // Rich media properties
+    var imageURL: String?
+    var locationData: MessageLocationData?
+    var pinData: MessagePinData?
+    
     // Computed properties for UI
     var isFromCurrentUser: Bool {
         // This will be set based on the current user context
         return false // Placeholder - will be updated in UI
+    }
+    
+    var isRead: Bool {
+        return !readBy.isEmpty
+    }
+    
+    var displayContent: String {
+        switch messageType {
+        case .text:
+            return content
+        case .image:
+            return "📷 Photo"
+        case .location:
+            return "📍 Location"
+        case .pin:
+            return "📌 Pin shared"
+        }
     }
     
     init(id: UUID = UUID(), conversationId: String, senderId: String, content: String, createdAt: Date = Date(), messageType: MessageType = .text) {
@@ -223,6 +251,7 @@ struct Message: Identifiable, Codable {
         self.content = content
         self.createdAt = createdAt
         self.messageType = messageType
+        self.status = .sending
     }
 }
 
@@ -231,6 +260,42 @@ enum MessageType: String, Codable, CaseIterable {
     case image = "image"
     case location = "location"
     case pin = "pin"
+}
+
+enum MessageStatus: String, Codable, CaseIterable {
+    case sending = "sending"
+    case sent = "sent"
+    case delivered = "delivered"
+    case read = "read"
+    case failed = "failed"
+    
+    var displayText: String {
+        switch self {
+        case .sending: return "Sending..."
+        case .sent: return "Sent"
+        case .delivered: return "Delivered"
+        case .read: return "Read"
+        case .failed: return "Failed"
+        }
+    }
+}
+
+struct MessageLocationData: Codable {
+    let latitude: Double
+    let longitude: Double
+    let name: String
+}
+
+struct MessagePinData: Codable {
+    let id: String
+    let locationName: String
+    let city: String
+    let latitude: Double
+    let longitude: Double
+    let reaction: String
+    let reviewText: String
+    let starRating: Double
+    let authorHandle: String
 }
 
 struct Conversation: Identifiable {

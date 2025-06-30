@@ -66,13 +66,26 @@ echo -e "${GREEN}✅ Archive created successfully!${NC}"
 
 # Create export options plist
 echo -e "${BLUE}📝 Creating export options...${NC}"
+
+# Check if we have a distribution certificate
+DIST_CERT=$(security find-identity -v -p codesigning | grep "Apple Distribution" | wc -l | tr -d ' ')
+
+if [ "$DIST_CERT" -gt 0 ]; then
+    echo -e "${GREEN}📋 Using Apple Distribution certificate for App Store upload${NC}"
+    EXPORT_METHOD="app-store"
+else
+    echo -e "${YELLOW}📋 No Distribution certificate found, using Development for internal testing${NC}"
+    echo -e "${YELLOW}💡 For full TestFlight upload, get an Apple Distribution certificate in Xcode${NC}"
+    EXPORT_METHOD="development"
+fi
+
 cat > "$BUILD_DIR/ExportOptions.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>app-store</string>
+    <string>$EXPORT_METHOD</string>
     <key>uploadBitcode</key>
     <false/>
     <key>uploadSymbols</key>
@@ -81,8 +94,16 @@ cat > "$BUILD_DIR/ExportOptions.plist" << EOF
     <false/>
     <key>manageAppVersionAndBuildNumber</key>
     <true/>
+EOF
+
+if [ "$EXPORT_METHOD" = "app-store" ]; then
+cat >> "$BUILD_DIR/ExportOptions.plist" << EOF
     <key>destination</key>
     <string>upload</string>
+EOF
+fi
+
+cat >> "$BUILD_DIR/ExportOptions.plist" << EOF
 </dict>
 </plist>
 EOF

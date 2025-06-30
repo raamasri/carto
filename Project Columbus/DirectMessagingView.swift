@@ -66,6 +66,12 @@ struct DirectMessagingView: View {
         .onAppear {
             print("📱 DirectMessagingView appeared - loading conversations")
             loadConversations()
+            setupRealTimeSubscription()
+        }
+        .onDisappear {
+            Task {
+                await SupabaseManager.shared.unsubscribeFromRealTimeUpdates()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ConversationUpdated"))) { _ in
             print("📱 Received ConversationUpdated notification - refreshing conversations")
@@ -143,7 +149,7 @@ struct DirectMessagingView: View {
         await MainActor.run {
             self.conversations = loadedConversations
         }
-        }
+    }
     
     private func createConversationWithUsers(_ selectedUsers: [AppUser]) {
         guard !selectedUsers.isEmpty else { return }
@@ -192,7 +198,18 @@ struct DirectMessagingView: View {
             }
         }
     }
- 
+    
+    private func setupRealTimeSubscription() {
+        guard let currentUserID = authManager.currentUserID else { return }
+        
+        Task {
+            await SupabaseManager.shared.subscribeToUserConversations(userId: currentUserID) {
+                Task {
+                    await loadConversationsAsync()
+                }
+            }
+        }
+    }
 }
 
 struct ConversationRowView: View {

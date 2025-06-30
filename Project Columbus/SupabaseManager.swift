@@ -9,6 +9,7 @@ import Supabase
 import Foundation
 import CryptoKit
 import SwiftUI
+import UserNotifications
 
 // MARK: - Legacy Database Models (to be removed after migration)
 struct PinCollectionDB: Codable {
@@ -1090,6 +1091,204 @@ class SupabaseManager: ObservableObject {
         print("✅ Created new conversation: \(newConversationId ?? "FAILED")")
         return newConversationId
     }
+
+    // MARK: - Real-time Messaging
+    
+    /// Subscribe to real-time message updates for a conversation
+    func subscribeToConversationMessages(conversationId: String, onMessageReceived: @escaping (Message) -> Void) async {
+        print("🔔 Real-time messaging subscription placeholder for conversation: \(conversationId)")
+        // TODO: Implement real-time subscriptions with updated Supabase API
+        // For now, we'll rely on periodic polling or manual refresh
+    }
+    
+    /// Subscribe to conversation list updates for a user
+    func subscribeToUserConversations(userId: String, onConversationUpdate: @escaping () -> Void) async {
+        print("🔔 Real-time conversation updates placeholder for user: \(userId)")
+        // TODO: Implement real-time subscriptions with updated Supabase API
+        // For now, we'll rely on periodic polling or manual refresh
+    }
+    
+    /// Unsubscribe from real-time updates
+    func unsubscribeFromRealTimeUpdates() async {
+        print("🔕 Unsubscribing from all real-time updates")
+        await client.removeAllChannels()
+    }
+    
+    /// Mark message as read and update read status
+    func markMessageAsRead(conversationId: String, messageId: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            let _: String = try await client
+                .rpc("mark_message_as_read", params: [
+                    "conversation_uuid": conversationId,
+                    "user_uuid": session.user.id.uuidString,
+                    "message_uuid": messageId
+                ])
+                .execute()
+                .value
+            
+            print("✅ Marked message as read: \(messageId)")
+            return true
+        } catch {
+            print("❌ Failed to mark message as read: \(error)")
+            return false
+        }
+    }
+    
+    /// Get message read status for a conversation
+    func getMessageReadStatus(conversationId: String, messageId: String) async -> [String] {
+        do {
+            let readByUserIds: [String] = try await client
+                .rpc("get_message_read_status", params: [
+                    "conversation_uuid": conversationId,
+                    "message_uuid": messageId
+                ])
+                .execute()
+                .value
+            
+            return readByUserIds
+        } catch {
+            print("❌ Failed to get message read status: \(error)")
+            return []
+        }
+    }
+    
+    // MARK: - Rich Media Messaging
+    
+    /// Upload image for messaging and return URL
+    func uploadMessageImage(_ imageData: Data, conversationId: String) async -> String? {
+        let fileName = "message_\(UUID().uuidString).jpg"
+        let filePath = "message-images/\(conversationId)/\(fileName)"
+        
+        do {
+            try await client.storage
+                .from("message-images")
+                .upload(filePath, data: imageData, options: FileOptions(contentType: "image/jpeg"))
+            
+            let response = try client.storage
+                .from("message-images")
+                .getPublicURL(path: filePath)
+            
+            print("✅ Message image uploaded: \(response.absoluteString)")
+            return response.absoluteString
+        } catch {
+            print("❌ Failed to upload message image: \(error)")
+            return nil
+        }
+    }
+    
+    /// Send image message
+    func sendImageMessage(conversationId: String, imageData: Data, caption: String? = nil) async -> Bool {
+        guard let imageURL = await uploadMessageImage(imageData, conversationId: conversationId) else {
+            return false
+        }
+        
+        let content = caption ?? imageURL
+        let messageType: MessageType = .image
+        
+        return await sendMessage(conversationId: conversationId, content: content, messageType: messageType)
+    }
+    
+    /// Send location message
+    func sendLocationMessage(conversationId: String, latitude: Double, longitude: Double, locationName: String? = nil) async -> Bool {
+        let locationData: [String: Any] = [
+            "latitude": latitude,
+            "longitude": longitude,
+            "name": locationName ?? "Shared Location"
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: locationData),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return false
+        }
+        
+        return await sendMessage(conversationId: conversationId, content: jsonString, messageType: .location)
+    }
+    
+    /// Send pin message (share a pin from the app)
+    func sendPinMessage(conversationId: String, pin: Pin) async -> Bool {
+        let pinData: [String: Any] = [
+            "id": pin.id.uuidString,
+            "locationName": pin.locationName,
+            "city": pin.city,
+            "latitude": pin.latitude,
+            "longitude": pin.longitude,
+            "reaction": pin.reaction.rawValue,
+            "reviewText": pin.reviewText ?? "",
+            "starRating": pin.starRating ?? 0,
+            "authorHandle": pin.authorHandle
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: pinData),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return false
+        }
+        
+        return await sendMessage(conversationId: conversationId, content: jsonString, messageType: .pin)
+    }
+    
+    // MARK: - Notification Support
+    
+    /// Request notification permissions
+    func requestNotificationPermissions() async -> Bool {
+        do {
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .sound, .badge]
+            )
+            print(granted ? "✅ Notification permissions granted" : "❌ Notification permissions denied")
+            return granted
+        } catch {
+            print("❌ Failed to request notification permissions: \(error)")
+            return false
+        }
+    }
+    
+    /// Send local notification for new message
+    func sendMessageNotification(message: Message, conversationTitle: String) {
+        let content = UNMutableNotificationContent()
+        content.title = conversationTitle
+        content.body = message.displayContent
+        content.sound = .default
+        content.badge = 1
+        
+        // Add conversation ID to userInfo for handling tap
+        content.userInfo = [
+            "conversationId": message.conversationId,
+            "messageId": message.id.uuidString
+        ]
+        
+        let request = UNNotificationRequest(
+            identifier: message.id.uuidString,
+            content: content,
+            trigger: nil // Immediate delivery
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Failed to send notification: \(error)")
+            } else {
+                print("✅ Message notification sent")
+            }
+        }
+    }
+    
+    /// Clear notifications for a conversation
+    func clearNotifications(conversationId: String) {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let identifiersToRemove = requests.compactMap { request in
+                if let userInfo = request.content.userInfo as? [String: Any],
+                   let notificationConversationId = userInfo["conversationId"] as? String,
+                   notificationConversationId == conversationId {
+                    return request.identifier
+                }
+                return nil
+            }
+            
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiersToRemove)
+        }
+    }
 }
 
 // MARK: - Apple Sign In Crypto Helper Extension
@@ -1137,9 +1336,9 @@ extension SupabaseManager {
     
     /// Upload an image to Supabase Storage
     func uploadImage(_ imageData: Data, to bucket: String, path: String) async throws -> String {
-        let response = try await client.storage
+        try await client.storage
             .from(bucket)
-            .upload(path: path, file: imageData, options: FileOptions(contentType: "image/jpeg"))
+            .upload(path, data: imageData, options: FileOptions(contentType: "image/jpeg"))
         
         // Get the public URL for the uploaded image
         return try client.storage

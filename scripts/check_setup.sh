@@ -32,7 +32,7 @@ fi
 
 # Check 2: Project exists
 echo -e "${BLUE}📂 Checking project files...${NC}"
-if [ -f "$WORKSPACE_PATH" ]; then
+if [ -d "$WORKSPACE_PATH" ]; then
     echo -e "${GREEN}✅ Project file found${NC}"
 else
     echo -e "${RED}❌ Project file not found: $WORKSPACE_PATH${NC}"
