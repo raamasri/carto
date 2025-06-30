@@ -922,6 +922,7 @@ struct ContentView: View {
     @StateObject private var pinStore = PinStore()
     @AppStorage("themePreference") private var themePreference: String = "Auto"
     @State private var navigateToFeed = false
+    @State private var showBiometricPrompt = false
 
     var body: some View {
         NavigationStack {
@@ -940,6 +941,15 @@ struct ContentView: View {
                 }
             }
             .preferredColorScheme(colorScheme)
+            .onReceive(NotificationCenter.default.publisher(for: .showBiometricPrompt)) { _ in
+                showBiometricPrompt = true
+            }
+            .sheet(isPresented: $showBiometricPrompt) {
+                BiometricSetupPromptView {
+                    showBiometricPrompt = false
+                }
+                .environmentObject(authManager)
+            }
         }
     }
 

@@ -114,12 +114,14 @@ class AuthManager: ObservableObject {
                     .value
 
                 if existing.isEmpty {
+                    // Create new user with temporary username
+                    let tempUsername = "user_\(Int.random(in: 1000...9999))"
                     let newUser = UserInsert(
                         id: user.id.uuidString,
-                        username: "user_\(Int.random(in: 1000...9999))",
+                        username: tempUsername,
                         email: user.email ?? "",
                         phone: "",
-                        full_name: "" // 👈 leave it blank for now, or use user.email ?? "" if you'd like
+                        full_name: user.userMetadata["full_name"] as? String ?? ""
                     )
                     _ = try await SupabaseManager.shared.client
                         .from("users")

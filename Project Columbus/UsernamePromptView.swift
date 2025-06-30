@@ -82,3 +82,60 @@ struct UsernameTextField: View {
         }
     }
 }
+
+// MARK: - Biometric Setup Prompt View
+
+struct BiometricSetupPromptView: View {
+    @EnvironmentObject var authManager: AuthManager
+    
+    var onComplete: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "faceid")
+                .font(.system(size: 60))
+                .foregroundColor(.blue)
+            
+            VStack(spacing: 12) {
+                Text("Enable Face ID")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("Use Face ID to quickly and securely sign in to your account")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+            }
+            
+            VStack(spacing: 12) {
+                Button(action: {
+                    enableBiometrics()
+                }) {
+                    Text("Enable Face ID")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+                .buttonStyle(.borderedProminent)
+                
+                Button("Maybe Later") {
+                    onComplete()
+                }
+                .foregroundColor(.secondary)
+            }
+        }
+        .padding(24)
+    }
+    
+    private func enableBiometrics() {
+        // Enable biometric authentication
+        UserDefaults.standard.set(true, forKey: "biometricEnabled")
+        
+        // Save current credentials to keychain
+        authManager.saveCredentialsToKeychain(
+            username: authManager.currentUsername ?? "",
+            password: authManager.lastUsedPassword
+        )
+        
+        onComplete()
+    }
+}

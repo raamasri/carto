@@ -34,6 +34,7 @@ struct SignUpView: View {
     @State private var showUsernamePrompt = false
     @State private var isCheckingUsername = false
     @State private var usernameError: String? = nil
+    @State private var usernameAvailable: Bool? = nil
 
     var body: some View {
         ZStack {
@@ -95,18 +96,41 @@ struct SignUpView: View {
                     .onTapGesture {
                         usernameFocused = true
                     }
+                    .onChange(of: username) { _, newValue in
+                        checkUsernameAvailability(newValue)
+                    }
                     .overlay(
                         HStack {
                             Spacer()
-                            if !username.isEmpty {
-                                Button(action: { username = "" }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.gray)
+                            if isCheckingUsername {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .padding(.trailing, 10)
+                            } else if !username.isEmpty {
+                                if let available = usernameAvailable {
+                                    Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                        .foregroundColor(available ? .green : .red)
+                                        .padding(.trailing, 10)
+                                } else {
+                                    Button(action: { username = "" }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.gray)
+                                    }
+                                    .padding(.trailing, 10)
                                 }
-                                .padding(.trailing, 10)
                             }
                         }
                     )
+
+                if let error = usernameError {
+                    HStack {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                }
 
                 TextField("Email", text: $email)
                     .padding()
@@ -362,6 +386,46 @@ struct SignUpView: View {
             let prefix = capped.dropFirst(3).prefix(3)
             let line = capped.dropFirst(6)
             return "(\(area)) \(prefix)-\(line)"
+        }
+    }
+
+    private func checkUsernameAvailability(_ newValue: String) {
+        // Clear previous state
+        usernameError = nil
+        usernameAvailable = nil
+        
+        // Only check if username meets basic requirements
+        guard newValue.count >= 3 && newValue.count <= 20 else {
+            if newValue.count > 0 && newValue.count < 3 {
+                usernameError = "Username must be at least 3 characters"
+            } else if newValue.count > 20 {
+                usernameError = "Username must be no more than 20 characters"
+            }
+            return
+        }
+        
+        // Check format (alphanumeric and underscore only)
+        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+        if newValue.unicodeScalars.contains(where: { !allowedCharacters.contains($0) }) {
+            usernameError = "Username can only contain letters, numbers, and underscores"
+            return
+        }
+        
+        // Debounce the availability check
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+            
+            // Make sure username hasn't changed during the delay
+            if self.username == newValue {
+                isCheckingUsername = true
+                let available = await SupabaseManager.shared.isUsernameAvailable(username: newValue)
+                isCheckingUsername = false
+                
+                usernameAvailable = available
+                if !available {
+                    usernameError = "Username is already taken"
+                }
+            }
         }
     }
 }
