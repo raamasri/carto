@@ -17,6 +17,7 @@ struct UserListView: View {
     
     @State private var users: [AppUser] = []
     @State private var isLoading = true
+    @EnvironmentObject var authManager: AuthManager
     
     var body: some View {
         List(users, id: \.id) { user in
@@ -71,11 +72,19 @@ struct UserListView: View {
         .refreshable {
             isLoading = true
             do {
+                var fetchedUsers: [AppUser]
                 if listType == .followers {
-                    users = try await SupabaseManager.shared.getFollowers(for: userID)
+                    fetchedUsers = try await SupabaseManager.shared.getFollowers(for: userID)
                 } else {
-                    users = try await SupabaseManager.shared.getFollowingUsers(for: userID)
+                    fetchedUsers = try await SupabaseManager.shared.getFollowingUsers(for: userID)
                 }
+                
+                // Filter out the current user from the display
+                if let currentUserID = authManager.currentUserID {
+                    fetchedUsers = fetchedUsers.filter { $0.id != currentUserID }
+                }
+                
+                users = fetchedUsers
             } catch {
                 print("❌ Failed to refresh users: \(error)")
             }
@@ -85,11 +94,20 @@ struct UserListView: View {
             isLoading = true
             do {
                 print("🧪 Fetching \(listType == .followers ? "followers" : "following") for userID: \(userID)")
+                var fetchedUsers: [AppUser]
                 if listType == .followers {
-                    users = try await SupabaseManager.shared.getFollowers(for: userID)
+                    fetchedUsers = try await SupabaseManager.shared.getFollowers(for: userID)
                 } else {
-                    users = try await SupabaseManager.shared.getFollowingUsers(for: userID)
+                    fetchedUsers = try await SupabaseManager.shared.getFollowingUsers(for: userID)
                 }
+                
+                // Filter out the current user from the display
+                if let currentUserID = authManager.currentUserID {
+                    fetchedUsers = fetchedUsers.filter { $0.id != currentUserID }
+                    print("🧪 Filtered out current user, showing \(fetchedUsers.count) users")
+                }
+                
+                users = fetchedUsers
                 print("🧪 Retrieved users: \(users.map { $0.username })")
             } catch {
                 print("❌ Failed to fetch users: \(error)")
