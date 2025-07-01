@@ -713,8 +713,12 @@ class SupabaseManager: ObservableObject {
     /// Get followers for a user
     func getFollowers(for userID: String) async throws -> [AppUser] {
         do {
+            // Use a lightweight struct for decoding
+            struct FollowerResponse: Codable {
+                let follower_id: String
+            }
             // Get the follow relationships where the target user is being followed
-            let follows: [FollowDB] = try await client
+            let follows: [FollowerResponse] = try await client
                 .from("follows")
                 .select("follower_id")
                 .eq("following_id", value: userID)
