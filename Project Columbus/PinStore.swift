@@ -76,19 +76,28 @@ class PinStore: ObservableObject {
     /// Creates default lists for new users
     private func createDefaultLists() {
         let defaultListNames = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
+        print("📱 PinStore: Creating default lists...")
+        
+        // Create default lists locally first for immediate UI update
+        for listName in defaultListNames {
+            if !lists.contains(where: { $0.name.lowercased() == listName.lowercased() }) {
+                lists.append(PinList(name: listName, pins: []))
+                print("📱 PinStore: Created local default list: \(listName)")
+            }
+        }
+        print("📱 PinStore: Created \(lists.count) default lists locally")
+        
+        // Then create in database asynchronously
         Task {
             for listName in defaultListNames {
-                // Prevent duplicate default lists (case-insensitive)
-                if !lists.contains(where: { $0.name.lowercased() == listName.lowercased() }) {
-                    do {
-                        _ = try await supabaseManager.createList(name: listName)
-                    } catch {
-                        print("❌ Failed to create default list '\(listName)': \(error)")
-                    }
+                do {
+                    _ = try await supabaseManager.createList(name: listName)
+                    print("📱 PinStore: Created default list '\(listName)' in database")
+                } catch {
+                    print("❌ Failed to create default list '\(listName)' in database: \(error)")
                 }
             }
-            // Reload after creating defaults
-            await loadFromDatabase()
+            print("📱 PinStore: Finished creating default lists in database")
         }
     }
     

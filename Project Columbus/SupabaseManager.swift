@@ -95,7 +95,14 @@ class SupabaseManager: ObservableObject {
     
     /// Fetches all lists for the current user
     func getUserLists() async -> [PinList] {
-        guard let session = try? await client.auth.session else { return [] }
+        print("📱 SupabaseManager: getUserLists() called")
+        
+        guard let session = try? await client.auth.session else { 
+            print("❌ SupabaseManager: No session available in getUserLists()")
+            return [] 
+        }
+        
+        print("📱 SupabaseManager: Session found, user ID: \(session.user.id.uuidString)")
         
         do {
             let listsDB: [ListDB] = try await client
@@ -105,15 +112,20 @@ class SupabaseManager: ObservableObject {
                 .execute()
                 .value
             
+            print("📱 SupabaseManager: Found \(listsDB.count) lists in database")
+            
             var lists: [PinList] = []
             
             // Fetch pins for each list
             for listDB in listsDB {
+                print("📱 SupabaseManager: Processing list: \(listDB.name)")
                 let pins = await getPinsForList(listId: listDB.id)
+                print("📱 SupabaseManager: List '\(listDB.name)' has \(pins.count) pins")
                 let list = listDB.toPinList(pins: pins)
                 lists.append(list)
             }
             
+            print("📱 SupabaseManager: Returning \(lists.count) lists")
             return lists
         } catch {
             print("❌ Failed to fetch lists: \(error)")
