@@ -107,6 +107,15 @@ struct HelpSupportView: View {
                         )
                     }
                     
+                    NavigationLink(destination: NotificationsHelpView()) {
+                        HelpActionRow(
+                            icon: "bell.fill",
+                            title: "Notifications Guide",
+                            description: "Understanding your notification center",
+                            accentColor: .orange
+                        )
+                    }
+                    
                     NavigationLink(destination: APIDocumentationView()) {
                         HelpActionRow(
                             icon: "doc.text.fill",
@@ -669,6 +678,363 @@ let sampleFAQs: [FAQ] = [
         ]
     )
 ]
+
+struct NotificationsHelpView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Notifications Guide")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Text("Stay connected with your friends and discover new places through CARTO's notification system.")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                
+                Divider()
+                
+                // Notification Types Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Notification Types")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    NotificationTypeCard(
+                        icon: "person.badge.plus",
+                        color: .blue,
+                        title: "Follow Requests",
+                        description: "When someone wants to follow you or starts following you",
+                        example: "John started following you"
+                    )
+                    
+                    NotificationTypeCard(
+                        icon: "heart.fill",
+                        color: .red,
+                        title: "Pin Likes",
+                        description: "When someone likes one of your pins",
+                        example: "Sarah liked your pin at Central Park"
+                    )
+                    
+                    NotificationTypeCard(
+                        icon: "bubble.left",
+                        color: .green,
+                        title: "Comments",
+                        description: "When someone comments on your pins",
+                        example: "Mike commented on your pin: 'Great spot!'"
+                    )
+                    
+                    NotificationTypeCard(
+                        icon: "message.fill",
+                        color: .purple,
+                        title: "Messages",
+                        description: "New direct messages from friends",
+                        example: "Emma: Hey, check out this cool place!"
+                    )
+                    
+                    NotificationTypeCard(
+                        icon: "location.fill",
+                        color: .orange,
+                        title: "Nearby Pins",
+                        description: "When you're near pins from your lists",
+                        example: "You're near Coffee Shop (0.2 miles away)"
+                    )
+                    
+                    NotificationTypeCard(
+                        icon: "person.2.fill",
+                        color: .cyan,
+                        title: "Friend Activity",
+                        description: "When friends add new pins or create lists",
+                        example: "Alex added a new pin to 'Best Restaurants'"
+                    )
+                    
+                    NotificationTypeCard(
+                        icon: "list.bullet",
+                        color: .indigo,
+                        title: "List Invitations",
+                        description: "When someone invites you to collaborate on a list",
+                        example: "Tom invited you to collaborate on 'Weekend Spots'"
+                    )
+                }
+                
+                Divider()
+                
+                // Tabs Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Notification Tabs")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        TabDescriptionRow(
+                            icon: "bell",
+                            title: "All",
+                            description: "View all your notifications in chronological order"
+                        )
+                        
+                        TabDescriptionRow(
+                            icon: "bell.badge",
+                            title: "Unread",
+                            description: "Focus on notifications you haven't seen yet. The red badge shows the count."
+                        )
+                        
+                        TabDescriptionRow(
+                            icon: "person.badge.plus",
+                            title: "Follows",
+                            description: "Follow requests and new followers only"
+                        )
+                        
+                        TabDescriptionRow(
+                            icon: "message",
+                            title: "Messages",
+                            description: "Direct messages and chat notifications"
+                        )
+                        
+                        TabDescriptionRow(
+                            icon: "heart",
+                            title: "Activity",
+                            description: "Likes, comments, and friend activity on your pins"
+                        )
+                    }
+                }
+                
+                Divider()
+                
+                // Actions Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Managing Notifications")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        ActionDescriptionRow(
+                            icon: "hand.tap",
+                            title: "Tap to Open",
+                            description: "Tap any notification to open the related content (profile, pin, chat, etc.)"
+                        )
+                        
+                        ActionDescriptionRow(
+                            icon: "checkmark.circle",
+                            title: "Mark as Read",
+                            description: "Swipe left on a notification and tap 'Mark Read' or tap 'Mark All Read' in the toolbar"
+                        )
+                        
+                        ActionDescriptionRow(
+                            icon: "trash",
+                            title: "Delete",
+                            description: "Swipe left on a notification and tap 'Delete' to remove it permanently"
+                        )
+                        
+                        ActionDescriptionRow(
+                            icon: "arrow.clockwise",
+                            title: "Pull to Refresh",
+                            description: "Pull down on the notification list to check for new notifications"
+                        )
+                        
+                        ActionDescriptionRow(
+                            icon: "gear",
+                            title: "Settings",
+                            description: "Tap the gear icon to customize notification preferences and quiet hours"
+                        )
+                    }
+                }
+                
+                Divider()
+                
+                // Priority Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Priority Levels")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Notifications are color-coded by priority:")
+                            .font(.body)
+                        
+                        HStack {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundColor(.orange)
+                            Text("High Priority")
+                                .fontWeight(.medium)
+                            Text("- Messages and time-sensitive alerts")
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        HStack {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundColor(.red)
+                            Text("Urgent Priority")
+                                .fontWeight(.medium)
+                            Text("- Critical notifications that need immediate attention")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                
+                Divider()
+                
+                // Tips Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Tips & Best Practices")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        TipRow(
+                            icon: "lightbulb.fill",
+                            tip: "Enable push notifications in Settings to get notified even when the app is closed"
+                        )
+                        
+                        TipRow(
+                            icon: "moon.fill",
+                            tip: "Set up Quiet Hours to avoid notifications during sleep or work hours"
+                        )
+                        
+                        TipRow(
+                            icon: "bell.slash.fill",
+                            tip: "Turn off specific notification types you don't want to receive in Settings"
+                        )
+                        
+                        TipRow(
+                            icon: "location.fill",
+                            tip: "Nearby pin notifications require location permissions to work properly"
+                        )
+                        
+                        TipRow(
+                            icon: "eye.fill",
+                            tip: "Regularly check the Unread tab to stay on top of important notifications"
+                        )
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding()
+        }
+        .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// Supporting Views for NotificationsHelpView
+
+struct NotificationTypeCard: View {
+    let icon: String
+    let color: Color
+    let title: String
+    let description: String
+    let example: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(color)
+                    .frame(width: 32, height: 32)
+                    .background(color.opacity(0.1))
+                    .clipShape(Circle())
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            
+            Text("Example: \(example)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.leading, 44)
+                .italic()
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
+
+struct TabDescriptionRow: View {
+    let icon: String
+    let title: String
+    let description: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(.blue)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+    }
+}
+
+struct ActionDescriptionRow: View {
+    let icon: String
+    let title: String
+    let description: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(.green)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+    }
+}
+
+struct TipRow: View {
+    let icon: String
+    let tip: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(.yellow)
+                .frame(width: 16)
+            
+            Text(tip)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+        }
+    }
+}
 
 #Preview {
     HelpSupportView()

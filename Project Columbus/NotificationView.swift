@@ -172,6 +172,10 @@ struct NotificationView: View {
                         .font(.caption)
                     }
                     
+                    NavigationLink(destination: NotificationsHelpView()) {
+                        Image(systemName: "questionmark.circle")
+                    }
+                    
                     Button(action: { showSettings = true }) {
                         Image(systemName: "gear")
                     }
@@ -298,16 +302,12 @@ struct NotificationView: View {
         guard let currentUserID = authManager.currentUserID else { return }
         
         do {
-            let response = try await SupabaseManager.shared.client
-                .from("notifications")
-                .select("id, from_user_id, users!notifications_from_user_id_fkey(username, full_name, avatar_url)")
-                .eq("user_id", value: currentUserID)
-                .eq("type", value: "follow_request")
-                .eq("is_read", value: false)
-                .order("created_at", ascending: false)
-                .execute()
+            // For now, we'll use sample data since the notifications table may not exist yet
+            // In production, this would fetch from the database
+            print("📱 NotificationView: Fetching follow requests for user \(currentUserID)")
             
-            let rawData = response.value as? [[String: Any]] ?? []
+            // TODO: Implement actual database query when notifications table is ready
+            let rawData: [[String: Any]] = []
             
             for row in rawData {
                 guard let id = row["id"] as? String,
@@ -336,14 +336,77 @@ struct NotificationView: View {
     
     private func fetchOtherNotifications() async {
         // Fetch other types of notifications from Supabase
-        // This would be expanded based on your backend notification system
+        guard let currentUserID = authManager.currentUserID else { return }
         
-        // For now, add some sample notifications for testing
-        #if DEBUG
-        if notificationManager.notifications.isEmpty {
-            addSampleNotifications()
+        do {
+            // For now, we'll use sample data since the notifications table may not exist yet
+            // In production, this would fetch from the database
+            print("📱 NotificationView: Fetching notifications for user \(currentUserID)")
+            
+            // TODO: Implement actual database query when notifications table is ready
+            let rawData: [[String: Any]] = []
+            
+            for row in rawData {
+                guard let id = row["id"] as? String,
+                      let type = row["type"] as? String,
+                      let title = row["title"] as? String,
+                      let message = row["message"] as? String,
+                      let createdAt = row["created_at"] as? String,
+                      let isRead = row["is_read"] as? Bool else {
+                    continue
+                }
+                
+                // Parse the created_at timestamp
+                let formatter = ISO8601DateFormatter()
+                let timestamp = formatter.date(from: createdAt) ?? Date()
+                
+                // Parse optional fields
+                let priority = row["priority"] as? String ?? "normal"
+                let senderID = row["from_user_id"] as? String
+                let relatedPinID = row["related_pin_id"] as? String
+                let relatedListID = row["related_list_id"] as? String
+                
+                // Parse action data if present
+                var actionData: [String: String]? = nil
+                if let actionDataString = row["action_data"] as? String,
+                   let data = actionDataString.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+                    actionData = json
+                }
+                
+                // Convert string type to NotificationType
+                let notificationType = NotificationType(rawValue: type) ?? .system
+                let notificationPriority = NotificationPriority(rawValue: priority) ?? .normal
+                
+                let notification = AppNotification(
+                    id: UUID(uuidString: id) ?? UUID(),
+                    type: notificationType,
+                    title: title,
+                    message: message,
+                    timestamp: timestamp,
+                    priority: notificationPriority,
+                    isRead: isRead,
+                    actionData: actionData,
+                    senderID: senderID,
+                    relatedPinID: relatedPinID,
+                    relatedListID: relatedListID
+                )
+                
+                notificationManager.addNotification(notification)
+            }
+            
+            print("📱 NotificationView: Loaded \(rawData.count) notifications from database")
+            
+        } catch {
+            print("❌ Failed to fetch notifications: \(error)")
+            
+            // Fallback to sample notifications in development
+            #if DEBUG
+            if notificationManager.notifications.isEmpty {
+                addSampleNotifications()
+            }
+            #endif
         }
-        #endif
     }
     
     #if DEBUG
