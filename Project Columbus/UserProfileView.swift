@@ -60,7 +60,25 @@ struct UserProfileView: View {
     
     // Computed filtered pins for enhanced map
     private var filteredPins: [Pin] {
-        var pins = pinStore.masterPins
+        // Only show pins that are actually in user's lists (not orphaned pins)
+        // Use Set to remove duplicates when pins appear in multiple lists
+        let allPins = pinStore.lists.flatMap { $0.pins }
+        var uniquePins: [Pin] = []
+        var seenIds: Set<UUID> = []
+        
+        for pin in allPins {
+            if !seenIds.contains(pin.id) {
+                uniquePins.append(pin)
+                seenIds.insert(pin.id)
+            }
+        }
+        
+        // Debug logging to help identify discrepancies
+        if allPins.count != uniquePins.count {
+            print("🔍 UserProfile Map: Found \(allPins.count) total pins, \(uniquePins.count) unique pins (removed \(allPins.count - uniquePins.count) duplicates)")
+        }
+        
+        var pins = uniquePins
         
         // Filter by reaction
         if let reaction = selectedReactionFilter {
@@ -665,6 +683,12 @@ struct UserProfileView: View {
             // Center map on pins
             centerMapOnPins()
             
+            // Refresh pin data when profile appears
+            print("🔄 UserProfileView: Refreshing pin data on appear")
+            Task {
+                await pinStore.refresh()
+            }
+            
             Task {
                 if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
                     displayedUser = updated
@@ -725,6 +749,15 @@ struct UserProfileView: View {
         }
         .onChange(of: pinStore.masterPins) { _, _ in
             centerMapOnPins()
+        }
+        .onChange(of: selectedSection) { _, newSection in
+            // Refresh pin data when switching to My Lists to ensure latest data
+            if newSection == "My Lists" {
+                print("🔄 UserProfileView: Switching to My Lists - refreshing data")
+                Task {
+                    await pinStore.refresh()
+                }
+            }
         }
         .fullScreenCover(isPresented: $showFullscreenMap) {
             FullscreenMapView(

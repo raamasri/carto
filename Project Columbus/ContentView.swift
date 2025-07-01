@@ -516,7 +516,7 @@ struct MainMapView: View {
                             if !pinStore.isLoading {
                                 ForEach(filteredPins, id: \.id) { pin in
                                     Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                                        MainMapEnhancedPinAnnotation(pin: pin)
+                                        MainMapEnhancedPinAnnotation(pin: pin, pinStore: pinStore)
                                     }
                                     .tag(pin.id)
                                 }
@@ -989,7 +989,7 @@ struct MainMapView: View {
 // MARK: - Enhanced Pin Annotation for Main Map
 struct MainMapEnhancedPinAnnotation: View {
     let pin: Pin
-    @EnvironmentObject var pinStore: PinStore
+    let pinStore: PinStore
     
     var body: some View {
         ZStack {
