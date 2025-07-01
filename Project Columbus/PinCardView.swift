@@ -335,9 +335,9 @@ struct PinCardView: View {
 
 struct AddToListSheet: View {
     let pin: Pin
-    let lists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
     var onSelect: (String) -> Void
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var pinStore: PinStore
 
     var body: some View {
         VStack(spacing: 24) {
@@ -345,12 +345,14 @@ struct AddToListSheet: View {
                 .font(.title2)
                 .bold()
                 .padding(.top)
-            ForEach(lists, id: \.self) { list in
+            
+            // Use actual lists from PinStore
+            ForEach(pinStore.lists, id: \.id) { list in
                 Button(action: {
-                    onSelect(list)
+                    onSelect(list.name)
                     dismiss()
                 }) {
-                    Text(list)
+                    Text(list.name)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -358,9 +360,18 @@ struct AddToListSheet: View {
                         .cornerRadius(8)
                 }
             }
+            
             Button("Cancel", role: .cancel) { dismiss() }
                 .padding(.top, 8)
         }
         .padding()
+        .onAppear {
+            // Ensure lists are loaded when sheet appears
+            if pinStore.lists.isEmpty {
+                Task {
+                    await pinStore.refresh()
+                }
+            }
+        }
     }
 }

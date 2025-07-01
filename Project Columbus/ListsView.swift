@@ -132,10 +132,9 @@ struct ListsView: View {
             }
         }
         .onAppear {
-            if pinStore.lists.isEmpty {
-                Task {
-                    await pinStore.refresh()
-                }
+            // Always refresh on appear to ensure we have the latest data
+            Task {
+                await pinStore.refresh()
             }
         }
     }

@@ -26,20 +26,23 @@ class PinStore: ObservableObject {
     private let supabaseManager = SupabaseManager.shared
     
     init() {
-        // Initialize with loading from database
-        loadFromDatabase()
+        // Don't automatically load data - wait for authentication
+        print("📱 PinStore: Initialized, waiting for authentication...")
     }
     
     /// Loads all user data from database (lists, pins, etc.)
     func loadFromDatabase() {
         Task {
             isLoading = true
+            print("📱 PinStore: Starting to load data from database...")
             
             // Load all user pins
             let allPins = await supabaseManager.getAllUserPins()
+            print("📱 PinStore: Loaded \(allPins.count) pins from database")
             
             // Load all user lists with their pins
             let userLists = await supabaseManager.getUserLists()
+            print("📱 PinStore: Loaded \(userLists.count) lists from database")
             
             await MainActor.run {
                 // Update master pins
@@ -47,19 +50,24 @@ class PinStore: ObservableObject {
                 
                 // Update lists
                 if userLists.isEmpty {
+                    print("📱 PinStore: No lists found, creating default lists...")
                     // Create default lists if none exist
                     createDefaultLists()
                 } else {
+                    print("📱 PinStore: Setting lists to loaded data")
                     lists = userLists
                 }
                 
                 // Update favorites (pins in "Favorites" list)
                 if let favoritesList = lists.first(where: { $0.name == "Favorites" }) {
                     favoritePins = favoritesList.pins
+                    print("📱 PinStore: Found \(favoritePins.count) favorite pins")
                 } else {
                     favoritePins = []
+                    print("📱 PinStore: No favorites list found")
                 }
                 
+                print("📱 PinStore: Finished loading. Final lists count: \(lists.count)")
                 isLoading = false
             }
         }

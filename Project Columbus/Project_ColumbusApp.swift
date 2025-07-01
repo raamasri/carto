@@ -47,6 +47,10 @@ struct Project_ColumbusApp: App {
                 .onReceive(authManager.$isLoggedIn) { isLoggedIn in
                     if isLoggedIn {
                         updateLocationOnAppLaunch()
+                        // Reload PinStore data after authentication
+                        Task {
+                            await pinStore.refresh()
+                        }
                     }
                 }
         }
