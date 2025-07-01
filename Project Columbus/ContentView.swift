@@ -130,10 +130,13 @@ struct MainMapView: View {
     
     // Enhanced Map Filter States
     @State private var showMapFilters = false
-    @State private var selectedReactionFilter: Reaction? = nil
+    @State private var selectedListFilter: UUID? = nil
     @State private var selectedTimeFilter: TimeFilter = .all
     @State private var selectedStarFilter: StarFilter = .all
     @State private var mapSearchText = ""
+    
+    // Auto-centering state
+    @State private var hasAutocentered = false
     
     // Computed filtered pins for enhanced map
     private var filteredPins: [Pin] {
@@ -141,8 +144,10 @@ struct MainMapView: View {
         var pins = pinStore.lists.flatMap { $0.pins }
         
         // Filter by reaction
-        if let reaction = selectedReactionFilter {
-            pins = pins.filter { $0.reaction == reaction }
+        if let listId = selectedListFilter {
+            pins = pins.filter { pin in
+                pinStore.lists.first(where: { $0.id == listId })?.pins.contains(where: { $0.id == pin.id }) == true
+            }
         }
         
         // Filter by time
@@ -189,7 +194,7 @@ struct MainMapView: View {
     
     // Filter badge computed properties
     private var hasActiveFilters: Bool {
-        selectedReactionFilter != nil || 
+        selectedListFilter != nil || 
         selectedTimeFilter != .all || 
         selectedStarFilter != .all || 
         !mapSearchText.isEmpty
@@ -197,7 +202,7 @@ struct MainMapView: View {
     
     private var activeFilterCount: Int {
         var count = 0
-        if selectedReactionFilter != nil { count += 1 }
+        if selectedListFilter != nil { count += 1 }
         if selectedTimeFilter != .all { count += 1 }
         if selectedStarFilter != .all { count += 1 }
         if !mapSearchText.isEmpty { count += 1 }
@@ -499,6 +504,9 @@ struct MainMapView: View {
                                     .tag(pin.id)
                                 }
                             }
+                            
+                            // Show user location
+                            UserAnnotation()
                         }
                         .onChange(of: filteredPins) { _, _ in
                             if !pinStore.isLoading {
@@ -536,18 +544,20 @@ struct MainMapView: View {
                                     .padding(.top, 8)
                                 
                                 MainMapFilterPanel(
-                                    selectedReaction: $selectedReactionFilter,
+                                    selectedList: $selectedListFilter,
                                     selectedTimeFilter: $selectedTimeFilter,
                                     selectedStarFilter: $selectedStarFilter,
-                                    searchText: $mapSearchText
+                                    searchText: $mapSearchText,
+                                    availableLists: pinStore.lists
                                 )
+                                .id("filter-panel-\(pinStore.lists.count)") // Force refresh when lists change
                             }
                             .padding()
                             .background(Color(.systemBackground))
                             .cornerRadius(16, corners: [.topLeft, .topRight])
                             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: -5)
                             .padding(.horizontal, 0)
-                            .padding(.bottom, 80) // Account for bottom navigation
+                            .padding(.bottom, 160) // Increased spacing to float above control buttons
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         .ignoresSafeArea(.container, edges: .bottom)
@@ -783,21 +793,19 @@ struct MainMapView: View {
                         Spacer()
 
                         Button(action: {
-                            shouldTrackUser.toggle()
-                            if shouldTrackUser {
-                                requestUserLocation()
-                                withAnimation {
-                                    if let location = locationManager.location {
-                                        cameraPosition = .region(MKCoordinateRegion(
-                                            center: location,
-                                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                                        ))
-                                    }
+                            // Always recenter on current location when pressed
+                            requestUserLocation()
+                            withAnimation {
+                                if let location = locationManager.location {
+                                    cameraPosition = .region(MKCoordinateRegion(
+                                        center: location,
+                                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                    ))
                                 }
                             }
                         }) {
                             Image(systemName: "location.fill")
-                                .foregroundColor(shouldTrackUser ? .blue : .gray)
+                                .foregroundColor(.blue)
                                 .padding()
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
@@ -863,7 +871,24 @@ struct MainMapView: View {
                 self.searchResults = results
             }
             searchCompleter.delegate = self.searchCompleterDelegateHolder
-
+            
+            // Reset auto-center flag when view appears
+            hasAutocentered = false
+            
+            // Load data immediately if user is already authenticated
+            if authManager.isLoggedIn && pinStore.lists.isEmpty {
+                Task {
+                    await pinStore.refresh()
+                }
+            }
+        }
+        .onReceive(authManager.$isLoggedIn) { isLoggedIn in
+            // Load data as soon as user is authenticated
+            if isLoggedIn && pinStore.lists.isEmpty {
+                Task {
+                    await pinStore.refresh()
+                }
+            }
         }
         .onReceive(locationManager.$location.compactMap { $0 }) { location in
             if shouldTrackUser && !isUserManuallyMovingMap {
@@ -879,6 +904,18 @@ struct MainMapView: View {
                 center: location,
                 span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
             )
+        }
+        .onReceive(pinStore.$isLoading) { isLoading in
+            // Auto-center map on pins when they finish loading (only once per app launch)
+            if !isLoading && !hasAutocentered && !filteredPins.isEmpty {
+                print("📍 Auto-centering map on \(filteredPins.count) pin(s) after load")
+                hasAutocentered = true
+                
+                // Use a slight delay to ensure UI is ready
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    centerMapOnFilteredPins()
+                }
+            }
         }
         .onChange(of: selectedTab) { oldValue, newTab in
             // Dismiss the POI popup and clear search results when switching tabs
@@ -991,10 +1028,11 @@ struct MainMapEnhancedPinAnnotation: View {
 
 // MARK: - Main Map Filter Panel
 struct MainMapFilterPanel: View {
-    @Binding var selectedReaction: Reaction?
+    @Binding var selectedList: UUID?
     @Binding var selectedTimeFilter: TimeFilter
     @Binding var selectedStarFilter: StarFilter
     @Binding var searchText: String
+    let availableLists: [PinList]
     
     var body: some View {
         VStack(spacing: 16) {
@@ -1014,28 +1052,28 @@ struct MainMapFilterPanel: View {
             
             // Filter Categories
             VStack(spacing: 12) {
-                // Reaction Filter
-                HStack {
-                    Text("Reaction:")
+                // List Filter
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("List:")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    Spacer()
-                    HStack(spacing: 8) {
-                        FilterChip(
-                            title: "All",
-                            isSelected: selectedReaction == nil,
-                            action: { selectedReaction = nil }
-                        )
-                        FilterChip(
-                            title: "❤️ Loved It",
-                            isSelected: selectedReaction == .lovedIt,
-                            action: { selectedReaction = .lovedIt }
-                        )
-                        FilterChip(
-                            title: "🔖 Want to Go",
-                            isSelected: selectedReaction == .wantToGo,
-                            action: { selectedReaction = .wantToGo }
-                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            FilterChip(
+                                title: "All Lists",
+                                isSelected: selectedList == nil,
+                                action: { selectedList = nil }
+                            )
+                            ForEach(availableLists, id: \.id) { list in
+                                FilterChip(
+                                    title: list.name,
+                                    isSelected: selectedList == list.id,
+                                    action: { selectedList = list.id }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 1)
                     }
                 }
                 
@@ -1078,7 +1116,7 @@ struct MainMapFilterPanel: View {
             if hasActiveFilters {
                 Button("Clear All Filters") {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        selectedReaction = nil
+                        selectedList = nil
                         selectedTimeFilter = .all
                         selectedStarFilter = .all
                         searchText = ""
@@ -1091,7 +1129,7 @@ struct MainMapFilterPanel: View {
     }
     
     private var hasActiveFilters: Bool {
-        selectedReaction != nil || 
+        selectedList != nil || 
         selectedTimeFilter != .all || 
         selectedStarFilter != .all || 
         !searchText.isEmpty
