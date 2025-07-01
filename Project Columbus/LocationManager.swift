@@ -143,8 +143,19 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
         
         lastLocationUpdate = now
         
-        // TODO: Integrate with SupabaseManager when available
-        // For now, just store locally
+        // TODO: Integrate with SupabaseManager when import issues are resolved
+        // For now, save locally with enhanced data structure
+        saveLocationLocally(location, timestamp: now)
+        
+        // Future implementation will include:
+        // - Database integration via SupabaseManager
+        // - Activity type detection
+        // - Reverse geocoding for location names
+        print("✅ Location saved to history: \(location.coordinate)")
+    }
+    
+    /// Save location locally as backup/cache
+    private func saveLocationLocally(_ location: CLLocation, timestamp: Date) {
         let locationData: [String: Any] = [
             "latitude": location.coordinate.latitude,
             "longitude": location.coordinate.longitude,
@@ -152,7 +163,7 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
             "altitude": location.altitude,
             "speed": location.speed,
             "heading": location.course,
-            "timestamp": now.timeIntervalSince1970
+            "timestamp": timestamp.timeIntervalSince1970
         ]
         
         // Store in UserDefaults as a simple cache
@@ -165,14 +176,28 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
         }
         
         UserDefaults.standard.set(locationHistory, forKey: "locationHistory")
-        
-        print("✅ Location saved to history: \(location.coordinate)")
+        print("✅ Location saved locally: \(location.coordinate)")
+    }
+    
+    /// Determine activity type based on location data
+    private func determineActivityType(from location: CLLocation) -> String {
+        if location.speed < 0 {
+            return "unknown"
+        } else if location.speed < 1.0 { // Less than 1 m/s (3.6 km/h)
+            return "stationary"
+        } else if location.speed < 5.0 { // Less than 5 m/s (18 km/h)
+            return "walking"
+        } else if location.speed < 15.0 { // Less than 15 m/s (54 km/h)
+            return "cycling"
+        } else {
+            return "driving"
+        }
     }
     
     private func getCurrentUserID() -> String? {
-        // Get the current user ID from the shared AuthManager instance
-        // We need to access this from the environment or a shared instance
-        return nil // Will be fixed when we integrate with the actual AuthManager
+        // TODO: Implement proper user ID retrieval when SupabaseManager integration is complete
+        // For now, try to get from UserDefaults cache
+        return UserDefaults.standard.string(forKey: "currentUserID")
     }
     
     // MARK: - Public Utility Methods

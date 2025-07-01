@@ -1273,22 +1273,150 @@ class SupabaseManager: ObservableObject {
     
     /// Subscribe to real-time message updates for a conversation
     func subscribeToConversationMessages(conversationId: String, onMessageReceived: @escaping (Message) -> Void) async {
-        print("🔔 Real-time messaging subscription placeholder for conversation: \(conversationId)")
-        // TODO: Implement real-time subscriptions with updated Supabase API
-        // For now, we'll rely on periodic polling or manual refresh
+        print("🔔 Setting up real-time messaging subscription for conversation: \(conversationId)")
+        
+        do {
+            let channel = client.channel("conversation:\(conversationId)")
+            
+            await channel.on(.postgres_changes(
+                AnyAction.insert,
+                schema: "public",
+                table: "messages",
+                filter: "conversation_id=eq.\(conversationId)"
+            )) { payload in
+                print("📨 Received new message via real-time")
+                
+                // Parse the new message from the payload
+                if let record = payload.record,
+                   let messageData = try? JSONSerialization.data(withJSONObject: record),
+                   let messageDB = try? JSONDecoder().decode(MessageDB.self, from: messageData) {
+                    
+                    let message = messageDB.toMessage()
+                    onMessageReceived(message)
+                } else {
+                    print("❌ Failed to parse real-time message payload")
+                }
+            }
+            
+            await channel.subscribe()
+            print("✅ Successfully subscribed to real-time messages for conversation: \(conversationId)")
+            
+        } catch {
+            print("❌ Failed to set up real-time messaging subscription: \(error)")
+            // Fall back to periodic polling
+            await startMessagePolling(conversationId: conversationId, onMessageReceived: onMessageReceived)
+        }
     }
     
     /// Subscribe to conversation list updates for a user
     func subscribeToUserConversations(userId: String, onConversationUpdate: @escaping () -> Void) async {
-        print("🔔 Real-time conversation updates placeholder for user: \(userId)")
-        // TODO: Implement real-time subscriptions with updated Supabase API
-        // For now, we'll rely on periodic polling or manual refresh
+        print("🔔 Setting up real-time conversation updates for user: \(userId)")
+        
+        do {
+            let channel = client.channel("user_conversations:\(userId)")
+            
+            // Subscribe to conversation updates
+            await channel.on(.postgres_changes(
+                AnyAction.all,
+                schema: "public",
+                table: "conversations",
+                filter: "participants.cs.{\"\(userId)\"}"
+            )) { _ in
+                print("📋 Conversation list updated via real-time")
+                onConversationUpdate()
+            }
+            
+            // Subscribe to new messages (to update conversation preview)
+            await channel.on(.postgres_changes(
+                AnyAction.insert,
+                schema: "public",
+                table: "messages"
+            )) { payload in
+                print("📨 New message received, updating conversations")
+                onConversationUpdate()
+            }
+            
+            await channel.subscribe()
+            print("✅ Successfully subscribed to real-time conversation updates for user: \(userId)")
+            
+        } catch {
+            print("❌ Failed to set up real-time conversation subscription: \(error)")
+            // Fall back to periodic polling
+            await startConversationPolling(userId: userId, onConversationUpdate: onConversationUpdate)
+        }
+    }
+    
+    /// Fallback polling mechanism for messages when real-time fails
+    private func startMessagePolling(conversationId: String, onMessageReceived: @escaping (Message) -> Void) async {
+        print("🔄 Starting message polling fallback for conversation: \(conversationId)")
+        
+        // Store last message timestamp to avoid duplicates
+        var lastMessageTime: Date = Date()
+        
+        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { timer in
+            Task {
+                let newMessages = await self.getMessagesAfter(conversationId: conversationId, after: lastMessageTime)
+                for message in newMessages {
+                    onMessageReceived(message)
+                    lastMessageTime = max(lastMessageTime, message.timestamp)
+                }
+            }
+        }
+    }
+    
+    /// Fallback polling mechanism for conversations when real-time fails
+    private func startConversationPolling(userId: String, onConversationUpdate: @escaping () -> Void) async {
+        print("🔄 Starting conversation polling fallback for user: \(userId)")
+        
+        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { timer in
+            Task {
+                onConversationUpdate()
+            }
+        }
+    }
+    
+    /// Helper method to get messages after a specific timestamp
+    private func getMessagesAfter(conversationId: String, after: Date) async -> [Message] {
+        do {
+            let afterString = ISO8601DateFormatter().string(from: after)
+            let messagesDB: [MessageDB] = try await client
+                .from("messages")
+                .select("*")
+                .eq("conversation_id", value: conversationId)
+                .gt("created_at", value: afterString)
+                .order("created_at", ascending: true)
+                .execute()
+                .value
+            
+            return messagesDB.map { $0.toMessage() }
+        } catch {
+            print("❌ Failed to fetch messages after timestamp: \(error)")
+            return []
+        }
     }
     
     /// Unsubscribe from real-time updates
     func unsubscribeFromRealTimeUpdates() async {
         print("🔕 Unsubscribing from all real-time updates")
         await client.removeAllChannels()
+    }
+    
+    /// Unsubscribe from specific conversation
+    func unsubscribeFromConversation(conversationId: String) async {
+        print("🔕 Unsubscribing from conversation: \(conversationId)")
+        let channelName = "conversation:\(conversationId)"
+        if let channel = client.getChannels().first(where: { $0.topic == channelName }) {
+            await channel.unsubscribe()
+        }
+    }
+    
+    /// Unsubscribe from user conversations
+    func unsubscribeFromUserConversations(userId: String) async {
+        print("🔕 Unsubscribing from user conversations: \(userId)")
+        let channelName = "user_conversations:\(userId)"
+        if let channel = client.getChannels().first(where: { $0.topic == channelName }) {
+            await channel.unsubscribe()
+        }
     }
     
     /// Mark message as read and update read status
@@ -1570,9 +1698,35 @@ extension SupabaseManager {
         isManual: Bool = false,
         activityType: String? = nil
     ) async -> Bool {
-        // TODO: Implement location history when database is ready
-        print("✅ Location saved to history (placeholder)")
-        return true
+        do {
+            let locationInsert = LocationHistoryInsert(
+                user_id: userID,
+                latitude: latitude,
+                longitude: longitude,
+                accuracy: accuracy,
+                altitude: altitude,
+                speed: speed,
+                heading: heading,
+                location_name: locationName,
+                city: city,
+                country: country,
+                is_manual: isManual,
+                activity_type: activityType ?? "unknown"
+            )
+            
+            let _: [LocationHistoryEntry] = try await client
+                .from("location_history")
+                .insert(locationInsert)
+                .select()
+                .execute()
+                .value
+            
+            print("✅ Location saved to history: \(locationName ?? "Unknown") at (\(latitude), \(longitude))")
+            return true
+        } catch {
+            print("❌ Failed to save location to history: \(error)")
+            return false
+        }
     }
     
     /// Get user's location history
@@ -1582,8 +1736,35 @@ extension SupabaseManager {
         startDate: Date? = nil,
         endDate: Date? = nil
     ) async throws -> [LocationHistoryEntry] {
-        // TODO: Implement when database is ready
-        return []
+        do {
+            var query = client
+                .from("location_history")
+                .select("*")
+                .eq("user_id", value: userID)
+                .order("created_at", ascending: false)
+                .limit(limit)
+            
+            // Add date filters if provided
+            if let startDate = startDate {
+                let startString = ISO8601DateFormatter().string(from: startDate)
+                query = query.gte("created_at", value: startString)
+            }
+            
+            if let endDate = endDate {
+                let endString = ISO8601DateFormatter().string(from: endDate)
+                query = query.lte("created_at", value: endString)
+            }
+            
+            let locationHistory: [LocationHistoryEntry] = try await query
+                .execute()
+                .value
+            
+            print("✅ Retrieved \(locationHistory.count) location history entries for user: \(userID)")
+            return locationHistory
+        } catch {
+            print("❌ Failed to retrieve location history: \(error)")
+            throw error
+        }
     }
     
     /// Delete location history older than specified days
