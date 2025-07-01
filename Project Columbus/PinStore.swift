@@ -218,34 +218,48 @@ class PinStore: ObservableObject {
     ///   - pin: The pin to remove
     ///   - listName: The name of the list to remove from
     func removePin(_ pin: Pin, from listName: String) {
+        print("🗑️ PinStore: Removing pin '\(pin.locationName)' from list '\(listName)'")
+        
         // Update local state
         if listName == "Favorites" {
             favoritePins.removeAll { $0.id == pin.id }
         }
         if let index = lists.firstIndex(where: { $0.name.lowercased() == listName.lowercased() }) {
+            let originalPinCount = lists[index].pins.count
             lists[index].pins.removeAll { $0.id == pin.id }
+            print("📊 PinStore: List '\(listName)' pin count: \(originalPinCount) -> \(lists[index].pins.count)")
+            
             // Remove from database using list ID
             let listId = lists[index].id.uuidString
             Task {
+                print("🔄 PinStore: Attempting to remove pin from database...")
                 let success = await supabaseManager.removePinFromListById(pin: pin, listId: listId)
                 if success {
-                    print("✅ Pin removed from list '\(listName)' in database")
+                    print("✅ Pin '\(pin.locationName)' removed from list '\(listName)' in database")
                     await refresh()
                 } else {
-                    print("❌ Failed to remove pin from list '\(listName)' in database")
+                    print("❌ Failed to remove pin '\(pin.locationName)' from list '\(listName)' in database")
                     // Revert local changes on failure
                     await MainActor.run {
                         lists[index].pins.append(pin)
+                        if listName == "Favorites" {
+                            favoritePins.append(pin)
+                        }
+                        print("🔄 PinStore: Reverted local changes due to database error")
                     }
                 }
             }
+        } else {
+            print("⚠️ PinStore: List '\(listName)' not found")
         }
+        
         // Remove from master list if not in any other list
         let isInAnyList = lists.contains { list in
             list.pins.contains { $0.id == pin.id }
         }
         if !isInAnyList {
             masterPins.removeAll { $0.id == pin.id }
+            print("🗑️ PinStore: Removed pin from master list as it's not in any other lists")
         }
     }
     

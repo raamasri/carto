@@ -259,7 +259,12 @@ class SupabaseManager: ObservableObject {
         guard let session = try? await client.auth.session else { return nil }
         
         do {
-            let existingPins: [PinDB] = try await client
+            // Create a simple response struct to avoid decoding issues
+            struct PinIdResponse: Codable {
+                let id: String
+            }
+            
+            let existingPins: [PinIdResponse] = try await client
                 .from("pins")
                 .select("id")
                 .eq("user_id", value: session.user.id.uuidString)

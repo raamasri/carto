@@ -348,6 +348,7 @@ struct ListDetailView: View {
     private func deletePins(offsets: IndexSet) {
         for index in offsets {
             let pin = filteredPins[index]
+            print("🗑️ Deleting pin '\(pin.locationName)' from list '\(list.name)'")
             pinStore.removePin(pin, from: list.name)
         }
     }
