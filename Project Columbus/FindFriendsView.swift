@@ -190,6 +190,7 @@ struct FindFriendsView: View {
     @State private var nearbyUsers: [AppUser] = []
     @State private var mutualFriendUsers: [AppUser] = []
     @State private var isLoadingRecommendations = false
+    @State private var showRecommendations = true
 
     var filteredUsers: [AppUser] {
         guard isEditing else { return [] }
@@ -239,107 +240,26 @@ struct FindFriendsView: View {
                     }
                 }
                 .overlay(alignment: .top) {
-                    ZStack(alignment: .top) {
-                        VStack(spacing: 0) {
-                            Spacer().frame(height: 70)
-                            if isEditing {
-                                ZStack {
-                                    ScrollView {
-                                        VStack(spacing: 0) {
-                                            ForEach(filteredUsers) { user in
-                                                Button {
-                                                    selectedUser = user
-                                                    showProfile = true
-                                                    isEditing = false
-                                                } label: {
-                                                    HStack {
-                                                        Text(user.username)
-                                                            .font(.headline)
-                                                            .foregroundColor(.primary)
-                                                        Spacer()
-                                                    }
-                                                    .padding()
-                                                }
-                                                Divider()
-                                            }
-                                        }
-                                    }
-                                    .fixedSize(horizontal: false, vertical: true)
-                                }
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(20)
-                                .padding(.horizontal)
-                            } else if !isEditing && searchText.isEmpty {
-                                // Show recommendations when not searching
-                                ZStack {
-                                    ScrollView {
-                                        VStack(spacing: 20) {
-                                            if !nearbyUsers.isEmpty {
-                                                RecommendationSection(
-                                                    title: "People Nearby",
-                                                    subtitle: "Based on your location",
-                                                    users: nearbyUsers,
-                                                    onUserTap: { user in
-                                                        selectedUser = user
-                                                        showProfile = true
-                                                    }
-                                                )
-                                            }
-                                            
-                                            if !mutualFriendUsers.isEmpty {
-                                                RecommendationSection(
-                                                    title: "Mutual Friends",
-                                                    subtitle: "People you might know",
-                                                    users: mutualFriendUsers,
-                                                    onUserTap: { user in
-                                                        selectedUser = user
-                                                        showProfile = true
-                                                    }
-                                                )
-                                            }
-                                            
-                                            if !recommendedUsers.isEmpty {
-                                                RecommendationSection(
-                                                    title: "Suggested for You",
-                                                    subtitle: "Based on your activity",
-                                                    users: recommendedUsers,
-                                                    onUserTap: { user in
-                                                        selectedUser = user
-                                                        showProfile = true
-                                                    }
-                                                )
-                                            }
-                                            
-                                            if isLoadingRecommendations {
-                                                VStack(spacing: 12) {
-                                                    ProgressView()
-                                                    Text("Finding people you might know...")
-                                                        .font(.caption)
-                                                        .foregroundColor(.secondary)
-                                                }
-                                                .padding()
-                                            }
-                                        }
-                                        .padding(.top, 20)
-                                    }
-                                }
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(20)
-                                .padding(.horizontal)
-                            }
-                        }
+                    VStack(spacing: 0) {
+                        // Search bar - always visible
                         HStack {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(.gray)
                             TextField("@handle, names, or email",
                                       text: $searchText,
-                                      onEditingChanged: { editing in isEditing = editing })
+                                      onEditingChanged: { editing in 
+                                isEditing = editing
+                                if editing {
+                                    showRecommendations = false
+                                }
+                            })
                                 .autocorrectionDisabled()
                                 .padding(8)
                             if !searchText.isEmpty || !filteredUsers.isEmpty {
                                 Button(action: {
                                     searchText = ""
                                     isEditing = false
+                                    showRecommendations = true
                                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                                 }) {
                                     Image(systemName: "xmark.circle.fill")
@@ -353,6 +273,141 @@ struct FindFriendsView: View {
                         .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                         .padding(.horizontal, AppSpacing.horizontal)
                         .padding(.top, AppSpacing.vertical)
+                        
+                        // Content area - flexible height
+                        if isEditing && !filteredUsers.isEmpty {
+                            VStack(spacing: 0) {
+                                ForEach(filteredUsers.prefix(6)) { user in // Limit to 6 results
+                                    Button {
+                                        selectedUser = user
+                                        showProfile = true
+                                        isEditing = false
+                                        searchText = ""
+                                    } label: {
+                                        HStack {
+                                            Text(user.username)
+                                                .font(.headline)
+                                                .foregroundColor(.primary)
+                                            Spacer()
+                                        }
+                                        .padding()
+                                    }
+                                    if user.id != filteredUsers.prefix(6).last?.id {
+                                        Divider()
+                                    }
+                                }
+                            }
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(20)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+                        } else if showRecommendations && !isEditing && searchText.isEmpty {
+                            // Flexible recommendations sheet
+                            VStack(spacing: 0) {
+                                // Handle bar for dismissing
+                                HStack {
+                                    Spacer()
+                                    Button(action: {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            showRecommendations = false
+                                        }
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.horizontal)
+                                .padding(.top, 12)
+                                
+                                ScrollView {
+                                    VStack(spacing: 20) {
+                                        if !nearbyUsers.isEmpty {
+                                            RecommendationSection(
+                                                title: "People Nearby",
+                                                subtitle: "Based on your location",
+                                                users: nearbyUsers,
+                                                onUserTap: { user in
+                                                    selectedUser = user
+                                                    showProfile = true
+                                                }
+                                            )
+                                        }
+                                        
+                                        if !mutualFriendUsers.isEmpty {
+                                            RecommendationSection(
+                                                title: "Mutual Friends",
+                                                subtitle: "People you might know",
+                                                users: mutualFriendUsers,
+                                                onUserTap: { user in
+                                                    selectedUser = user
+                                                    showProfile = true
+                                                }
+                                            )
+                                        }
+                                        
+                                        if !recommendedUsers.isEmpty {
+                                            RecommendationSection(
+                                                title: "Suggested for You",
+                                                subtitle: "Based on your activity",
+                                                users: recommendedUsers,
+                                                onUserTap: { user in
+                                                    selectedUser = user
+                                                    showProfile = true
+                                                }
+                                            )
+                                        }
+                                        
+                                        if isLoadingRecommendations {
+                                            VStack(spacing: 12) {
+                                                ProgressView()
+                                                Text("Finding people you might know...")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            .padding()
+                                        }
+                                        
+                                        // Bottom padding to ensure content doesn't get cut off
+                                        Color.clear.frame(height: 20)
+                                    }
+                                    .padding(.top, 12)
+                                }
+                                .frame(maxHeight: 400) // Limit max height but allow flexibility
+                            }
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(20)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+                        }
+                        
+                        Spacer()
+                    }
+                }
+                
+                // Floating action button to show recommendations when hidden
+                if !showRecommendations && !isEditing && searchText.isEmpty {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    showRecommendations = true
+                                }
+                            }) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.system(size: 20, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            .frame(width: 56, height: 56)
+                            .background(Color.blue)
+                            .clipShape(Circle())
+                            .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                            .padding(.leading, 20)
+                            .padding(.bottom, 100) // Account for tab bar
+                            
+                            Spacer()
+                        }
                     }
                 }
             } // end ZStack
