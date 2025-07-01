@@ -8,6 +8,8 @@ struct AlertMessage: Identifiable {
 }
 
 struct LiveFeedView: View {
+    let tabs = ["History", "Friends", "Following", "For You"]
+    @State private var followingUsers: [AppUser] = []
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
     @State private var region = MKCoordinateRegion(
@@ -24,13 +26,11 @@ struct LiveFeedView: View {
     @State private var pinToSend: Pin? = nil
     @State private var pinToAdd: Pin? = nil
     @State private var showAddToListSheet = false
-    @State private var followingUsers: [AppUser] = []
     @State private var isLoadingFollowing = false
     @State private var sendConfirmation: AlertMessage? = nil
-    let tabs = ["History", "Friends", "Following", "For You"]
 
     var body: some View {
-        NavigationView {
+        return NavigationView {
             VStack(spacing: 0) {
                 Picker("Tabs", selection: $selectedTab) {
                     ForEach(0..<tabs.count, id: \.self) { index in
@@ -47,7 +47,7 @@ struct LiveFeedView: View {
                         // History Tab - User's own activity
                         VStack {
                             if authManager.isLoggedIn {
-                                List(pinStore.masterPins.filter { $0.authorHandle.contains(authManager.currentUsername ?? "") }.reversed()) { pin in
+                                List(getFilteredPins().filter { $0.authorHandle.contains(authManager.currentUsername ?? "") }.reversed()) { pin in
                                     NavigationLink(
                                         destination: LocationDetailView(
                                             mapItem: pin.toMapItem(),
@@ -69,48 +69,48 @@ struct LiveFeedView: View {
                             }
                         }
                     case 1:
-                                            // Friends Tab
-                    List(pinStore.masterPins.reversed()) { pin in
-                        NavigationLink(
-                            destination: LocationDetailView(
-                                mapItem: pin.toMapItem(),
-                                onAddPin: { _ in }
-                            )
-                            .environmentObject(pinStore)
-                        ) {
-                            PinCardView(pin: pin)
+                        // Friends Tab
+                        List(getFriendsTabPins().reversed()) { pin in
+                            NavigationLink(
+                                destination: LocationDetailView(
+                                    mapItem: pin.toMapItem(),
+                                    onAddPin: { _ in }
+                                )
                                 .environmentObject(pinStore)
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button {
-                                pinToAdd = pin
-                                showAddToListSheet = true
-                            } label: {
-                                Label("Add to List", systemImage: "plus")
+                            ) {
+                                PinCardView(pin: pin)
+                                    .environmentObject(pinStore)
                             }
-                            .tint(.blue)
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                            Button {
-                                pinToSend = pin
-                                showSendToModal = true
-                                fetchFollowingUsersIfNeeded()
-                            } label: {
-                                Label("Send To", systemImage: "paperplane")
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    pinToAdd = pin
+                                    showAddToListSheet = true
+                                } label: {
+                                    Label("Add to List", systemImage: "plus")
+                                }
+                                .tint(.blue)
                             }
-                            .tint(.green)
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                Button {
+                                    pinToSend = pin
+                                    showSendToModal = true
+                                    fetchFollowingUsersIfNeeded()
+                                } label: {
+                                    Label("Send To", systemImage: "paperplane")
+                                }
+                                .tint(.green)
+                            }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
-                    }
-                    .refreshable {
-                        await refreshPins()
-                    }
-                    .simultaneousGesture(
-                        DragGesture()
-                            .onChanged { _ in }
-                            .onEnded { _ in }
-                    )
+                        .refreshable {
+                            await refreshPins()
+                        }
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { _ in }
+                                .onEnded { _ in }
+                        )
                     case 2:
                         // Following Tab - Content from people you follow
                         VStack {
@@ -137,10 +137,10 @@ struct LiveFeedView: View {
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 } else {
                                     List {
-                                        ForEach(pinStore.masterPins.filter { pin in
-                                            followingUsers.contains { user in
+                                        ForEach(getFilteredPins().filter { pin in
+                                            followingUsers.contains(where: { user in
                                                 pin.authorHandle.contains(user.username)
-                                            }
+                                            })
                                         }.reversed()) { pin in
                                             NavigationLink(
                                                 destination: LocationDetailView(
@@ -308,6 +308,58 @@ struct LiveFeedView: View {
         }
     }
 
+    /// Get filtered pins that are only in user lists (not orphaned pins)
+    func getFilteredPins() -> [Pin] {
+        // Only show pins that are actually in user's lists (not orphaned pins)
+        // Use Set to remove duplicates when pins appear in multiple lists
+        let allPins = pinStore.lists.flatMap { $0.pins }
+        var uniquePins: [Pin] = []
+        var seenIds: Set<UUID> = []
+        
+        for pin in allPins {
+            if !seenIds.contains(pin.id) {
+                uniquePins.append(pin)
+                seenIds.insert(pin.id)
+            }
+        }
+        
+        // Debug logging to help identify discrepancies
+        if pinStore.masterPins.count != uniquePins.count {
+            print("🔍 LiveFeed: Found \(pinStore.masterPins.count) total pins in database, \(uniquePins.count) pins in lists (filtered out \(pinStore.masterPins.count - uniquePins.count) orphaned pins)")
+        }
+        
+        return uniquePins
+    }
+
+    /// Get pins for Friends tab - includes user's organized pins + public pins from others, but excludes user's orphaned pins
+    func getFriendsTabPins() -> [Pin] {
+        let currentUsername = authManager.currentUsername ?? ""
+        
+        // Get pins from user's lists (organized pins)
+        let userListPins = getFilteredPins()
+        
+        // Get all master pins and filter out user's orphaned pins
+        let publicPins = pinStore.masterPins.filter { pin in
+            // Include if it's in user's lists OR if it's from another user
+            userListPins.contains(where: { $0.id == pin.id }) || 
+            !pin.authorHandle.contains(currentUsername)
+        }
+        
+        // Remove duplicates
+        var uniquePins: [Pin] = []
+        var seenIds: Set<UUID> = []
+        
+        for pin in publicPins {
+            if !seenIds.contains(pin.id) {
+                uniquePins.append(pin)
+                seenIds.insert(pin.id)
+            }
+        }
+        
+        print("🔍 Friends Tab: Showing \(uniquePins.count) pins (user organized + public from others, filtered out user's orphaned pins)")
+        return uniquePins
+    }
+
     func refreshPins() async {
         guard let userID = authManager.currentUserID else { return }
         
@@ -374,10 +426,10 @@ struct LiveFeedView: View {
     
     /// Smart recommendation algorithm for "For You" feed
     func getRecommendedPins() -> [Pin] {
-        guard authManager.isLoggedIn else { return pinStore.masterPins }
+        guard authManager.isLoggedIn else { return getFilteredPins() }
         
         let currentUsername = authManager.currentUsername ?? ""
-        let allPins = pinStore.masterPins
+        let allPins = getFilteredPins()
         
         // Score each pin based on multiple factors
         let scoredPins = allPins.map { pin -> (Pin, Double) in
@@ -521,23 +573,23 @@ struct POIView: View {
 
 private func iconForCollection(_ name: String) -> String {
     switch name.lowercased() {
-    case "favorites": return "heart.fill"
-    case "coffee shops": return "cup.and.saucer.fill"
-    case "restaurants": return "fork.knife"
-    case "bars": return "wineglass.fill"
-    case "shopping": return "bag.fill"
-    default: return "folder.fill"
+    case "favorites":  "heart.fill"
+    case "coffee shops":  "cup.and.saucer.fill"
+    case "restaurants":  "fork.knife"
+    case "bars":  "wineglass.fill"
+    case "shopping":  "bag.fill"
+    default:  "folder.fill"
     }
 }
 
 private func colorForCollection(_ name: String) -> Color {
     switch name.lowercased() {
-    case "favorites": return .red
-    case "coffee shops": return .brown
-    case "restaurants": return .orange
-    case "bars": return .purple
-    case "shopping": return .pink
-    default: return .blue
+    case "favorites":  .red
+    case "coffee shops":  .brown
+    case "restaurants":  .orange
+    case "bars":  .purple
+    case "shopping":  .pink
+    default:  .blue
     }
 }
 
