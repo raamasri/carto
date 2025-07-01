@@ -989,17 +989,18 @@ struct MainMapView: View {
 // MARK: - Enhanced Pin Annotation for Main Map
 struct MainMapEnhancedPinAnnotation: View {
     let pin: Pin
+    @EnvironmentObject var pinStore: PinStore
     
     var body: some View {
         ZStack {
-            // Pin background with reaction color
+            // Pin background with list color
             Circle()
-                .fill(reactionColor)
+                .fill(listColor)
                 .frame(width: 32, height: 32)
                 .shadow(radius: 3)
             
-            // Pin icon based on reaction
-            Image(systemName: reactionIcon)
+            // Pin icon based on list
+            Image(systemName: listIcon)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
             
@@ -1024,22 +1025,20 @@ struct MainMapEnhancedPinAnnotation: View {
         }
     }
     
-    private var reactionColor: Color {
-        switch pin.reaction {
-        case .lovedIt:
-            return .red
-        case .wantToGo:
-            return .blue
+    private var listColor: Color {
+        if let primaryList = pinStore.getPrimaryListForPin(pin) {
+            return pinStore.getColorForList(named: primaryList.name)
         }
+        // Fallback to reaction color if no list found
+        return pin.reaction == .lovedIt ? .red : .blue
     }
     
-    private var reactionIcon: String {
-        switch pin.reaction {
-        case .lovedIt:
-            return "heart.fill"
-        case .wantToGo:
-            return "bookmark.fill"
+    private var listIcon: String {
+        if let primaryList = pinStore.getPrimaryListForPin(pin) {
+            return pinStore.getIconForList(named: primaryList.name)
         }
+        // Fallback to reaction icon if no list found
+        return pin.reaction == .lovedIt ? "heart.fill" : "bookmark.fill"
     }
 }
 

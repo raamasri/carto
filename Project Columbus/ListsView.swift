@@ -163,7 +163,7 @@ struct ListRowView: View {
                             .font(.title2)
                     )
                 
-                // Pin icons on top corner of list icon
+                // List icons on top corner of list icon
                 if !list.pins.isEmpty {
                     HStack(spacing: 1) {
                         ForEach(Array(list.pins.prefix(3)), id: \.id) { pin in
@@ -173,9 +173,9 @@ struct ListRowView: View {
                                     .frame(width: 12, height: 12)
                                     .shadow(radius: 1)
                                 
-                                Image(systemName: pin.reaction == .lovedIt ? "heart.fill" : "bookmark.fill")
+                                Image(systemName: iconForCollection(list.name))
                                     .font(.system(size: 6))
-                                    .foregroundColor(pin.reaction == .lovedIt ? .red : .blue)
+                                    .foregroundColor(colorForCollection(list.name))
                             }
                         }
                     }

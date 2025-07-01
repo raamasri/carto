@@ -358,6 +358,45 @@ class PinStore: ObservableObject {
         return lists.first(where: { $0.name == listName })
     }
     
+    /// Finds the primary list that contains a specific pin (prioritizes non-Favorites lists)
+    func getPrimaryListForPin(_ pin: Pin) -> PinList? {
+        let listsContainingPin = lists.filter { list in
+            list.pins.contains { $0.id == pin.id }
+        }
+        
+        // If pin is only in Favorites, return Favorites
+        if listsContainingPin.count == 1 && listsContainingPin.first?.name == "Favorites" {
+            return listsContainingPin.first
+        }
+        
+        // Otherwise, return the first non-Favorites list
+        return listsContainingPin.first { $0.name != "Favorites" } ?? listsContainingPin.first
+    }
+    
+    /// Gets the icon name for a list based on its name
+    func getIconForList(named listName: String) -> String {
+        switch listName.lowercased() {
+        case "favorites": return "heart.fill"
+        case "coffee shops": return "cup.and.saucer.fill"
+        case "restaurants": return "fork.knife"
+        case "bars": return "wineglass.fill"
+        case "shopping": return "bag.fill"
+        default: return "folder.fill"
+        }
+    }
+    
+    /// Gets the color for a list based on its name
+    func getColorForList(named listName: String) -> Color {
+        switch listName.lowercased() {
+        case "favorites": return .red
+        case "coffee shops": return .brown
+        case "restaurants": return .orange
+        case "bars": return .purple
+        case "shopping": return .pink
+        default: return .blue
+        }
+    }
+    
     // TODO: Implement when DataManager is integrated
     // func searchPins(query: String) async -> [Pin] {
     //     guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
