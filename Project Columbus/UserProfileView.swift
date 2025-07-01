@@ -337,7 +337,7 @@ struct UserProfileView: View {
                         .padding(.top, 8)
 
                         if selectedSection == "Map View" {
-                            ZStack(alignment: .topLeading) {
+                            ZStack {
                                 // Main Map
                                 Map(coordinateRegion: $region, annotationItems: filteredPins) { pin in
                                     MapAnnotation(
@@ -352,7 +352,7 @@ struct UserProfileView: View {
                                 .frame(height: 400)
                                 .cornerRadius(10)
                                 .padding(.horizontal)
-                                .padding(.top, showMapFilters ? 120 : 8)
+                                .padding(.top, 8)
                                 .padding(.bottom, 20)
                                 .onAppear {
                                     centerMapOnPins()
@@ -361,23 +361,32 @@ struct UserProfileView: View {
                                     centerMapOnPins()
                                 }
                                 
-                                // Filter Panel (Collapsible)
+                                // Filter Panel (Slides from bottom)
                                 if showMapFilters {
-                                    VStack(spacing: 12) {
-                                        MapFilterPanel(
-                                            selectedReaction: $selectedReactionFilter,
-                                            selectedTimeFilter: $selectedTimeFilter,
-                                            selectedStarFilter: $selectedStarFilter,
-                                            searchText: $mapSearchText
-                                        )
+                                    VStack {
+                                        Spacer()
+                                        VStack(spacing: 12) {
+                                            // Handle bar for visual feedback
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .fill(Color.gray.opacity(0.3))
+                                                .frame(width: 40, height: 6)
+                                                .padding(.top, 8)
+                                            
+                                            MapFilterPanel(
+                                                selectedReaction: $selectedReactionFilter,
+                                                selectedTimeFilter: $selectedTimeFilter,
+                                                selectedStarFilter: $selectedStarFilter,
+                                                searchText: $mapSearchText
+                                            )
+                                        }
+                                        .padding()
+                                        .background(Color(.systemBackground))
+                                        .cornerRadius(16, corners: [.topLeft, .topRight])
+                                        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: -5)
+                                        .padding(.horizontal, 0)
+                                        .transition(.move(edge: .bottom).combined(with: .opacity))
                                     }
-                                    .padding()
-                                    .background(Color(.systemBackground))
-                                    .cornerRadius(12)
-                                    .shadow(radius: 8)
-                                    .padding(.horizontal)
-                                    .padding(.top, 8)
-                                    .transition(.move(edge: .top).combined(with: .opacity))
+                                    .frame(height: 400)
                                 }
                                 
                                 // Control Buttons
@@ -417,7 +426,7 @@ struct UserProfileView: View {
                                         }
                                     }
                                     .padding(.horizontal, 30)
-                                    .padding(.top, showMapFilters ? 140 : 20)
+                                    .padding(.top, 20)
                                     
                                     Spacer()
                                     

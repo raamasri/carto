@@ -482,7 +482,7 @@ struct MainMapView: View {
         ZStack {
             if selectedTab == 0 {
 
-                ZStack(alignment: .topLeading) {
+                ZStack {
                     Map(position: $cameraPosition, selection: $selectedPinForPopup) {
                         ForEach(filteredPins, id: \.id) { pin in
                             Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
@@ -495,23 +495,33 @@ struct MainMapView: View {
                         centerMapOnFilteredPins()
                     }
                     
-                    // Filter Panel (Collapsible)
+                    // Filter Panel (Slides from bottom)
                     if showMapFilters {
-                        VStack(spacing: 12) {
-                            MainMapFilterPanel(
-                                selectedReaction: $selectedReactionFilter,
-                                selectedTimeFilter: $selectedTimeFilter,
-                                selectedStarFilter: $selectedStarFilter,
-                                searchText: $mapSearchText
-                            )
+                        VStack {
+                            Spacer()
+                            VStack(spacing: 12) {
+                                // Handle bar for visual feedback
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 40, height: 6)
+                                    .padding(.top, 8)
+                                
+                                MainMapFilterPanel(
+                                    selectedReaction: $selectedReactionFilter,
+                                    selectedTimeFilter: $selectedTimeFilter,
+                                    selectedStarFilter: $selectedStarFilter,
+                                    searchText: $mapSearchText
+                                )
+                            }
+                            .padding()
+                            .background(Color(.systemBackground))
+                            .cornerRadius(16, corners: [.topLeft, .topRight])
+                            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: -5)
+                            .padding(.horizontal, 0)
+                            .padding(.bottom, 80) // Account for bottom navigation
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        .padding()
-                        .background(Color(.systemBackground))
-                        .cornerRadius(12)
-                        .shadow(radius: 8)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .ignoresSafeArea(.container, edges: .bottom)
                     }
                 }
                 .mapStyle(styleForMapType(selectedMapType))
@@ -1319,6 +1329,27 @@ struct ContentView: View {
         }
     }
 
+}
+
+// MARK: - View Extensions
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
+    }
 }
 
     struct ContentView_Previews: PreviewProvider {
