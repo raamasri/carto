@@ -102,13 +102,18 @@ struct UserListView: View {
                 }
                 
                 // Filter out the current user from the display
+                let originalCount = fetchedUsers.count
                 if let currentUserID = authManager.currentUserID {
+                    print("🔍 Current user ID: \(currentUserID)")
+                    print("🔍 User IDs in list: \(fetchedUsers.map { "\($0.username): \($0.id)" })")
                     fetchedUsers = fetchedUsers.filter { $0.id != currentUserID }
-                    print("🧪 Filtered out current user, showing \(fetchedUsers.count) users")
+                    print("🧪 Filtered out current user: \(originalCount) -> \(fetchedUsers.count) users")
+                } else {
+                    print("⚠️ No current user ID found in authManager")
                 }
                 
                 users = fetchedUsers
-                print("🧪 Retrieved users: \(users.map { $0.username })")
+                print("🧪 Final users list: \(users.map { $0.username })")
             } catch {
                 print("❌ Failed to fetch users: \(error)")
             }
