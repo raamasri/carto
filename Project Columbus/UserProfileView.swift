@@ -872,43 +872,6 @@ struct CircleCropperView: View {
     }
 }
 
-struct EditProfileSheet: View {
-    @Binding var username: String
-    @Binding var fullName: String
-    @Binding var bio: String
-    var onSave: () -> Void
-    var onCancel: () -> Void
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(header: Text("Name")) {
-                    TextField("Full name", text: $fullName)
-                }
-                Section(header: Text("Username")) {
-                    TextField("Username", text: $username)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                }
-                Section(header: Text("Bio")) {
-                    TextEditor(text: $bio)
-                        .frame(minHeight: 120)
-                }
-            }
-            .navigationTitle("Edit Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onCancel() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { onSave() }
-                }
-            }
-        }
-    }
-}
-
 
 struct FollowButton: View {
     @Binding var isFollowing: Bool

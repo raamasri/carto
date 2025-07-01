@@ -1036,6 +1036,251 @@ struct TipRow: View {
     }
 }
 
+struct ProfileHelpView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Profile Guide")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Text("Master your CARTO profile and discover everything the app has to offer.")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                
+                Divider()
+                
+                // Profile Overview Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Your Profile")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        HelpActionRow(
+                            icon: "person.circle.fill",
+                            title: "Profile Picture",
+                            description: "Tap to upload or change your profile photo. Your picture helps friends recognize you.",
+                            accentColor: .blue
+                        )
+                        
+                        HelpActionRow(
+                            icon: "textformat",
+                            title: "Name & Bio",
+                            description: "Share your name and a brief bio. Tell others about your interests and travel style.",
+                            accentColor: .green
+                        )
+                        
+                        HelpActionRow(
+                            icon: "person.2.fill",
+                            title: "Followers & Following",
+                            description: "See your social connections. Tap the numbers to view your followers and who you follow.",
+                            accentColor: .purple
+                        )
+                    }
+                }
+                
+                Divider()
+                
+                // Profile Actions Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Profile Actions")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        HelpActionRow(
+                            icon: "pencil",
+                            title: "Edit Profile",
+                            description: "Update your information, profile picture, interests, and privacy settings.",
+                            accentColor: .orange
+                        )
+                        
+                        HelpActionRow(
+                            icon: "bell.fill",
+                            title: "Notifications",
+                            description: "Stay updated with follows, likes, comments, and activity from your network.",
+                            accentColor: .red
+                        )
+                        
+                        HelpActionRow(
+                            icon: "map.fill",
+                            title: "Map View",
+                            description: "See all your pinned locations on an interactive map with filtering options.",
+                            accentColor: .blue
+                        )
+                        
+                        HelpActionRow(
+                            icon: "list.bullet",
+                            title: "My Lists",
+                            description: "Organize your pins into collections like Favorites, Restaurants, Coffee Shops, etc.",
+                            accentColor: .green
+                        )
+                    }
+                }
+                
+                Divider()
+                
+                // CARTO App Overview Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("About CARTO")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("CARTO is your personal travel companion and location discovery app. Here's what makes it special:")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                        
+                        HelpActionRow(
+                            icon: "location.fill",
+                            title: "Pin Locations",
+                            description: "Save and organize places you've been or want to visit. Add photos, notes, and ratings.",
+                            accentColor: .red
+                        )
+                        
+                        HelpActionRow(
+                            icon: "person.3.fill",
+                            title: "Social Discovery",
+                            description: "Follow friends, see their recommendations, and discover new places through your network.",
+                            accentColor: .purple
+                        )
+                        
+                        HelpActionRow(
+                            icon: "list.star",
+                            title: "Smart Lists",
+                            description: "Create themed collections of places. Share lists with friends or keep them private.",
+                            accentColor: .orange
+                        )
+                        
+                        HelpActionRow(
+                            icon: "map",
+                            title: "Interactive Maps",
+                            description: "Visualize your pins on beautiful maps with filtering, search, and exploration features.",
+                            accentColor: .blue
+                        )
+                        
+                        HelpActionRow(
+                            icon: "heart.fill",
+                            title: "Reactions & Reviews",
+                            description: "Rate places, leave reactions, and read reviews from your trusted network.",
+                            accentColor: .pink
+                        )
+                    }
+                }
+                
+                Divider()
+                
+                // Navigation Tips Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Navigation Tips")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        HelpActionRow(
+                            icon: "house.fill",
+                            title: "Home Tab",
+                            description: "Your main feed showing recent activity from friends and recommended places.",
+                            accentColor: .blue
+                        )
+                        
+                        HelpActionRow(
+                            icon: "person.2.fill",
+                            title: "Social Tab",
+                            description: "Discover new people to follow and see trending locations in your network.",
+                            accentColor: .purple
+                        )
+                        
+                        HelpActionRow(
+                            icon: "plus.circle.fill",
+                            title: "Add Tab",
+                            description: "Quickly add new pins, create lists, or share your current location.",
+                            accentColor: .green
+                        )
+                        
+                        HelpActionRow(
+                            icon: "doc.text.fill",
+                            title: "Lists Tab",
+                            description: "Manage all your collections and browse shared lists from friends.",
+                            accentColor: .orange
+                        )
+                        
+                        HelpActionRow(
+                            icon: "person.circle.fill",
+                            title: "Profile Tab",
+                            description: "Your personal space to manage your profile, settings, and view your activity.",
+                            accentColor: .blue
+                        )
+                    }
+                }
+                
+                Divider()
+                
+                // Privacy & Settings Section
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Privacy & Settings")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        HelpActionRow(
+                            icon: "lock.fill",
+                            title: "Private Account",
+                            description: "Control who can see your profile and pins. Make your account private for added privacy.",
+                            accentColor: .red
+                        )
+                        
+                        HelpActionRow(
+                            icon: "location.circle.fill",
+                            title: "Location Privacy",
+                            description: "Choose when to share your location and control visibility of your pins.",
+                            accentColor: .orange
+                        )
+                        
+                        HelpActionRow(
+                            icon: "message.fill",
+                            title: "Communication",
+                            description: "Manage who can send you messages and how you receive notifications.",
+                            accentColor: .blue
+                        )
+                    }
+                }
+                
+                Divider()
+                
+                // Getting Started Tips
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Getting Started")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("New to CARTO? Here's how to get the most out of the app:")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("1. **Complete your profile** - Add a photo and bio")
+                            Text("2. **Create your first list** - Start with 'Favorites' or 'Want to Visit'")
+                            Text("3. **Add some pins** - Save places you love or want to remember")
+                            Text("4. **Find friends** - Connect with people you know")
+                            Text("5. **Explore** - Browse recommendations and discover new places")
+                        }
+                        .font(.body)
+                    }
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Profile & App Guide")
+        .navigationBarTitleDisplayMode(.large)
+    }
+}
+
 #Preview {
     HelpSupportView()
 } 
