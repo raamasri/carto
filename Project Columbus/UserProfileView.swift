@@ -42,10 +42,7 @@ struct UserProfileView: View {
     @State private var selectedUIImage: UIImage? = nil
     @State private var imageToCrop: UIImage? = nil
     @State private var profileImage: Image? = nil
-    @State private var tempUsername: String = ""
-    @State private var tempFullName: String = ""
-    @State private var isEditingProfile = false
-    @State private var tempBio = ""
+
     @State private var hasRequestedFollow = false
     @State private var showFullscreenMap = false
     @State private var showBlockReportSheet = false
@@ -218,12 +215,10 @@ struct UserProfileView: View {
                 VStack(spacing: 8) {
                     if profileUser.isCurrentUser ?? false {
                         HStack(spacing: 16) {
-                            Button(action: {
-                                tempUsername = profileUser.username
-                                tempFullName = profileUser.full_name
-                                tempBio = bio
-                                isEditingProfile = true
-                            }) {
+                            NavigationLink(destination: 
+                                ProfileEditView()
+                                    .environmentObject(authManager)
+                            ) {
                                 Text("Edit Profile")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
@@ -610,42 +605,7 @@ struct UserProfileView: View {
                 }
             }
         }
-        .sheet(isPresented: $isEditingProfile) {
-            EditProfileSheet(
-                username: $tempUsername,
-                fullName: $tempFullName,
-                bio: $tempBio,
-                onSave: {
-                    Task {
-                        do {
-                            // Persist change to backend
-                            try await SupabaseManager.shared.updateUserProfile(
-                                userID: profileUser.id,
-                                username: tempUsername,
-                                fullName: tempFullName,
-                                email: profileUser.email ?? "",
-                                bio: tempBio,
-                                avatarURL: profileUser.avatarURL ?? ""
-                            )
-                            // Re-fetch to get the definitive record
-                            if let updated = await SupabaseManager.shared.fetchUserProfile(userID: profileUser.id) {
-                                await MainActor.run {
-                                    displayedUser = updated
-                                    bio = updated.bio ?? ""
-                                    tempBio = updated.bio ?? ""
-                                    isEditingProfile = false
-                                }
-                            }
-                        } catch {
-                            print("Failed to save profile:", error)
-                        }
-                    }
-                },
-                onCancel: {
-                    isEditingProfile = false
-                }
-            )
-        }
+
                 .sheet(item: $imageToCrop) { image in
             CircleCropperView(image: image) { cropped in
                 Task {
@@ -671,7 +631,7 @@ struct UserProfileView: View {
                             try await SupabaseManager.shared.updateUserProfile(
                                 userID: profileUser.id,
                                 username: displayedUser.username,
-                                fullName: tempFullName, // ✅ user's edited name
+                                fullName: displayedUser.full_name,
                                 email: profileUser.email ?? "",
                                 bio: bio,
                                 avatarURL: url.absoluteString
