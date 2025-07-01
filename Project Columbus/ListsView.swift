@@ -268,10 +268,13 @@ struct ListDetailView: View {
     @EnvironmentObject var locationManager: AppLocationManager
     
     var filteredPins: [Pin] {
+        // Get the updated list from pinStore to ensure we have the latest data
+        let updatedList = pinStore.lists.first { $0.id == list.id } ?? list
+        
         if searchText.isEmpty {
-            return list.pins
+            return updatedList.pins
         } else {
-            return list.pins.filter {
+            return updatedList.pins.filter {
                 $0.locationName.localizedCaseInsensitiveContains(searchText) ||
                 $0.city.localizedCaseInsensitiveContains(searchText)
             }
@@ -349,7 +352,13 @@ struct ListDetailView: View {
         for index in offsets {
             let pin = filteredPins[index]
             print("🗑️ Deleting pin '\(pin.locationName)' from list '\(list.name)'")
-            pinStore.removePin(pin, from: list.name)
+            
+            // Perform deletion in a task to handle async operations
+            Task {
+                await MainActor.run {
+                    pinStore.removePin(pin, from: list.name)
+                }
+            }
         }
     }
 }
