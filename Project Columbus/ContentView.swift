@@ -618,7 +618,7 @@ struct MainMapView: View {
                     }
                 }
             } else if selectedTab == 5 {
-                ListsView()
+                EnhancedListsView()
                     .environmentObject(pinStore)
                     .environmentObject(authManager)
                     .environmentObject(locationManager)

@@ -52,16 +52,108 @@ struct Pin: Identifiable, Equatable, Codable {
     }
 }
 
-// MARK: - List Model (Updated from PinCollection)
+// MARK: - Enhanced List Models
+
+// List sharing permissions
+enum ListSharingType: String, CaseIterable, Codable {
+    case privateList = "private"
+    case publicReadOnly = "public_read_only"
+    case publicEditable = "public_editable"
+    case friendsOnly = "friends_only"
+    case specificUsers = "specific_users"
+    
+    var displayName: String {
+        switch self {
+        case .privateList: return "Private"
+        case .publicReadOnly: return "Public (View Only)"
+        case .publicEditable: return "Public (Editable)"
+        case .friendsOnly: return "Friends Only"
+        case .specificUsers: return "Specific Users"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .privateList: return "lock.fill"
+        case .publicReadOnly: return "globe"
+        case .publicEditable: return "globe.badge.chevron.backward"
+        case .friendsOnly: return "person.2.fill"
+        case .specificUsers: return "person.crop.circle.badge.plus"
+        }
+    }
+}
+
+// Enhanced List Model with sharing and collaboration features
 struct PinList: Identifiable, Codable {
     let id: UUID
     let name: String
     var pins: [Pin]
     
-    init(id: UUID = UUID(), name: String, pins: [Pin] = []) {
+    // Enhanced properties for sharing and collaboration
+    let ownerId: UUID
+    var sharingType: ListSharingType
+    var description: String?
+    var tags: [String]
+    var isTemplate: Bool
+    var templateCategory: String?
+    
+    // Collaboration properties
+    var collaborators: [UUID] // Users who can edit
+    var viewers: [UUID] // Users who can view (for specific_users type)
+    var pendingInvites: [String] // Email addresses of pending invites
+    
+    // Metadata
+    let createdAt: Date
+    var updatedAt: Date
+    var lastActivityAt: Date
+    
+    // Statistics
+    var totalViews: Int
+    var totalShares: Int
+    var totalForks: Int // When someone copies this template
+    
+    init(id: UUID = UUID(), name: String, pins: [Pin] = [], ownerId: UUID, sharingType: ListSharingType = .privateList, description: String? = nil, tags: [String] = [], isTemplate: Bool = false, templateCategory: String? = nil) {
         self.id = id
         self.name = name
         self.pins = pins
+        self.ownerId = ownerId
+        self.sharingType = sharingType
+        self.description = description
+        self.tags = tags
+        self.isTemplate = isTemplate
+        self.templateCategory = templateCategory
+        self.collaborators = []
+        self.viewers = []
+        self.pendingInvites = []
+        self.createdAt = Date()
+        self.updatedAt = Date()
+        self.lastActivityAt = Date()
+        self.totalViews = 0
+        self.totalShares = 0
+        self.totalForks = 0
+    }
+    
+    // Computed properties
+    var isPublic: Bool {
+        return sharingType == .publicReadOnly || sharingType == .publicEditable
+    }
+    
+    var isCollaborative: Bool {
+        return sharingType == .publicEditable || !collaborators.isEmpty
+    }
+    
+    var canBeShared: Bool {
+        return sharingType != .privateList
+    }
+    
+    var displaySharingStatus: String {
+        switch sharingType {
+        case .privateList: return "Private"
+        case .publicReadOnly: return "Public"
+        case .publicEditable: return "Collaborative"
+        case .friendsOnly: return "Friends"
+        case .specificUsers: return "\(viewers.count + collaborators.count) users"
+        }
     }
 }
 
@@ -99,6 +191,69 @@ struct ListPinDB: Codable {
     let id: String
     let list_id: String
     let pin_id: String
+}
+
+// MARK: - Enhanced List Database Models
+
+struct EnhancedListDB: Codable {
+    let id: String
+    let user_id: String
+    let name: String
+    let description: String?
+    let sharing_type: String
+    let tags: [String]?
+    let is_template: Bool
+    let template_category: String?
+    let total_views: Int
+    let total_shares: Int
+    let total_forks: Int
+    let created_at: String
+    let updated_at: String
+    let last_activity_at: String
+}
+
+struct ListCollaboratorDB: Codable {
+    let id: String
+    let list_id: String
+    let user_id: String
+    let permission_type: String // "edit" or "view"
+    let invited_by: String
+    let invited_at: String
+    let accepted_at: String?
+    let is_active: Bool
+}
+
+struct ListInviteDB: Codable {
+    let id: String
+    let list_id: String
+    let email: String
+    let permission_type: String
+    let invited_by: String
+    let invited_at: String
+    let expires_at: String
+    let is_used: Bool
+}
+
+struct ListTemplateDB: Codable {
+    let id: String
+    let name: String
+    let description: String
+    let category: String
+    let tags: [String]
+    let pin_count: Int
+    let usage_count: Int
+    let created_by: String
+    let created_at: String
+    let is_featured: Bool
+}
+
+struct ListActivityDB: Codable {
+    let id: String
+    let list_id: String
+    let user_id: String
+    let action_type: String // "pin_added", "pin_removed", "list_shared", etc.
+    let details: String? // JSON string with additional details
+    let created_at: String
 }
 
 struct PinDBInsert: Codable {
@@ -195,9 +350,133 @@ extension ListDB {
         return PinList(
             id: UUID(uuidString: id) ?? UUID(),
             name: name,
-            pins: pins
+            pins: pins,
+            ownerId: UUID(uuidString: user_id) ?? UUID()
         )
     }
+}
+
+// MARK: - Additional List Models
+
+struct ListTemplate: Identifiable, Codable {
+    let id: UUID
+    let name: String
+    let description: String
+    let category: String
+    let tags: [String]
+    let pinCount: Int
+    let usageCount: Int
+    let createdBy: String
+    let createdAt: Date
+    let isFeatured: Bool
+    let previewPins: [Pin] // Sample pins to show what the template contains
+    
+    var displayCategory: String {
+        return category.capitalized
+    }
+    
+    var displayUsage: String {
+        return "\(usageCount) uses"
+    }
+}
+
+struct ListShare: Identifiable, Codable {
+    let id: UUID
+    let listId: UUID
+    let shareUrl: String
+    let shareType: ListSharingType
+    let createdAt: Date
+    let expiresAt: Date?
+    let viewCount: Int
+    let isActive: Bool
+    
+    var isExpired: Bool {
+        guard let expiresAt = expiresAt else { return false }
+        return Date() > expiresAt
+    }
+}
+
+struct ListCollaborator: Identifiable, Codable {
+    let id: UUID
+    let listId: UUID
+    let userId: UUID
+    let username: String
+    let fullName: String?
+    let permissionType: CollaboratorPermission
+    let invitedBy: UUID
+    let invitedAt: Date
+    let acceptedAt: Date?
+    let isActive: Bool
+    
+    var displayName: String {
+        return fullName ?? username
+    }
+    
+    var status: String {
+        if acceptedAt != nil {
+            return isActive ? "Active" : "Inactive"
+        } else {
+            return "Pending"
+        }
+    }
+}
+
+enum CollaboratorPermission: String, CaseIterable, Codable {
+    case view = "view"
+    case edit = "edit"
+    case admin = "admin"
+    
+    var displayName: String {
+        switch self {
+        case .view: return "Can View"
+        case .edit: return "Can Edit"
+        case .admin: return "Admin"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .view: return "eye"
+        case .edit: return "pencil"
+        case .admin: return "crown"
+        }
+    }
+}
+
+struct ListActivity: Identifiable, Codable {
+    let id: UUID
+    let listId: UUID
+    let userId: UUID
+    let username: String
+    let actionType: ListActivityType
+    let details: String?
+    let createdAt: Date
+    
+    var displayText: String {
+        switch actionType {
+        case .pinAdded:
+            return "\(username) added a pin"
+        case .pinRemoved:
+            return "\(username) removed a pin"
+        case .listShared:
+            return "\(username) shared the list"
+        case .collaboratorAdded:
+            return "\(username) added a collaborator"
+        case .listRenamed:
+            return "\(username) renamed the list"
+        case .listDescriptionChanged:
+            return "\(username) updated the description"
+        }
+    }
+}
+
+enum ListActivityType: String, CaseIterable, Codable {
+    case pinAdded = "pin_added"
+    case pinRemoved = "pin_removed"
+    case listShared = "list_shared"
+    case collaboratorAdded = "collaborator_added"
+    case listRenamed = "list_renamed"
+    case listDescriptionChanged = "list_description_changed"
 }
 
 // MARK: - Messaging Models

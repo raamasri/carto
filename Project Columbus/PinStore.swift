@@ -79,13 +79,18 @@ class PinStore: ObservableObject {
         print("📱 PinStore: Creating default lists...")
         
         // Create default lists locally first for immediate UI update
-        for listName in defaultListNames {
-            if !lists.contains(where: { $0.name.lowercased() == listName.lowercased() }) {
-                lists.append(PinList(name: listName, pins: []))
-                print("📱 PinStore: Created local default list: \(listName)")
+        Task {
+            let currentUserId = await supabaseManager.getCurrentUserID() ?? UUID()
+            await MainActor.run {
+                for listName in defaultListNames {
+                    if !lists.contains(where: { $0.name.lowercased() == listName.lowercased() }) {
+                        lists.append(PinList(name: listName, pins: [], ownerId: currentUserId))
+                        print("📱 PinStore: Created local default list: \(listName)")
+                    }
+                }
+                print("📱 PinStore: Created \(lists.count) default lists locally")
             }
         }
-        print("📱 PinStore: Created \(lists.count) default lists locally")
         
         // Then create in database asynchronously
         Task {
@@ -177,8 +182,13 @@ class PinStore: ObservableObject {
             }
         } else {
             // Create a new list locally (will be created in database automatically)
-            let newList = PinList(name: listName, pins: [pin])
-            lists.append(newList)
+            Task {
+                let currentUserId = await supabaseManager.getCurrentUserID() ?? UUID()
+                await MainActor.run {
+                    let newList = PinList(name: listName, pins: [pin], ownerId: currentUserId)
+                    lists.append(newList)
+                }
+            }
             // Save to database
             Task {
                 do {
@@ -251,8 +261,13 @@ class PinStore: ObservableObject {
             print("⚠️ List '\(name)' already exists")
             return
         }
-        // Add locally
-        lists.append(PinList(name: name, pins: []))
+        // Add locally (with proper user ID)
+        Task {
+            let currentUserId = await supabaseManager.getCurrentUserID() ?? UUID()
+            await MainActor.run {
+                lists.append(PinList(name: name, pins: [], ownerId: currentUserId))
+            }
+        }
         // Save to database
         Task {
             do {

@@ -72,6 +72,16 @@ class SupabaseManager: ObservableObject {
             )
         )
     }
+    
+    // MARK: - User Management
+    
+    /// Gets the current authenticated user's ID
+    func getCurrentUserID() async -> UUID? {
+        guard let session = try? await client.auth.session else { 
+            return nil 
+        }
+        return UUID(uuidString: session.user.id.uuidString)
+    }
 
     // MARK: - Lists Management (NEW SCHEMA)
     
