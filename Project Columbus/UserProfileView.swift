@@ -54,6 +54,64 @@ struct UserProfileView: View {
     @State private var blockReportMessage = ""
     @State private var showBlockReportAlert = false
     
+    // Enhanced Map Filter States
+    @State private var showMapFilters = false
+    @State private var selectedReactionFilter: Reaction? = nil
+    @State private var selectedTimeFilter: TimeFilter = .all
+    @State private var selectedStarFilter: StarFilter = .all
+    @State private var mapSearchText = ""
+    
+    // Computed filtered pins for enhanced map
+    private var filteredPins: [Pin] {
+        var pins = pinStore.masterPins
+        
+        // Filter by reaction
+        if let reaction = selectedReactionFilter {
+            pins = pins.filter { $0.reaction == reaction }
+        }
+        
+        // Filter by time
+        let calendar = Calendar.current
+        let now = Date()
+        
+        switch selectedTimeFilter {
+        case .all:
+            break // No filtering
+        case .thisWeek:
+            let weekAgo = calendar.date(byAdding: .weekOfYear, value: -1, to: now) ?? now
+            pins = pins.filter { $0.createdAt >= weekAgo }
+        case .thisMonth:
+            let monthAgo = calendar.date(byAdding: .month, value: -1, to: now) ?? now
+            pins = pins.filter { $0.createdAt >= monthAgo }
+        case .thisYear:
+            let yearAgo = calendar.date(byAdding: .year, value: -1, to: now) ?? now
+            pins = pins.filter { $0.createdAt >= yearAgo }
+        }
+        
+        // Filter by star rating
+        switch selectedStarFilter {
+        case .all:
+            break // No filtering
+        case .fiveStars:
+            pins = pins.filter { ($0.starRating ?? 0) >= 4.5 }
+        case .fourPlus:
+            pins = pins.filter { ($0.starRating ?? 0) >= 4.0 }
+        case .threePlus:
+            pins = pins.filter { ($0.starRating ?? 0) >= 3.0 }
+        }
+        
+        // Filter by search text
+        if !mapSearchText.isEmpty {
+            pins = pins.filter { pin in
+                pin.locationName.localizedCaseInsensitiveContains(mapSearchText) ||
+                pin.city.localizedCaseInsensitiveContains(mapSearchText) ||
+                (pin.tripName?.localizedCaseInsensitiveContains(mapSearchText) ?? false)
+            }
+        }
+        
+        return pins
+    }
+    
     private var profileHeader: some View {
         HStack {
             Text("@\(profileUser.username)")
@@ -279,41 +337,105 @@ struct UserProfileView: View {
                         .padding(.top, 8)
 
                         if selectedSection == "Map View" {
-                            ZStack(alignment: .topTrailing) {
-                                Map(
-                                    coordinateRegion: $region,
-                                    annotationItems: pinStore.masterPins
-                                ) { pin in
+                            ZStack(alignment: .topLeading) {
+                                // Main Map
+                                Map(coordinateRegion: $region, annotationItems: filteredPins) { pin in
                                     MapAnnotation(
                                         coordinate: CLLocationCoordinate2D(
                                             latitude: pin.latitude,
                                             longitude: pin.longitude
                                         )
                                     ) {
-                                        Image(systemName: "mappin.circle.fill")
-                                            .resizable()
-                                            .frame(width: 30, height: 30)
-                                            .foregroundColor(.blue)
-                                            .shadow(radius: 3)
+                                        EnhancedPinAnnotation(pin: pin)
                                     }
                                 }
                                 .frame(height: 400)
                                 .cornerRadius(10)
                                 .padding(.horizontal)
-                                .padding(.top, 8)
+                                .padding(.top, showMapFilters ? 120 : 8)
                                 .padding(.bottom, 20)
-                                
-                                Button(action: {
-                                    showFullscreenMap = true
-                                }) {
-                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                        .foregroundColor(.white)
-                                        .padding(8)
-                                        .background(Color.black.opacity(0.6))
-                                        .clipShape(Circle())
+                                .onAppear {
+                                    centerMapOnPins()
                                 }
-                                .padding(.top, 20)
-                                .padding(.trailing, 30)
+                                .onChange(of: filteredPins) { _, _ in
+                                    centerMapOnPins()
+                                }
+                                
+                                // Filter Panel (Collapsible)
+                                if showMapFilters {
+                                    VStack(spacing: 12) {
+                                        MapFilterPanel(
+                                            selectedReaction: $selectedReactionFilter,
+                                            selectedTimeFilter: $selectedTimeFilter,
+                                            selectedStarFilter: $selectedStarFilter,
+                                            searchText: $mapSearchText
+                                        )
+                                    }
+                                    .padding()
+                                    .background(Color(.systemBackground))
+                                    .cornerRadius(12)
+                                    .shadow(radius: 8)
+                                    .padding(.horizontal)
+                                    .padding(.top, 8)
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                                }
+                                
+                                // Control Buttons
+                                VStack {
+                                    HStack {
+                                        // Filter Toggle Button
+                                        Button(action: {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                showMapFilters.toggle()
+                                            }
+                                        }) {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: showMapFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                                                if !showMapFilters {
+                                                    Text("Filters")
+                                                        .font(.caption)
+                                                        .fontWeight(.medium)
+                                                }
+                                            }
+                                            .foregroundColor(.white)
+                                            .padding(showMapFilters ? 8 : 12)
+                                            .background(Color.blue.opacity(0.8))
+                                            .clipShape(Capsule())
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        // Fullscreen Button
+                                        Button(action: {
+                                            showFullscreenMap = true
+                                        }) {
+                                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                                .foregroundColor(.white)
+                                                .padding(8)
+                                                .background(Color.black.opacity(0.6))
+                                                .clipShape(Circle())
+                                        }
+                                    }
+                                    .padding(.horizontal, 30)
+                                    .padding(.top, showMapFilters ? 140 : 20)
+                                    
+                                    Spacer()
+                                    
+                                    // Pin Count Badge
+                                    HStack {
+                                        Spacer()
+                                        Text("\(filteredPins.count) pin\(filteredPins.count == 1 ? "" : "s")")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(Color.black.opacity(0.6))
+                                            .clipShape(Capsule())
+                                            .padding(.trailing, 30)
+                                            .padding(.bottom, 30)
+                                    }
+                                }
                             }
                         } else if selectedSection == "My Lists" {
                             if profileUser.isCurrentUser ?? false {
@@ -359,7 +481,7 @@ struct UserProfileView: View {
     }
 
     private func centerMapOnPins() {
-        let pins = pinStore.masterPins
+        let pins = filteredPins
         guard !pins.isEmpty else {
             // Default to San Francisco if no pins
             region = MKCoordinateRegion(
@@ -1257,5 +1379,253 @@ private func colorForCollection(_ name: String) -> Color {
     case "bars": return .purple
     case "shopping": return .pink
     default: return .blue
+    }
+}
+
+// MARK: - Enhanced Pin Annotation
+struct EnhancedPinAnnotation: View {
+    let pin: Pin
+    
+    var body: some View {
+        ZStack {
+            // Pin background with reaction color
+            Circle()
+                .fill(reactionColor)
+                .frame(width: 32, height: 32)
+                .shadow(radius: 3)
+            
+            // Pin icon based on reaction
+            Image(systemName: reactionIcon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.white)
+            
+            // Star rating indicator (if available)
+            if let rating = pin.starRating, rating > 0 {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 1) {
+                        ForEach(0..<Int(rating.rounded()), id: \.self) { _ in
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 6))
+                                .foregroundColor(.yellow)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 1)
+                    .background(Color.black.opacity(0.7))
+                    .clipShape(Capsule())
+                    .offset(y: 2)
+                }
+                .frame(width: 32, height: 32)
+            }
+        }
+    }
+    
+    private var reactionColor: Color {
+        switch pin.reaction {
+        case .lovedIt:
+            return .red
+        case .wantToGo:
+            return .blue
+        }
+    }
+    
+    private var reactionIcon: String {
+        switch pin.reaction {
+        case .lovedIt:
+            return "heart.fill"
+        case .wantToGo:
+            return "bookmark.fill"
+        }
+    }
+}
+
+// MARK: - Map Filter Panel
+struct MapFilterPanel: View {
+    @Binding var selectedReaction: Reaction?
+    @Binding var selectedTimeFilter: TimeFilter
+    @Binding var selectedStarFilter: StarFilter
+    @Binding var searchText: String
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // Search Bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.gray)
+                TextField("Search locations, cities, trips...", text: $searchText)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                
+                if !searchText.isEmpty {
+                    Button("Clear") {
+                        searchText = ""
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                }
+            }
+            
+            // Filter Chips Row 1: Reactions
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    MapFilterChip(
+                        title: "All Reactions",
+                        isSelected: selectedReaction == nil,
+                        action: { selectedReaction = nil }
+                    )
+                    
+                    ForEach(Reaction.allCases, id: \.self) { reaction in
+                        MapFilterChip(
+                            title: reaction.rawValue,
+                            icon: reactionIcon(for: reaction),
+                            isSelected: selectedReaction == reaction,
+                            action: { selectedReaction = reaction }
+                        )
+                    }
+                }
+                .padding(.horizontal)
+            }
+            
+            // Filter Chips Row 2: Time & Rating
+            HStack(spacing: 12) {
+                // Time Filter
+                Menu {
+                    ForEach(TimeFilter.allCases, id: \.self) { filter in
+                        Button(filter.displayName) {
+                            selectedTimeFilter = filter
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                        Text(selectedTimeFilter.displayName)
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.blue.opacity(0.1))
+                    .clipShape(Capsule())
+                }
+                
+                // Star Rating Filter
+                Menu {
+                    ForEach(StarFilter.allCases, id: \.self) { filter in
+                        Button(filter.displayName) {
+                            selectedStarFilter = filter
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "star")
+                        Text(selectedStarFilter.displayName)
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(Capsule())
+                }
+                
+                Spacer()
+                
+                // Clear All Filters
+                if selectedReaction != nil || selectedTimeFilter != .all || selectedStarFilter != .all || !searchText.isEmpty {
+                    Button("Clear All") {
+                        selectedReaction = nil
+                        selectedTimeFilter = .all
+                        selectedStarFilter = .all
+                        searchText = ""
+                    }
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.red.opacity(0.1))
+                    .clipShape(Capsule())
+                }
+            }
+        }
+    }
+    
+    private func reactionIcon(for reaction: Reaction) -> String {
+        switch reaction {
+        case .lovedIt:
+            return "heart.fill"
+        case .wantToGo:
+            return "bookmark.fill"
+        }
+    }
+}
+
+// MARK: - Map Filter Chip
+struct MapFilterChip: View {
+    let title: String
+    let icon: String?
+    let isSelected: Bool
+    let action: () -> Void
+    
+    init(title: String, icon: String? = nil, isSelected: Bool, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.isSelected = isSelected
+        self.action = action
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon = icon {
+                    Image(systemName: icon)
+                        .font(.caption)
+                }
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+            }
+            .foregroundColor(isSelected ? .white : .primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.blue : Color(.systemGray5))
+            .clipShape(Capsule())
+        }
+    }
+}
+
+// MARK: - Enhanced Map Filter Enums
+enum TimeFilter: CaseIterable {
+    case all
+    case thisWeek
+    case thisMonth
+    case thisYear
+    
+    var displayName: String {
+        switch self {
+        case .all: return "All Time"
+        case .thisWeek: return "This Week"
+        case .thisMonth: return "This Month"
+        case .thisYear: return "This Year"
+        }
+    }
+}
+
+enum StarFilter: CaseIterable {
+    case all
+    case fiveStars
+    case fourPlus
+    case threePlus
+    
+    var displayName: String {
+        switch self {
+        case .all: return "All Ratings"
+        case .fiveStars: return "5 Stars"
+        case .fourPlus: return "4+ Stars"
+        case .threePlus: return "3+ Stars"
+        }
     }
 }
