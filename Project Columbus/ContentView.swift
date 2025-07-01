@@ -205,7 +205,12 @@ struct MainMapView: View {
     // Helper function to center map on filtered pins
     private func centerMapOnFilteredPins() {
         let pins = filteredPins
-        guard !pins.isEmpty else { return }
+        guard !pins.isEmpty else { 
+            print("📍 No pins available to center on")
+            return 
+        }
+        
+        print("📍 Centering map on \(pins.count) pin(s)")
         
         if pins.count == 1 {
             let pin = pins[0]
@@ -737,6 +742,21 @@ struct MainMapView: View {
                                         .offset(x: 12, y: -12)
                                 }
                             }
+                        }
+                        .padding(.bottom, 60)
+                        
+                        Spacer()
+                        
+                        // Recenter Button
+                        Button(action: {
+                            centerMapOnFilteredPins()
+                        }) {
+                            Image(systemName: "viewfinder")
+                                .foregroundColor(.gray)
+                                .padding()
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
                         }
                         .padding(.bottom, 60)
                         
