@@ -470,6 +470,10 @@ struct UserProfileView: View {
                                     .padding(.top, 8)
                                     .onAppear {
                                         print("🔍 UserProfileView: Using main ListsView for current user")
+                                        print("🔄 UserProfileView: Refreshing lists data")
+                                        Task {
+                                            await pinStore.refresh()
+                                        }
                                     }
                             } else {
                                 // For other users, use UserListsView
@@ -566,8 +570,13 @@ struct UserProfileView: View {
             }
         }
         .toolbar {
-            if profileUser.isCurrentUser ?? false {
-                ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                NavigationLink(destination: ProfileHelpView()) {
+                    Image(systemName: "questionmark.circle")
+                        .foregroundColor(.blue)
+                }
+                
+                if profileUser.isCurrentUser ?? false {
                     NavigationLink(destination:
                         NotificationView()
                             .environmentObject(authManager)

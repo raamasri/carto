@@ -163,13 +163,20 @@ struct ListRowView: View {
                             .font(.title2)
                     )
                 
-                // Notification dots on top corner of icon
+                // Pin icons on top corner of list icon
                 if !list.pins.isEmpty {
-                    HStack(spacing: 2) {
+                    HStack(spacing: 1) {
                         ForEach(Array(list.pins.prefix(3)), id: \.id) { pin in
-                            Circle()
-                                .fill(pin.reaction == .lovedIt ? .red : .blue)
-                                .frame(width: 8, height: 8)
+                            ZStack {
+                                Circle()
+                                    .fill(.white)
+                                    .frame(width: 12, height: 12)
+                                    .shadow(radius: 1)
+                                
+                                Image(systemName: pin.reaction == .lovedIt ? "heart.fill" : "bookmark.fill")
+                                    .font(.system(size: 6))
+                                    .foregroundColor(pin.reaction == .lovedIt ? .red : .blue)
+                            }
                         }
                     }
                     .offset(x: 5, y: -5) // Position on top corner
@@ -344,6 +351,16 @@ struct ListDetailView: View {
                         pinStore.addPin(pin, to: list.name)
                     })
                 }
+            }
+            .onAppear {
+                print("🔄 ListDetailView appeared for '\(list.name)' - refreshing data")
+                Task {
+                    await pinStore.refresh()
+                }
+            }
+            .refreshable {
+                print("🔄 ListDetailView manual refresh for '\(list.name)'")
+                await pinStore.refresh()
             }
         }
     }
