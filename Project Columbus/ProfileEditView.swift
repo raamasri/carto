@@ -45,28 +45,29 @@ struct ProfileEditView: View {
                     ProgressView("Loading Profile...")
                 } else {
                     ScrollView {
-                        VStack(spacing: 20) {
-                            // Profile Image Section
-                            VStack {
+                        VStack(spacing: 24) {
+                            // Profile Image Section - Enhanced and Always Visible
+                            VStack(spacing: 16) {
                                 ZStack {
+                                    // Background circle
+                                    Circle()
+                                        .fill(Color(.systemGray6))
+                                        .frame(width: 120, height: 120)
+                                    
+                                    // Profile image or placeholder
                                     if let image = profileImage {
                                         image
                                             .resizable()
                                             .scaledToFill()
                                             .frame(width: 120, height: 120)
                                             .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 2))
                                     } else {
-                                        Circle()
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: 2)
-                                            .frame(width: 120, height: 120)
-                                            .overlay(
-                                                Image(systemName: "person.circle.fill")
-                                                    .font(.system(size: 60))
-                                                    .foregroundColor(.gray)
-                                            )
+                                        Image(systemName: "person.circle.fill")
+                                            .font(.system(size: 80))
+                                            .foregroundColor(.gray)
                                     }
                                     
+                                    // Upload progress overlay
                                     if isUploadingAvatar {
                                         Circle()
                                             .fill(Color.black.opacity(0.6))
@@ -74,20 +75,69 @@ struct ProfileEditView: View {
                                             .overlay(
                                                 ProgressView()
                                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                                    .scaleEffect(1.2)
                                             )
                                     }
+                                    
+                                    // Camera icon overlay
+                                    if !isUploadingAvatar {
+                                        VStack {
+                                            Spacer()
+                                            HStack {
+                                                Spacer()
+                                                Circle()
+                                                    .fill(Color.blue)
+                                                    .frame(width: 32, height: 32)
+                                                    .overlay(
+                                                        Image(systemName: "camera.fill")
+                                                            .font(.system(size: 14))
+                                                            .foregroundColor(.white)
+                                                    )
+                                                    .offset(x: -8, y: -8)
+                                            }
+                                        }
+                                    }
+                                }
+                                .onTapGesture {
+                                    // Trigger photo picker when tapping the avatar
+                                    // Note: PhotosPicker will be triggered by the button below
                                 }
                                 
-                                PhotosPicker(
-                                    selection: $selectedPhotoItem,
-                                    matching: .images,
-                                    photoLibrary: .shared()
-                                ) {
-                                    Text("Change Photo")
+                                VStack(spacing: 8) {
+                                    PhotosPicker(
+                                        selection: $selectedPhotoItem,
+                                        matching: .images,
+                                        photoLibrary: .shared()
+                                    ) {
+                                        HStack {
+                                            Image(systemName: "photo")
+                                                .font(.system(size: 16))
+                                            Text("Change Profile Photo")
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                        }
                                         .foregroundColor(.blue)
-                                        .padding(.top, 8)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(Color.blue.opacity(0.1))
+                                        .cornerRadius(20)
+                                    }
+                                    .disabled(isUploadingAvatar)
+                                    
+                                    if profileImage != nil && !isUploadingAvatar {
+                                        Button(action: {
+                                            profileImage = nil
+                                            profileImageData = nil
+                                            selectedPhotoItem = nil
+                                        }) {
+                                            Text("Remove Photo")
+                                                .font(.caption)
+                                                .foregroundColor(.red)
+                                        }
+                                    }
                                 }
                             }
+                            .padding(.top, 20)
                             .padding(.bottom, 10)
                             
                             // Form sections
