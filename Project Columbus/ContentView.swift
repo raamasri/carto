@@ -137,7 +137,8 @@ struct MainMapView: View {
     
     // Computed filtered pins for enhanced map
     private var filteredPins: [Pin] {
-        var pins = pinStore.masterPins
+        // Only show pins that are actually in user's lists (not orphaned pins)
+        var pins = pinStore.lists.flatMap { $0.pins }
         
         // Filter by reaction
         if let reaction = selectedReactionFilter {
