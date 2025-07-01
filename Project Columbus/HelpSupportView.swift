@@ -314,7 +314,7 @@ struct ReportBugView: View {
     @State private var bugDescription = ""
     @State private var stepsToReproduce = ""
     @State private var deviceInfo = UIDevice.current.systemVersion
-    @State private var appVersion = "0.63.0"
+    @State private var appVersion = "0.64.0"
     @State private var showingSubmissionAlert = false
     
     var body: some View {
