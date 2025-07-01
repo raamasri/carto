@@ -141,7 +141,24 @@ struct MainMapView: View {
     // Computed filtered pins for enhanced map
     private var filteredPins: [Pin] {
         // Only show pins that are actually in user's lists (not orphaned pins)
-        var pins = pinStore.lists.flatMap { $0.pins }
+        // Use Set to remove duplicates when pins appear in multiple lists
+        let allPins = pinStore.lists.flatMap { $0.pins }
+        var uniquePins: [Pin] = []
+        var seenIds: Set<UUID> = []
+        
+        for pin in allPins {
+            if !seenIds.contains(pin.id) {
+                uniquePins.append(pin)
+                seenIds.insert(pin.id)
+            }
+        }
+        
+        // Debug logging to help identify discrepancies
+        if allPins.count != uniquePins.count {
+            print("🔍 Map: Found \(allPins.count) total pins, \(uniquePins.count) unique pins (removed \(allPins.count - uniquePins.count) duplicates)")
+        }
+        
+        var pins = uniquePins
         
         // Filter by reaction
         if let listId = selectedListFilter {
