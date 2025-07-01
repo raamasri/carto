@@ -279,7 +279,7 @@ struct ContactSupportView: View {
                     showingSubmissionAlert = true
                     // Reset form
                     subject = ""
-                    description = ""
+                    message = ""
                     selectedCategory = .general
                 } else {
                     // Show error alert
@@ -300,7 +300,7 @@ struct ContactSupportView: View {
             print("  - Ticket ID: \(ticketId)")
             print("  - Category: \(selectedCategory.rawValue)")
             print("  - Subject: \(subject)")
-            print("  - Description: \(description)")
+            print("  - Description: \(message)")
             
             return true
         } catch {

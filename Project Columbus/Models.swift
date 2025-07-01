@@ -639,6 +639,34 @@ struct MessageDB: Codable {
     let created_at: String
     let edited_at: String?
     let is_deleted: Bool
+    
+    func toMessage() -> Message {
+        // Parse timestamp with support for fractional seconds
+        func parseTimestamp(_ timestamp: String) -> Date? {
+            // Try ISO8601 with fractional seconds first
+            let iso8601WithFractionsFormatter = ISO8601DateFormatter()
+            iso8601WithFractionsFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            if let date = iso8601WithFractionsFormatter.date(from: timestamp) {
+                return date
+            }
+            
+            // Fallback to standard ISO8601
+            let iso8601Formatter = ISO8601DateFormatter()
+            return iso8601Formatter.date(from: timestamp)
+        }
+        
+        let createdDate = parseTimestamp(created_at) ?? Date()
+        
+        return Message(
+            id: UUID(uuidString: id) ?? UUID(),
+            conversationId: conversation_id,
+            senderId: sender_id,
+            content: content,
+            createdAt: createdDate,
+            messageType: MessageType(rawValue: message_type) ?? .text
+        )
+    }
 }
 
 struct ConversationParticipantDB: Codable {

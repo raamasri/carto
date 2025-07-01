@@ -1275,75 +1275,20 @@ class SupabaseManager: ObservableObject {
     func subscribeToConversationMessages(conversationId: String, onMessageReceived: @escaping (Message) -> Void) async {
         print("🔔 Setting up real-time messaging subscription for conversation: \(conversationId)")
         
-        do {
-            let channel = client.channel("conversation:\(conversationId)")
-            
-            await channel.on(.postgres_changes(
-                AnyAction.insert,
-                schema: "public",
-                table: "messages",
-                filter: "conversation_id=eq.\(conversationId)"
-            )) { payload in
-                print("📨 Received new message via real-time")
-                
-                // Parse the new message from the payload
-                if let record = payload.record,
-                   let messageData = try? JSONSerialization.data(withJSONObject: record),
-                   let messageDB = try? JSONDecoder().decode(MessageDB.self, from: messageData) {
-                    
-                    let message = messageDB.toMessage()
-                    onMessageReceived(message)
-                } else {
-                    print("❌ Failed to parse real-time message payload")
-                }
-            }
-            
-            await channel.subscribe()
-            print("✅ Successfully subscribed to real-time messages for conversation: \(conversationId)")
-            
-        } catch {
-            print("❌ Failed to set up real-time messaging subscription: \(error)")
-            // Fall back to periodic polling
-            await startMessagePolling(conversationId: conversationId, onMessageReceived: onMessageReceived)
-        }
+        // TODO: Update to newer Supabase Realtime API syntax
+        // For now, fall back to polling until API is updated
+        print("⚠️ Real-time messaging temporarily disabled, using polling fallback")
+        await startMessagePolling(conversationId: conversationId, onMessageReceived: onMessageReceived)
     }
     
     /// Subscribe to conversation list updates for a user
     func subscribeToUserConversations(userId: String, onConversationUpdate: @escaping () -> Void) async {
         print("🔔 Setting up real-time conversation updates for user: \(userId)")
         
-        do {
-            let channel = client.channel("user_conversations:\(userId)")
-            
-            // Subscribe to conversation updates
-            await channel.on(.postgres_changes(
-                AnyAction.all,
-                schema: "public",
-                table: "conversations",
-                filter: "participants.cs.{\"\(userId)\"}"
-            )) { _ in
-                print("📋 Conversation list updated via real-time")
-                onConversationUpdate()
-            }
-            
-            // Subscribe to new messages (to update conversation preview)
-            await channel.on(.postgres_changes(
-                AnyAction.insert,
-                schema: "public",
-                table: "messages"
-            )) { payload in
-                print("📨 New message received, updating conversations")
-                onConversationUpdate()
-            }
-            
-            await channel.subscribe()
-            print("✅ Successfully subscribed to real-time conversation updates for user: \(userId)")
-            
-        } catch {
-            print("❌ Failed to set up real-time conversation subscription: \(error)")
-            // Fall back to periodic polling
-            await startConversationPolling(userId: userId, onConversationUpdate: onConversationUpdate)
-        }
+        // TODO: Update to newer Supabase Realtime API syntax
+        // For now, fall back to polling until API is updated
+        print("⚠️ Real-time conversation updates temporarily disabled, using polling fallback")
+        await startConversationPolling(userId: userId, onConversationUpdate: onConversationUpdate)
     }
     
     /// Fallback polling mechanism for messages when real-time fails
@@ -1358,7 +1303,7 @@ class SupabaseManager: ObservableObject {
                 let newMessages = await self.getMessagesAfter(conversationId: conversationId, after: lastMessageTime)
                 for message in newMessages {
                     onMessageReceived(message)
-                    lastMessageTime = max(lastMessageTime, message.timestamp)
+                    lastMessageTime = max(lastMessageTime, message.createdAt)
                 }
             }
         }
@@ -1398,25 +1343,28 @@ class SupabaseManager: ObservableObject {
     /// Unsubscribe from real-time updates
     func unsubscribeFromRealTimeUpdates() async {
         print("🔕 Unsubscribing from all real-time updates")
-        await client.removeAllChannels()
+        // TODO: Update to newer Supabase API
+        // await client.removeAllChannels()
     }
     
     /// Unsubscribe from specific conversation
     func unsubscribeFromConversation(conversationId: String) async {
         print("🔕 Unsubscribing from conversation: \(conversationId)")
-        let channelName = "conversation:\(conversationId)"
-        if let channel = client.getChannels().first(where: { $0.topic == channelName }) {
-            await channel.unsubscribe()
-        }
+        // TODO: Update to newer Supabase API
+        // let channelName = "conversation:\(conversationId)"
+        // if let channel = client.getChannels().first(where: { $0.topic == channelName }) {
+        //     await channel.unsubscribe()
+        // }
     }
     
     /// Unsubscribe from user conversations
     func unsubscribeFromUserConversations(userId: String) async {
         print("🔕 Unsubscribing from user conversations: \(userId)")
-        let channelName = "user_conversations:\(userId)"
-        if let channel = client.getChannels().first(where: { $0.topic == channelName }) {
-            await channel.unsubscribe()
-        }
+        // TODO: Update to newer Supabase API
+        // let channelName = "user_conversations:\(userId)"
+        // if let channel = client.getChannels().first(where: { $0.topic == channelName }) {
+        //     await channel.unsubscribe()
+        // }
     }
     
     /// Mark message as read and update read status

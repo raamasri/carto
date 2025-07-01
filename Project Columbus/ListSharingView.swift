@@ -8,6 +8,8 @@ struct ListSharingView: View {
     @State private var showingInviteForm = false
     @State private var showingShareSheet = false
     @State private var shareURL: URL?
+    @State private var showingError = false
+    @State private var errorMessage = ""
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var pinStore: PinStore
     
@@ -88,6 +90,11 @@ struct ListSharingView: View {
                 if let shareURL = shareURL {
                     ShareSheet(items: [shareURL])
                 }
+            }
+            .alert("Error", isPresented: $showingError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage)
             }
         }
     }
@@ -216,12 +223,12 @@ struct ListSharingView: View {
             VStack(spacing: 12) {
                 // Collaborators (can edit)
                 ForEach(list.collaborators, id: \.self) { userId in
-                    CollaboratorRow(userId: userId, permission: .edit)
+                    CollaboratorRow(userId: userId, permission: .edit, onRemove: removeCollaborator)
                 }
                 
                 // Viewers (can view only)
                 ForEach(list.viewers, id: \.self) { userId in
-                    CollaboratorRow(userId: userId, permission: .view)
+                    CollaboratorRow(userId: userId, permission: .view, onRemove: removeCollaborator)
                 }
             }
         }
@@ -367,16 +374,14 @@ struct ListSharingView: View {
                 
                 await MainActor.run {
                     if success {
-                        // Update local list object
-                        list.sharingType = selectedSharingType
                         print("✅ List sharing settings updated successfully")
+                        dismiss()
                     } else {
                         print("❌ Failed to update list sharing settings")
                         // Show error alert
                         showingError = true
                         errorMessage = "Failed to update sharing settings. Please try again."
                     }
-                    dismiss()
                 }
             }
         }
@@ -499,9 +504,6 @@ struct ListSharingView: View {
              
              await MainActor.run {
                  if success {
-                     // Remove from local collaborators list
-                     list.collaborators.removeAll { $0 == userId }
-                     list.viewers.removeAll { $0 == userId }
                      print("✅ Collaborator removed successfully")
                  } else {
                      showingError = true
@@ -578,6 +580,7 @@ struct SharingOptionRow: View {
 struct CollaboratorRow: View {
     let userId: UUID
     let permission: ListSharingView.PermissionType
+    let onRemove: (UUID) -> Void
     
     var body: some View {
         HStack {
@@ -604,7 +607,7 @@ struct CollaboratorRow: View {
             Spacer()
             
             Button("Remove") {
-                removeCollaborator(userId)
+                onRemove(userId)
             }
             .font(.caption)
             .foregroundColor(.red)
