@@ -50,7 +50,10 @@ struct SettingsView: View {
                         ChangePasswordView()
                             .environmentObject(authManager)
                     )
-                    NavigationLink("Connected Accounts", destination: Text("Connected Accounts Placeholder"))
+                    NavigationLink("Connected Accounts", destination: 
+                        ConnectedAccountsView()
+                            .environmentObject(authManager)
+                    )
                     
                     HStack {
                         Toggle("Private Account", isOn: $isPrivateAccount)
@@ -172,10 +175,10 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("About")) {
-                    NavigationLink("Help & Support", destination: Text("Help Placeholder"))
-                    NavigationLink("Privacy Policy", destination: Text("Privacy Placeholder"))
-                    NavigationLink("Terms of Use", destination: Text("Terms Placeholder"))
-                    Text("App Version 0.50.0 ©2025 Carto Inc.")
+                    NavigationLink("Help & Support", destination: HelpSupportView())
+                    NavigationLink("Privacy Policy", destination: PrivacyPolicyView())
+                    NavigationLink("Terms of Use", destination: TermsOfUseView())
+                    Text("App Version 0.63.0 ©2025 Carto Inc.")
                         .foregroundColor(.gray)
                 }
                 
