@@ -316,16 +316,24 @@ struct UserProfileView: View {
                                 .padding(.trailing, 30)
                             }
                         } else if selectedSection == "My Lists" {
-                            UserListsView(
-                                userID: profileUser.id,
-                                isCurrentUser: profileUser.isCurrentUser ?? false
-                            )
-                            .padding(.top, 8)
-                            .onAppear {
-                                print("🔍 UserProfileView: Creating UserListsView with:")
-                                print("  - profileUser.id: \(profileUser.id)")
-                                print("  - profileUser.isCurrentUser: \(String(describing: profileUser.isCurrentUser))")
-                                print("  - final isCurrentUser value: \(profileUser.isCurrentUser ?? false)")
+                            if profileUser.isCurrentUser ?? false {
+                                // For current user, use the main ListsView
+                                ListsView()
+                                    .environmentObject(pinStore)
+                                    .padding(.top, 8)
+                                    .onAppear {
+                                        print("🔍 UserProfileView: Using main ListsView for current user")
+                                    }
+                            } else {
+                                // For other users, use UserListsView
+                                UserListsView(
+                                    userID: profileUser.id,
+                                    isCurrentUser: false
+                                )
+                                .padding(.top, 8)
+                                .onAppear {
+                                    print("🔍 UserProfileView: Using UserListsView for other user: \(profileUser.id)")
+                                }
                             }
                         }
                     }
