@@ -483,16 +483,40 @@ struct MainMapView: View {
             if selectedTab == 0 {
 
                 ZStack {
-                    Map(position: $cameraPosition, selection: $selectedPinForPopup) {
-                        ForEach(filteredPins, id: \.id) { pin in
-                            Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                                MainMapEnhancedPinAnnotation(pin: pin)
+                    ZStack {
+                        Map(position: $cameraPosition, selection: $selectedPinForPopup) {
+                            // Only show pins after initial loading is complete
+                            if !pinStore.isLoading {
+                                ForEach(filteredPins, id: \.id) { pin in
+                                    Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
+                                        MainMapEnhancedPinAnnotation(pin: pin)
+                                    }
+                                    .tag(pin.id)
+                                }
                             }
-                            .tag(pin.id)
                         }
-                    }
-                    .onChange(of: filteredPins) { _, _ in
-                        centerMapOnFilteredPins()
+                        .onChange(of: filteredPins) { _, _ in
+                            if !pinStore.isLoading {
+                                centerMapOnFilteredPins()
+                            }
+                        }
+                        
+                        // Loading indicator while pins are being fetched
+                        if pinStore.isLoading {
+                            VStack {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                    .tint(.blue)
+                                Text("Loading pins...")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 8)
+                            }
+                            .padding()
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(12)
+                            .shadow(radius: 4)
+                        }
                     }
                     
                     // Filter Panel (Slides from bottom)

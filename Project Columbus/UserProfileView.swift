@@ -339,26 +339,47 @@ struct UserProfileView: View {
                         if selectedSection == "Map View" {
                             ZStack {
                                 // Main Map
-                                Map(coordinateRegion: $region, annotationItems: filteredPins) { pin in
-                                    MapAnnotation(
-                                        coordinate: CLLocationCoordinate2D(
-                                            latitude: pin.latitude,
-                                            longitude: pin.longitude
-                                        )
-                                    ) {
-                                        EnhancedPinAnnotation(pin: pin)
+                                ZStack {
+                                    Map(coordinateRegion: $region, annotationItems: pinStore.isLoading ? [] : filteredPins) { pin in
+                                        MapAnnotation(
+                                            coordinate: CLLocationCoordinate2D(
+                                                latitude: pin.latitude,
+                                                longitude: pin.longitude
+                                            )
+                                        ) {
+                                            EnhancedPinAnnotation(pin: pin)
+                                        }
                                     }
-                                }
-                                .frame(height: 400)
-                                .cornerRadius(10)
-                                .padding(.horizontal)
-                                .padding(.top, 8)
-                                .padding(.bottom, 20)
-                                .onAppear {
-                                    centerMapOnPins()
-                                }
-                                .onChange(of: filteredPins) { _, _ in
-                                    centerMapOnPins()
+                                    .frame(height: 400)
+                                    .cornerRadius(10)
+                                    .padding(.horizontal)
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 20)
+                                    .onAppear {
+                                        centerMapOnPins()
+                                    }
+                                    .onChange(of: filteredPins) { _, _ in
+                                        if !pinStore.isLoading {
+                                            centerMapOnPins()
+                                        }
+                                    }
+                                    
+                                    // Loading indicator while pins are being fetched
+                                    if pinStore.isLoading {
+                                        VStack {
+                                            ProgressView()
+                                                .scaleEffect(1.2)
+                                                .tint(.blue)
+                                            Text("Loading pins...")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                                .padding(.top, 8)
+                                        }
+                                        .padding()
+                                        .background(.ultraThinMaterial)
+                                        .cornerRadius(12)
+                                        .shadow(radius: 4)
+                                    }
                                 }
                                 
                                 // Filter Panel (Slides from bottom)
