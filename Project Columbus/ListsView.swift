@@ -352,11 +352,13 @@ struct ListDetailView: View {
         for index in offsets {
             let pin = filteredPins[index]
             print("🗑️ Deleting pin '\(pin.locationName)' from list '\(list.name)'")
+            print("🔄 UI: Starting delete operation for pin ID: \(pin.id)")
             
-            // Perform deletion in a task to handle async operations
+            // Perform deletion and ensure UI updates
             Task {
                 await MainActor.run {
                     pinStore.removePin(pin, from: list.name)
+                    print("🔄 UI: Delete operation completed for pin '\(pin.locationName)'")
                 }
             }
         }
