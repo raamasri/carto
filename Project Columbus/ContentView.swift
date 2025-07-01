@@ -101,6 +101,7 @@ import SwiftUI
 import MapKit
 struct MainMapView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var pinStore: PinStore
     @State private var shouldTrackUser = false
     @State private var isUserManuallyMovingMap = false
     @State private var cameraPosition = MapCameraPosition.region(MKCoordinateRegion(
@@ -480,8 +481,6 @@ struct MainMapView: View {
             .onTapGesture(perform: onTap)
         }
     }
-    
-    @EnvironmentObject var pinStore: PinStore
 
     var body: some View {
         ZStack {
@@ -714,6 +713,26 @@ struct MainMapView: View {
                         .padding(.bottom, 60)
                         .padding(.leading)
 
+                        Spacer()
+                        
+                        // Refresh Button
+                        Button(action: {
+                            Task {
+                                await pinStore.refresh()
+                            }
+                        }) {
+                            Image(systemName: pinStore.isLoading ? "arrow.clockwise" : "arrow.clockwise")
+                                .foregroundColor(.gray)
+                                .padding()
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                                .rotationEffect(.degrees(pinStore.isLoading ? 360 : 0))
+                                .animation(pinStore.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: pinStore.isLoading)
+                        }
+                        .disabled(pinStore.isLoading)
+                        .padding(.bottom, 60)
+                        
                         Spacer()
                         
                         // Filter Button
