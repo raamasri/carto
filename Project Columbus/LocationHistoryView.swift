@@ -24,57 +24,76 @@ struct LocationHistoryView: View {
         case day = "Today"
         case week = "This Week"
         case month = "This Month"
-        case year = "This Year"
         case all = "All Time"
     }
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Time Range Picker
-                Picker("Time Range", selection: $selectedTimeRange) {
-                    ForEach(TimeRange.allCases, id: \.self) { range in
-                        Text(range.rawValue).tag(range)
+            VStack {
+                if !isLocationHistoryEnabled {
+                    // Location History Disabled State
+                    VStack(spacing: 20) {
+                        Image(systemName: "location.slash")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        
+                        Text("Location History Disabled")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        Text("Enable location history to track and view your location data over time.")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        
+                        Button("Enable Location History") {
+                            enableLocationHistory()
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding()
-                
-                if isLoading {
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if isLoading {
                     ProgressView("Loading location history...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if locationHistory.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "location.slash")
-                            .font(.system(size: 64))
+                    // Empty State
+                    VStack(spacing: 20) {
+                        Image(systemName: "location")
+                            .font(.system(size: 60))
                             .foregroundColor(.gray)
                         
                         Text("No Location History")
                             .font(.title2)
                             .fontWeight(.semibold)
                         
-                        Text("Enable location history to see your past locations here")
+                        Text("Your location history will appear here as you use the app.")
                             .font(.body)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        
-                        if !isLocationHistoryEnabled {
-                            Button("Enable Location History") {
-                                enableLocationHistory()
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List {
-                        ForEach(groupedLocationHistory, id: \.key) { group in
-                            Section(header: Text(group.key)) {
-                                ForEach(group.value, id: \.id) { entry in
-                                    LocationHistoryRow(entry: entry) {
-                                        selectedEntry = entry
-                                        showingMap = true
+                    // Location History Content
+                    VStack {
+                        // Time Range Picker
+                        Picker("Time Range", selection: $selectedTimeRange) {
+                            ForEach(TimeRange.allCases, id: \.self) { range in
+                                Text(range.rawValue).tag(range)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding()
+                        
+                        // Location History List
+                        List {
+                            ForEach(groupedLocationHistory, id: \.key) { day, entries in
+                                Section(header: Text(day)) {
+                                    ForEach(entries) { entry in
+                                        LocationHistoryRow(entry: entry) {
+                                            selectedEntry = entry
+                                            showingMap = true
+                                        }
                                     }
                                 }
                             }
@@ -84,23 +103,13 @@ struct LocationHistoryView: View {
             }
             .navigationTitle("Location History")
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button(action: {
-                            exportLocationHistory()
-                        }) {
+                        Button(action: exportLocationHistory) {
                             Label("Export Data", systemImage: "square.and.arrow.up")
                         }
                         
-                        Button(action: {
-                            showDeleteConfirmation()
-                        }) {
+                        Button(action: showDeleteConfirmation) {
                             Label("Delete All", systemImage: "trash")
                         }
                         .foregroundColor(.red)
@@ -142,10 +151,37 @@ struct LocationHistoryView: View {
     private func loadLocationHistory() {
         isLoading = true
         
-        // Simulate loading with mock data
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            locationHistory = generateMockLocationHistory()
-            isLoading = false
+        // Load from LocationManager's cached data
+        let cachedHistory = locationManager.getLocationHistory()
+        
+        // Convert to MockLocationEntry format
+        var entries: [MockLocationEntry] = []
+        
+        for (index, locationData) in cachedHistory.enumerated() {
+            if let latitude = locationData["latitude"] as? Double,
+               let longitude = locationData["longitude"] as? Double,
+               let timestamp = locationData["timestamp"] as? TimeInterval {
+                
+                let entry = MockLocationEntry(
+                    id: UUID(),
+                    timestamp: Date(timeIntervalSince1970: timestamp),
+                    latitude: latitude,
+                    longitude: longitude,
+                    locationName: "Location \(index + 1)",
+                    activityType: "unknown"
+                )
+                entries.append(entry)
+            }
+        }
+        
+        // If no real data, use mock data for demonstration
+        if entries.isEmpty {
+            entries = generateMockLocationHistory()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.locationHistory = entries
+            self.isLoading = false
         }
     }
     
@@ -156,12 +192,17 @@ struct LocationHistoryView: View {
     private func enableLocationHistory() {
         isLocationHistoryEnabled = true
         UserDefaults.standard.set(true, forKey: "locationHistoryEnabled")
-        // TODO: Enable in LocationManager when accessible
+        locationManager.enableLocationHistory()
+        loadLocationHistory()
     }
     
     private func toggleLocationHistory(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: "locationHistoryEnabled")
-        // TODO: Toggle in LocationManager when accessible
+        if enabled {
+            locationManager.enableLocationHistory()
+        } else {
+            locationManager.disableLocationHistory()
+        }
     }
     
     private func exportLocationHistory() {
@@ -306,9 +347,8 @@ struct LocationHistoryMapView: View {
                 }
             }
             .navigationTitle(entry.locationName)
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
                         presentationMode.wrappedValue.dismiss()
                     }
