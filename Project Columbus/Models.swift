@@ -491,3 +491,416 @@ extension MessageDetailDB {
         )
     }
 }
+
+// MARK: - Location Models
+
+struct LocationHistoryEntry: Identifiable, Codable {
+    let id: String
+    let userID: String
+    let latitude: Double
+    let longitude: Double
+    let accuracy: Double?
+    let altitude: Double?
+    let speed: Double?
+    let heading: Double?
+    let locationName: String?
+    let city: String?
+    let country: String?
+    let createdAt: Date
+    let isManual: Bool
+    let activityType: String?
+    
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case latitude
+        case longitude
+        case accuracy
+        case altitude
+        case speed
+        case heading
+        case locationName = "location_name"
+        case city
+        case country
+        case createdAt = "created_at"
+        case isManual = "is_manual"
+        case activityType = "activity_type"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        userID = try container.decode(String.self, forKey: .userID)
+        latitude = try container.decode(Double.self, forKey: .latitude)
+        longitude = try container.decode(Double.self, forKey: .longitude)
+        accuracy = try container.decodeIfPresent(Double.self, forKey: .accuracy)
+        altitude = try container.decodeIfPresent(Double.self, forKey: .altitude)
+        speed = try container.decodeIfPresent(Double.self, forKey: .speed)
+        heading = try container.decodeIfPresent(Double.self, forKey: .heading)
+        locationName = try container.decodeIfPresent(String.self, forKey: .locationName)
+        city = try container.decodeIfPresent(String.self, forKey: .city)
+        country = try container.decodeIfPresent(String.self, forKey: .country)
+        isManual = try container.decode(Bool.self, forKey: .isManual)
+        activityType = try container.decodeIfPresent(String.self, forKey: .activityType)
+        
+        // Parse the timestamp
+        let createdAtString = try container.decode(String.self, forKey: .createdAt)
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        createdAt = iso8601Formatter.date(from: createdAtString) ?? Date()
+    }
+}
+
+struct Geofence: Identifiable, Codable {
+    let id: String
+    let userID: String
+    let name: String
+    let description: String?
+    let latitude: Double
+    let longitude: Double
+    let radius: Double
+    let isActive: Bool
+    let notificationType: String
+    let createdAt: Date
+    let updatedAt: Date
+    
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case name
+        case description
+        case latitude
+        case longitude
+        case radius
+        case isActive = "is_active"
+        case notificationType = "notification_type"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        userID = try container.decode(String.self, forKey: .userID)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        latitude = try container.decode(Double.self, forKey: .latitude)
+        longitude = try container.decode(Double.self, forKey: .longitude)
+        radius = try container.decode(Double.self, forKey: .radius)
+        isActive = try container.decode(Bool.self, forKey: .isActive)
+        notificationType = try container.decode(String.self, forKey: .notificationType)
+        
+        // Parse timestamps
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        let createdAtString = try container.decode(String.self, forKey: .createdAt)
+        createdAt = iso8601Formatter.date(from: createdAtString) ?? Date()
+        
+        let updatedAtString = try container.decode(String.self, forKey: .updatedAt)
+        updatedAt = iso8601Formatter.date(from: updatedAtString) ?? Date()
+    }
+}
+
+struct GeofenceEvent: Identifiable, Codable {
+    let id: String
+    let userID: String
+    let geofenceID: String
+    let eventType: String
+    let latitude: Double
+    let longitude: Double
+    let createdAt: Date
+    let geofenceName: String?
+    let geofenceDescription: String?
+    
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case geofenceID = "geofence_id"
+        case eventType = "event_type"
+        case latitude
+        case longitude
+        case createdAt = "created_at"
+        case geofences
+    }
+    
+    private enum GeofenceKeys: String, CodingKey {
+        case name
+        case description
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        userID = try container.decode(String.self, forKey: .userID)
+        geofenceID = try container.decode(String.self, forKey: .geofenceID)
+        eventType = try container.decode(String.self, forKey: .eventType)
+        latitude = try container.decode(Double.self, forKey: .latitude)
+        longitude = try container.decode(Double.self, forKey: .longitude)
+        
+        // Parse timestamp
+        let createdAtString = try container.decode(String.self, forKey: .createdAt)
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        createdAt = iso8601Formatter.date(from: createdAtString) ?? Date()
+        
+        // Parse nested geofence data
+        if let geofenceContainer = try? container.nestedContainer(keyedBy: GeofenceKeys.self, forKey: .geofences) {
+            geofenceName = try geofenceContainer.decodeIfPresent(String.self, forKey: .name)
+            geofenceDescription = try geofenceContainer.decodeIfPresent(String.self, forKey: .description)
+        } else {
+            geofenceName = nil
+            geofenceDescription = nil
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(geofenceID, forKey: .geofenceID)
+        try container.encode(eventType, forKey: .eventType)
+        try container.encode(latitude, forKey: .latitude)
+        try container.encode(longitude, forKey: .longitude)
+        
+        // Encode timestamp
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        try container.encode(iso8601Formatter.string(from: createdAt), forKey: .createdAt)
+        
+        // Encode nested geofence data if available
+        if geofenceName != nil || geofenceDescription != nil {
+            var geofenceContainer = container.nestedContainer(keyedBy: GeofenceKeys.self, forKey: .geofences)
+            try geofenceContainer.encodeIfPresent(geofenceName, forKey: .name)
+            try geofenceContainer.encodeIfPresent(geofenceDescription, forKey: .description)
+        }
+    }
+}
+
+struct LocationPrivacySettings: Identifiable, Codable {
+    let id: String?
+    let userID: String
+    let shareLocationWithFriends: Bool
+    let shareLocationWithFollowers: Bool
+    let shareLocationPublicly: Bool
+    let shareLocationHistory: Bool
+    let locationAccuracyLevel: String
+    let autoDeleteHistoryDays: Int
+    let allowLocationRequests: Bool
+    let createdAt: Date?
+    let updatedAt: Date?
+    
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case shareLocationWithFriends = "share_location_with_friends"
+        case shareLocationWithFollowers = "share_location_with_followers"
+        case shareLocationPublicly = "share_location_publicly"
+        case shareLocationHistory = "share_location_history"
+        case locationAccuracyLevel = "location_accuracy_level"
+        case autoDeleteHistoryDays = "auto_delete_history_days"
+        case allowLocationRequests = "allow_location_requests"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+    
+    init(
+        id: String? = nil,
+        userID: String,
+        shareLocationWithFriends: Bool = true,
+        shareLocationWithFollowers: Bool = false,
+        shareLocationPublicly: Bool = false,
+        shareLocationHistory: Bool = false,
+        locationAccuracyLevel: String = "approximate",
+        autoDeleteHistoryDays: Int = 30,
+        allowLocationRequests: Bool = true,
+        createdAt: Date? = nil,
+        updatedAt: Date? = nil
+    ) {
+        self.id = id
+        self.userID = userID
+        self.shareLocationWithFriends = shareLocationWithFriends
+        self.shareLocationWithFollowers = shareLocationWithFollowers
+        self.shareLocationPublicly = shareLocationPublicly
+        self.shareLocationHistory = shareLocationHistory
+        self.locationAccuracyLevel = locationAccuracyLevel
+        self.autoDeleteHistoryDays = autoDeleteHistoryDays
+        self.allowLocationRequests = allowLocationRequests
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        userID = try container.decode(String.self, forKey: .userID)
+        shareLocationWithFriends = try container.decode(Bool.self, forKey: .shareLocationWithFriends)
+        shareLocationWithFollowers = try container.decode(Bool.self, forKey: .shareLocationWithFollowers)
+        shareLocationPublicly = try container.decode(Bool.self, forKey: .shareLocationPublicly)
+        shareLocationHistory = try container.decode(Bool.self, forKey: .shareLocationHistory)
+        locationAccuracyLevel = try container.decode(String.self, forKey: .locationAccuracyLevel)
+        autoDeleteHistoryDays = try container.decode(Int.self, forKey: .autoDeleteHistoryDays)
+        allowLocationRequests = try container.decode(Bool.self, forKey: .allowLocationRequests)
+        
+        // Parse timestamps if present
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        if let createdAtString = try container.decodeIfPresent(String.self, forKey: .createdAt) {
+            createdAt = iso8601Formatter.date(from: createdAtString)
+        } else {
+            createdAt = nil
+        }
+        
+        if let updatedAtString = try container.decodeIfPresent(String.self, forKey: .updatedAt) {
+            updatedAt = iso8601Formatter.date(from: updatedAtString)
+        } else {
+            updatedAt = nil
+        }
+    }
+}
+
+// MARK: - Location Accuracy Levels
+
+enum LocationAccuracyLevel: String, CaseIterable {
+    case exact = "exact"
+    case approximate = "approximate"
+    case cityOnly = "city_only"
+    case hidden = "hidden"
+    
+    var displayName: String {
+        switch self {
+        case .exact:
+            return "Exact Location"
+        case .approximate:
+            return "Approximate Location"
+        case .cityOnly:
+            return "City Only"
+        case .hidden:
+            return "Hidden"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .exact:
+            return "Share your precise location"
+        case .approximate:
+            return "Share general area (~1km radius)"
+        case .cityOnly:
+            return "Share only your city"
+        case .hidden:
+            return "Don't share location"
+        }
+    }
+}
+
+// MARK: - Insert Models for Database Operations
+
+struct LocationHistoryInsert: Codable {
+    let user_id: String
+    let latitude: Double
+    let longitude: Double
+    let accuracy: Double?
+    let altitude: Double?
+    let speed: Double?
+    let heading: Double?
+    let location_name: String?
+    let city: String?
+    let country: String?
+    let is_manual: Bool
+    let activity_type: String
+}
+
+struct GeofenceInsert: Codable {
+    let user_id: String
+    let name: String
+    let description: String?
+    let latitude: Double
+    let longitude: Double
+    let radius: Double
+    let notification_type: String
+}
+
+struct GeofenceEventInsert: Codable {
+    let user_id: String
+    let geofence_id: String
+    let event_type: String
+    let latitude: Double
+    let longitude: Double
+}
+
+struct LocationPrivacySettingsInsert: Codable {
+    let user_id: String
+    let share_location_with_friends: Bool
+    let share_location_with_followers: Bool
+    let share_location_publicly: Bool
+    let share_location_history: Bool
+    let location_accuracy_level: String
+    let auto_delete_history_days: Int
+    let allow_location_requests: Bool
+}
+
+// MARK: - Geofence Notification Types
+
+enum GeofenceNotificationType: String, CaseIterable {
+    case enter = "enter"
+    case exit = "exit"
+    case both = "both"
+    
+    var displayName: String {
+        switch self {
+        case .enter:
+            return "When Entering"
+        case .exit:
+            return "When Leaving"
+        case .both:
+            return "Enter & Exit"
+        }
+    }
+}
+
+// MARK: - Activity Types
+
+enum LocationActivityType: String, CaseIterable {
+    case stationary = "stationary"
+    case walking = "walking"
+    case running = "running"
+    case automotive = "automotive"
+    case cycling = "cycling"
+    case unknown = "unknown"
+    
+    var displayName: String {
+        switch self {
+        case .stationary:
+            return "Stationary"
+        case .walking:
+            return "Walking"
+        case .running:
+            return "Running"
+        case .automotive:
+            return "Driving"
+        case .cycling:
+            return "Cycling"
+        case .unknown:
+            return "Unknown"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .stationary:
+            return "figure.stand"
+        case .walking:
+            return "figure.walk"
+        case .running:
+            return "figure.run"
+        case .automotive:
+            return "car.fill"
+        case .cycling:
+            return "bicycle"
+        case .unknown:
+            return "questionmark.circle"
+        }
+    }
+}

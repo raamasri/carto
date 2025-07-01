@@ -1525,3 +1525,375 @@ extension SupabaseManager {
             .remove(paths: [path])
     }
 }
+
+// MARK: - Location Features Extension (Temporarily Disabled)
+
+/*
+extension SupabaseManager {
+    
+    // MARK: - Location History (Placeholder Implementation)
+    
+    /// Save location to history
+    func saveLocationToHistory(
+        userID: String,
+        latitude: Double,
+        longitude: Double,
+        accuracy: Double? = nil,
+        altitude: Double? = nil,
+        speed: Double? = nil,
+        heading: Double? = nil,
+        locationName: String? = nil,
+        city: String? = nil,
+        country: String? = nil,
+        isManual: Bool = false,
+        activityType: String? = nil
+    ) async -> Bool {
+        // TODO: Implement location history when database is ready
+        print("✅ Location saved to history (placeholder)")
+        return true
+    }
+    
+    /// Get user's location history
+    func getLocationHistory(
+        userID: String,
+        limit: Int = 100,
+        startDate: Date? = nil,
+        endDate: Date? = nil
+    ) async throws -> [LocationHistoryEntry] {
+        // TODO: Implement when database is ready
+        return []
+    }
+    
+    /// Delete location history older than specified days
+    func cleanupLocationHistory(userID: String, olderThanDays: Int) async -> Bool {
+        do {
+            let cutoffDate = Calendar.current.date(byAdding: .day, value: -olderThanDays, to: Date()) ?? Date()
+            let cutoffString = ISO8601DateFormatter().string(from: cutoffDate)
+            
+            _ = try await client
+                .from("location_history")
+                .delete()
+                .eq("user_id", value: userID)
+                .lt("created_at", value: cutoffString)
+                .execute()
+            
+            print("✅ Location history cleaned up (older than \(olderThanDays) days)")
+            return true
+        } catch {
+            print("❌ Failed to cleanup location history: \(error)")
+            return false
+        }
+    }
+    
+    /// Delete all location history for user
+    func deleteAllLocationHistory(userID: String) async -> Bool {
+        do {
+            _ = try await client
+                .from("location_history")
+                .delete()
+                .eq("user_id", value: userID)
+                .execute()
+            
+            print("✅ All location history deleted")
+            return true
+        } catch {
+            print("❌ Failed to delete location history: \(error)")
+            return false
+        }
+    }
+    
+    // MARK: - Geofencing
+    
+    /// Create a geofence
+    func createGeofence(
+        userID: String,
+        name: String,
+        description: String? = nil,
+        latitude: Double,
+        longitude: Double,
+        radius: Double,
+        notificationType: String = "both"
+    ) async -> Bool {
+        do {
+            let geofenceData = GeofenceInsert(
+                user_id: userID,
+                name: name,
+                description: description,
+                latitude: latitude,
+                longitude: longitude,
+                radius: radius,
+                notification_type: notificationType
+            )
+            
+            _ = try await client
+                .from("geofences")
+                .insert(geofenceData)
+                .execute()
+            
+            print("✅ Geofence created: \(name)")
+            return true
+        } catch {
+            print("❌ Failed to create geofence: \(error)")
+            return false
+        }
+    }
+    
+    /// Get user's geofences
+    func getUserGeofences(userID: String) async throws -> [Geofence] {
+        let response = try await client
+            .from("geofences")
+            .select()
+            .eq("user_id", value: userID)
+            .eq("is_active", value: true)
+            .order("created_at", ascending: false)
+            .execute()
+        
+        return try JSONDecoder().decode([Geofence].self, from: response.data)
+    }
+    
+    /// Update geofence
+    func updateGeofence(
+        geofenceID: String,
+        name: String? = nil,
+        description: String? = nil,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        radius: Double? = nil,
+        isActive: Bool? = nil,
+        notificationType: String? = nil
+    ) async -> Bool {
+        do {
+            var updateData: [String: Any] = [:]
+            
+            if let name = name { updateData["name"] = name }
+            if let description = description { updateData["description"] = description }
+            if let latitude = latitude { updateData["latitude"] = latitude }
+            if let longitude = longitude { updateData["longitude"] = longitude }
+            if let radius = radius { updateData["radius"] = radius }
+            if let isActive = isActive { updateData["is_active"] = isActive }
+            if let notificationType = notificationType { updateData["notification_type"] = notificationType }
+            
+            _ = try await client
+                .from("geofences")
+                .update(updateData)
+                .eq("id", value: geofenceID)
+                .execute()
+            
+            print("✅ Geofence updated")
+            return true
+        } catch {
+            print("❌ Failed to update geofence: \(error)")
+            return false
+        }
+    }
+    
+    /// Delete geofence
+    func deleteGeofence(geofenceID: String) async -> Bool {
+        do {
+            _ = try await client
+                .from("geofences")
+                .delete()
+                .eq("id", value: geofenceID)
+                .execute()
+            
+            print("✅ Geofence deleted")
+            return true
+        } catch {
+            print("❌ Failed to delete geofence: \(error)")
+            return false
+        }
+    }
+    
+    /// Record geofence event (enter/exit)
+    func recordGeofenceEvent(
+        userID: String,
+        geofenceID: String,
+        eventType: String,
+        latitude: Double,
+        longitude: Double
+    ) async -> Bool {
+        do {
+            let eventData: [String: Any] = [
+                "user_id": userID,
+                "geofence_id": geofenceID,
+                "event_type": eventType,
+                "latitude": latitude,
+                "longitude": longitude
+            ]
+            
+            _ = try await client
+                .from("geofence_events")
+                .insert(eventData)
+                .execute()
+            
+            print("✅ Geofence event recorded: \(eventType)")
+            return true
+        } catch {
+            print("❌ Failed to record geofence event: \(error)")
+            return false
+        }
+    }
+    
+    /// Get geofence events
+    func getGeofenceEvents(userID: String, limit: Int = 50) async throws -> [GeofenceEvent] {
+        let response = try await client
+            .from("geofence_events")
+            .select("""
+                *,
+                geofences (
+                    name,
+                    description
+                )
+            """)
+            .eq("user_id", value: userID)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+        
+        return try JSONDecoder().decode([GeofenceEvent].self, from: response.data)
+    }
+    
+    // MARK: - Location Privacy Settings
+    
+    /// Get user's location privacy settings
+    func getLocationPrivacySettings(userID: String) async throws -> LocationPrivacySettings {
+        let response = try await client
+            .from("location_privacy_settings")
+            .select()
+            .eq("user_id", value: userID)
+            .execute()
+        
+        let settings = try JSONDecoder().decode([LocationPrivacySettings].self, from: response.data)
+        
+        if let existing = settings.first {
+            return existing
+        } else {
+            // Create default settings if none exist
+            let defaultSettings = LocationPrivacySettings(
+                userID: userID,
+                shareLocationWithFriends: true,
+                shareLocationWithFollowers: false,
+                shareLocationPublicly: false,
+                shareLocationHistory: false,
+                locationAccuracyLevel: "approximate",
+                autoDeleteHistoryDays: 30,
+                allowLocationRequests: true
+            )
+            
+            _ = await createLocationPrivacySettings(settings: defaultSettings)
+            return defaultSettings
+        }
+    }
+    
+    /// Create location privacy settings
+    func createLocationPrivacySettings(settings: LocationPrivacySettings) async -> Bool {
+        do {
+            let settingsData: [String: Any] = [
+                "user_id": settings.userID,
+                "share_location_with_friends": settings.shareLocationWithFriends,
+                "share_location_with_followers": settings.shareLocationWithFollowers,
+                "share_location_publicly": settings.shareLocationPublicly,
+                "share_location_history": settings.shareLocationHistory,
+                "location_accuracy_level": settings.locationAccuracyLevel,
+                "auto_delete_history_days": settings.autoDeleteHistoryDays,
+                "allow_location_requests": settings.allowLocationRequests
+            ]
+            
+            _ = try await client
+                .from("location_privacy_settings")
+                .insert(settingsData)
+                .execute()
+            
+            print("✅ Location privacy settings created")
+            return true
+        } catch {
+            print("❌ Failed to create location privacy settings: \(error)")
+            return false
+        }
+    }
+    
+    /// Update location privacy settings
+    func updateLocationPrivacySettings(
+        userID: String,
+        shareLocationWithFriends: Bool? = nil,
+        shareLocationWithFollowers: Bool? = nil,
+        shareLocationPublicly: Bool? = nil,
+        shareLocationHistory: Bool? = nil,
+        locationAccuracyLevel: String? = nil,
+        autoDeleteHistoryDays: Int? = nil,
+        allowLocationRequests: Bool? = nil
+    ) async -> Bool {
+        do {
+            var updateData: [String: Any] = [:]
+            
+            if let shareLocationWithFriends = shareLocationWithFriends {
+                updateData["share_location_with_friends"] = shareLocationWithFriends
+            }
+            if let shareLocationWithFollowers = shareLocationWithFollowers {
+                updateData["share_location_with_followers"] = shareLocationWithFollowers
+            }
+            if let shareLocationPublicly = shareLocationPublicly {
+                updateData["share_location_publicly"] = shareLocationPublicly
+            }
+            if let shareLocationHistory = shareLocationHistory {
+                updateData["share_location_history"] = shareLocationHistory
+            }
+            if let locationAccuracyLevel = locationAccuracyLevel {
+                updateData["location_accuracy_level"] = locationAccuracyLevel
+            }
+            if let autoDeleteHistoryDays = autoDeleteHistoryDays {
+                updateData["auto_delete_history_days"] = autoDeleteHistoryDays
+            }
+            if let allowLocationRequests = allowLocationRequests {
+                updateData["allow_location_requests"] = allowLocationRequests
+            }
+            
+            _ = try await client
+                .from("location_privacy_settings")
+                .update(updateData)
+                .eq("user_id", value: userID)
+                .execute()
+            
+            print("✅ Location privacy settings updated")
+            return true
+        } catch {
+            print("❌ Failed to update location privacy settings: \(error)")
+            return false
+        }
+    }
+    
+    /// Check if user allows location sharing with another user
+    func canShareLocationWith(userID: String, targetUserID: String) async -> Bool {
+        do {
+            // Get privacy settings
+            let settings = try await getLocationPrivacySettings(userID: userID)
+            
+            // Check if public sharing is enabled
+            if settings.shareLocationPublicly {
+                return true
+            }
+            
+            // Check if they're friends and friend sharing is enabled
+            if settings.shareLocationWithFriends {
+                let isFollowing = try await checkIfFollowing(followerID: targetUserID, followingID: userID)
+                let isFollowedBy = try await checkIfFollowing(followerID: userID, followingID: targetUserID)
+                
+                if isFollowing && isFollowedBy {
+                    return true // Mutual follow = friends
+                }
+            }
+            
+            // Check if follower sharing is enabled
+            if settings.shareLocationWithFollowers {
+                let isFollowedBy = try await checkIfFollowing(followerID: targetUserID, followingID: userID)
+                return isFollowedBy
+            }
+            
+            return false
+        } catch {
+            print("❌ Failed to check location sharing permissions: \(error)")
+            return false
+        }
+    }
+}
+*/

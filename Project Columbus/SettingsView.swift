@@ -83,6 +83,57 @@ struct SettingsView: View {
                         }
                 }
                 
+                // Enhanced Location Privacy Section
+                Section(header: Text("Location Privacy")) {
+                    NavigationLink(destination: LocationPrivacySettingsView()) {
+                        HStack {
+                            Image(systemName: "location.fill")
+                                .foregroundColor(.blue)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Location Sharing")
+                                    .font(.body)
+                                Text("Control who can see your location")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                    
+                    NavigationLink(destination: LocationHistoryView()) {
+                        HStack {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .foregroundColor(.orange)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Location History")
+                                    .font(.body)
+                                Text("View and manage your location data")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                    
+                    NavigationLink(destination: GeofenceManagementView()) {
+                        HStack {
+                            Image(systemName: "location.circle")
+                                .foregroundColor(.purple)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Location Alerts")
+                                    .font(.body)
+                                Text("Set up geofences and notifications")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+                
                 Section(header: Text("Notifications")) {
                     Toggle("Friend Activity", isOn: $friendActivityNotifications)
                     Toggle("Nearby Pins", isOn: $nearbyPinsNotifications)
