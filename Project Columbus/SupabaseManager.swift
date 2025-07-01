@@ -508,7 +508,81 @@ class SupabaseManager: ObservableObject {
                 .execute()
                 .value
             
-            return basicUser.toAppUser()
+            // Calculate follower count
+            let followerCount: Int
+            do {
+                struct CountResult: Codable {
+                    let count: Int
+                }
+                
+                let followerResult: CountResult = try await client
+                    .from("follows")
+                    .select("count", count: .exact)
+                    .eq("following_id", value: userID)
+                    .single()
+                    .execute()
+                    .value
+                followerCount = followerResult.count
+            } catch {
+                print("❌ Failed to get follower count: \(error)")
+                followerCount = 0
+            }
+            
+            // Calculate following count  
+            let followingCount: Int
+            do {
+                struct CountResult: Codable {
+                    let count: Int
+                }
+                
+                let followingResult: CountResult = try await client
+                    .from("follows")
+                    .select("count", count: .exact)
+                    .eq("follower_id", value: userID)
+                    .single()
+                    .execute()
+                    .value
+                followingCount = followingResult.count
+            } catch {
+                print("❌ Failed to get following count: \(error)")
+                followingCount = 0
+            }
+            
+            // Filter out self-follows from counts
+            let selfFollowCount: Int
+            do {
+                struct CountResult: Codable {
+                    let count: Int
+                }
+                
+                let selfFollowResult: CountResult = try await client
+                    .from("follows")
+                    .select("count", count: .exact)
+                    .eq("follower_id", value: userID)
+                    .eq("following_id", value: userID)
+                    .single()
+                    .execute()
+                    .value
+                selfFollowCount = selfFollowResult.count
+            } catch {
+                selfFollowCount = 0
+            }
+            
+            // Create AppUser with calculated counts (subtract self-follows)
+            return AppUser(
+                id: basicUser.id,
+                username: basicUser.username,
+                full_name: basicUser.full_name,
+                email: basicUser.email,
+                bio: basicUser.bio,
+                follower_count: max(0, followerCount - selfFollowCount),
+                following_count: max(0, followingCount - selfFollowCount),
+                isFollowedByCurrentUser: false, // Will be set separately if needed
+                latitude: basicUser.latitude,
+                longitude: basicUser.longitude,
+                isCurrentUser: false, // Will be set separately if needed
+                avatarURL: basicUser.avatar_url
+            )
         } catch {
             print("❌ Failed to fetch user profile: \(error)")
             return nil
