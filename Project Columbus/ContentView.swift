@@ -928,10 +928,6 @@ struct MainMapView: View {
                 VStack {
                     Spacer()
                     HStack {
-
-
-                        Spacer()
-
                         // Refresh Button
                         Button(action: {
                             Task {
@@ -939,8 +935,9 @@ struct MainMapView: View {
                             }
                         }) {
                             Image(systemName: pinStore.isLoading ? "arrow.clockwise" : "arrow.clockwise")
+                                .font(.title2)
                                 .foregroundColor(.gray)
-                                .padding()
+                                .padding(16)
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
                                 .shadow(radius: 4)
@@ -949,9 +946,7 @@ struct MainMapView: View {
                         }
                         .disabled(pinStore.isLoading)
                         .padding(.bottom, 60)
-                        
                         Spacer()
-                        
                         // Filter Button
                         Button(action: {
                             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
@@ -960,13 +955,12 @@ struct MainMapView: View {
                         }) {
                             ZStack {
                                 Image(systemName: showMapFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                                    .font(.title2)
                                     .foregroundColor(showMapFilters ? .blue : .gray)
-                                    .padding()
+                                    .padding(16)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Circle())
                                     .shadow(radius: 4)
-                                
-                                // Filter count badge
                                 if hasActiveFilters {
                                     Text("\(activeFilterCount)")
                                         .font(.caption2)
@@ -980,46 +974,44 @@ struct MainMapView: View {
                             }
                         }
                         .padding(.bottom, 60)
-                        
                         Spacer()
-                        
                         // Recenter Button
                         Button(action: {
                             centerMapOnFilteredPins()
                         }) {
                             Image(systemName: "viewfinder")
+                                .font(.title2)
                                 .foregroundColor(.gray)
-                                .padding()
+                                .padding(16)
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
                                 .shadow(radius: 4)
                         }
                         .padding(.bottom, 60)
-                        
                         Spacer()
-
+                        // Location Button
                         Button(action: {
-                            // Always recenter on current location when pressed
-                                requestUserLocation()
-                                withAnimation {
-                                    if let location = locationManager.location {
-                                        cameraPosition = .region(MKCoordinateRegion(
-                                            center: location,
-                                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                                        ))
+                            requestUserLocation()
+                            withAnimation {
+                                if let location = locationManager.location {
+                                    cameraPosition = .region(MKCoordinateRegion(
+                                        center: location,
+                                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                    ))
                                 }
                             }
                         }) {
                             Image(systemName: "location.fill")
+                                .font(.title2)
                                 .foregroundColor(.blue)
-                                .padding()
+                                .padding(16)
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
                                 .shadow(radius: 4)
                         }
                         .padding(.bottom, 60)
-                        .padding(.trailing)
                     }
+                    .padding(.horizontal)
                 }
             }
 
