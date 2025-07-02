@@ -2433,7 +2433,6 @@ extension SupabaseManager {
         
         return try JSONDecoder().decode([GeofenceEvent].self, from: response.data)
     }
-}
 
     // MARK: - Location Privacy Settings
     
@@ -2577,10 +2576,14 @@ extension SupabaseManager {
             return false
         }
     }
-    
+}
+*/
+
+// MARK: - Deep Linking Support
+extension SupabaseManager {
     /// Get user by username for deep linking
     func getUserByUsername(_ username: String) async throws -> AppUser {
-        let userDB: UserDB = try await client
+        let basicUser: BasicUser = try await client
             .from("users")
             .select("*")
             .eq("username", value: username)
@@ -2588,6 +2591,6 @@ extension SupabaseManager {
             .execute()
             .value
         
-        return AppUser(from: userDB)
+        return basicUser.toAppUser()
     }
 }

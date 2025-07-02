@@ -1,0 +1,30 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "TEAMID.com.yourcompany.project-columbus"
+        ],
+        "components": [
+          {
+            "/": "/profile/*",
+            "comment": "Matches profile URLs like /profile/username"
+          },
+          {
+            "/": "/pin/*",
+            "comment": "Matches pin URLs like /pin/id (for future use)"
+          },
+          {
+            "/": "/list/*",
+            "comment": "Matches list URLs like /list/id (for future use)"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAMID.com.yourcompany.project-columbus"
+    ]
+  }
+} 
