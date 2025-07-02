@@ -161,33 +161,31 @@ struct SendToFriendsView: View {
         isSending = true
         
         Task {
-            do {
-                // Create notifications for each selected user using the enhanced notification system
-                let selectedUsernames = followingUsers.filter { selectedUsers.contains($0.id) }.map { $0.username }
+            // Create notifications for each selected user using the enhanced notification system
+            let selectedUsernames = followingUsers.filter { selectedUsers.contains($0.id) }.map { $0.username }
+            
+            var allSuccessful = true
+            for userId in selectedUsers {
+                let success = await SupabaseManager.shared.sendPinRecommendationNotification(
+                    pinID: pin.id.uuidString,
+                    to: userId,
+                    message: message.isEmpty ? nil : message
+                )
                 
-                for userId in selectedUsers {
-                    let success = await SupabaseManager.shared.sendPinRecommendationNotification(
-                        pinID: pin.id.uuidString,
-                        to: userId,
-                        message: message.isEmpty ? nil : message
-                    )
-                    
-                    if !success {
-                        print("❌ Failed to send notification to user: \(userId)")
-                    }
+                if !success {
+                    print("❌ Failed to send notification to user: \(userId)")
+                    allSuccessful = false
                 }
-                
-                await MainActor.run {
+            }
+            
+            await MainActor.run {
+                if allSuccessful {
                     let names = selectedUsernames.joined(separator: ", ")
                     onSent("Pin sent to \(names)")
-                    isSending = false
+                } else {
+                    onSent("Pin sent with some failures")
                 }
-                
-            } catch {
-                await MainActor.run {
-                    onSent("Failed to send pin")
-                    isSending = false
-                }
+                isSending = false
             }
         }
     }

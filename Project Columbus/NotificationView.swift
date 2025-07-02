@@ -301,36 +301,32 @@ struct NotificationView: View {
     private func fetchFollowRequests() async {
         guard let currentUserID = authManager.currentUserID else { return }
         
-        do {
-            // For now, we'll use sample data since the notifications table may not exist yet
-            // In production, this would fetch from the database
-            print("📱 NotificationView: Fetching follow requests for user \(currentUserID)")
-            
-            // TODO: Implement actual database query when notifications table is ready
-            let rawData: [[String: Any]] = []
-            
-            for row in rawData {
-                guard let id = row["id"] as? String,
-                      let fromUserID = row["from_user_id"] as? String,
-                      let users = row["users"] as? [String: Any],
-                      let username = users["username"] as? String,
-                      let fullName = users["full_name"] as? String else {
-                    continue
-                }
-                
-                let notification = AppNotification(
-                    type: .follow,
-                    title: "New Follower",
-                    message: "\(username) wants to follow you",
-                    priority: .normal,
-                    actionData: ["action": "view_profile", "userID": fromUserID],
-                    senderID: fromUserID
-                )
-                
-                notificationManager.addNotification(notification)
+        // For now, we'll use sample data since the notifications table may not exist yet
+        // In production, this would fetch from the database
+        print("📱 NotificationView: Fetching follow requests for user \(currentUserID)")
+        
+        // TODO: Implement actual database query when notifications table is ready
+        let rawData: [[String: Any]] = []
+        
+        for row in rawData {
+            guard let _ = row["id"] as? String,
+                  let fromUserID = row["from_user_id"] as? String,
+                  let users = row["users"] as? [String: Any],
+                  let username = users["username"] as? String,
+                  let _ = users["full_name"] as? String else {
+                continue
             }
-        } catch {
-            print("❌ Failed to fetch follow requests: \(error)")
+            
+            let notification = AppNotification(
+                type: .follow,
+                title: "New Follower",
+                message: "\(username) wants to follow you",
+                priority: .normal,
+                actionData: ["action": "view_profile", "userID": fromUserID],
+                senderID: fromUserID
+            )
+            
+            notificationManager.addNotification(notification)
         }
     }
     
@@ -338,16 +334,15 @@ struct NotificationView: View {
         // Fetch other types of notifications from Supabase
         guard let currentUserID = authManager.currentUserID else { return }
         
-        do {
-            // For now, we'll use sample data since the notifications table may not exist yet
-            // In production, this would fetch from the database
-            print("📱 NotificationView: Fetching notifications for user \(currentUserID)")
-            
-            // TODO: Implement actual database query when notifications table is ready
-            let rawData: [[String: Any]] = []
-            
-            for row in rawData {
-                guard let id = row["id"] as? String,
+        // For now, we'll use sample data since the notifications table may not exist yet
+        // In production, this would fetch from the database
+        print("📱 NotificationView: Fetching notifications for user \(currentUserID)")
+        
+        // TODO: Implement actual database query when notifications table is ready
+        let rawData: [[String: Any]] = []
+        
+        for row in rawData {
+                guard let notificationId = row["id"] as? String,
                       let type = row["type"] as? String,
                       let title = row["title"] as? String,
                       let message = row["message"] as? String,
@@ -379,7 +374,7 @@ struct NotificationView: View {
                 let notificationPriority = NotificationPriority(rawValue: priority) ?? .normal
                 
                 let notification = AppNotification(
-                    id: UUID(uuidString: id) ?? UUID(),
+                    id: UUID(uuidString: notificationId) ?? UUID(),
                     type: notificationType,
                     title: title,
                     message: message,
@@ -397,16 +392,12 @@ struct NotificationView: View {
             
             print("📱 NotificationView: Loaded \(rawData.count) notifications from database")
             
-        } catch {
-            print("❌ Failed to fetch notifications: \(error)")
-            
             // Fallback to sample notifications in development
             #if DEBUG
             if notificationManager.notifications.isEmpty {
                 addSampleNotifications()
             }
             #endif
-        }
     }
     
     #if DEBUG

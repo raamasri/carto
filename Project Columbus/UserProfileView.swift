@@ -232,7 +232,7 @@ struct UserProfileView: View {
 
                 // Buttons and Map
                 VStack(spacing: 8) {
-                    if profileUser.isCurrentUser ?? false {
+                    if profileUser.isCurrentUser {
                         HStack(spacing: 16) {
                             NavigationLink(destination: 
                                 ProfileEditView()
@@ -263,7 +263,7 @@ struct UserProfileView: View {
                         .padding(.horizontal)
                     }
 
-                    if !(profileUser.isCurrentUser ?? false) {
+                    if !profileUser.isCurrentUser {
                         FollowButton(isFollowing: $hasRequestedFollow, followText: hasRequestedFollow ? "Requested" : "Follow") {
                             Task {
                                 print("📍 Follow button tapped")
@@ -730,24 +730,20 @@ struct UserProfileView: View {
                     return
                 }
 
-                do {
-                    if let uuid = UUID(uuidString: profileUser.id) {
-                        let hasSent = await SupabaseManager.shared.hasFollowRequestSent(to: uuid)
-                        print("📌 hasFollowRequestSent(to:) result:", hasSent)
-                        await MainActor.run {
-                            hasRequestedFollow = hasSent
-                        }
-                    } else {
-                        print("❌ Failed to convert profileUser.id to UUID:", profileUser.id)
-                    }
-                    
-                    // Check if user is blocked
-                    let blocked = await SupabaseManager.shared.isUserBlocked(userID: profileUser.id)
+                if let uuid = UUID(uuidString: profileUser.id) {
+                    let hasSent = await SupabaseManager.shared.hasFollowRequestSent(to: uuid)
+                    print("📌 hasFollowRequestSent(to:) result:", hasSent)
                     await MainActor.run {
-                        isBlocked = blocked
+                        hasRequestedFollow = hasSent
                     }
-                } catch {
-                    print("❌ Error checking follow request via helper:", error)
+                } else {
+                    print("❌ Failed to convert profileUser.id to UUID:", profileUser.id)
+                }
+                
+                // Check if user is blocked
+                let blocked = await SupabaseManager.shared.isUserBlocked(userID: profileUser.id)
+                await MainActor.run {
+                    isBlocked = blocked
                 }
             }
         }

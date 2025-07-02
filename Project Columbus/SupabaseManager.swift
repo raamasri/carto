@@ -10,6 +10,7 @@ import Foundation
 import CryptoKit
 import SwiftUI
 import UserNotifications
+import os.log
 
 // MARK: - Legacy Database Models (to be removed after migration)
 struct PinCollectionDB: Codable {
@@ -1378,15 +1379,28 @@ class SupabaseManager: ObservableObject {
     private func startMessagePolling(conversationId: String, onMessageReceived: @escaping (Message) -> Void) async {
         print("🔄 Starting message polling fallback for conversation: \(conversationId)")
         
-        // Store last message timestamp to avoid duplicates
-        var lastMessageTime: Date = Date()
+        // Use actor to handle concurrent access to lastMessageTime
+        actor MessageTimeTracker {
+            private var lastMessageTime: Date = Date()
+            
+            func updateLastMessageTime(to newTime: Date) {
+                lastMessageTime = max(lastMessageTime, newTime)
+            }
+            
+            func getLastMessageTime() -> Date {
+                return lastMessageTime
+            }
+        }
+        
+        let timeTracker = MessageTimeTracker()
         
         Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { timer in
             Task {
-                let newMessages = await self.getMessagesAfter(conversationId: conversationId, after: lastMessageTime)
+                let lastTime = await timeTracker.getLastMessageTime()
+                let newMessages = await self.getMessagesAfter(conversationId: conversationId, after: lastTime)
                 for message in newMessages {
                     onMessageReceived(message)
-                    lastMessageTime = max(lastMessageTime, message.createdAt)
+                    await timeTracker.updateLastMessageTime(to: message.createdAt)
                 }
             }
         }

@@ -166,7 +166,7 @@ class AuthManager: ObservableObject {
                     await self.fetchCurrentUser()
                 }
             } catch {
-                print("Failed to check session: \(error)")
+                // Log error but don't expose sensitive session details
                 DispatchQueue.main.async {
                     self.isLoggedIn = false
                 }
