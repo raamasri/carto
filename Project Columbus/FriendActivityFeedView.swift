@@ -20,38 +20,21 @@ struct FriendActivityFeedView: View {
         NavigationView {
             VStack(spacing: 0) {
                 if isLoading {
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.2)
-                        Text("Loading friend activities...")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
+                    AppleProgressView(
+                        "Loading friend activities...",
+                        subtitle: "Fetching latest updates",
+                        tint: .blue
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if activities.isEmpty {
-                    VStack(spacing: 20) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-                        
-                        Text("No Friend Activity Yet")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                        
-                        Text("Follow friends to see their latest discoveries and reviews here!")
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                        
-                        NavigationLink(destination: FindFriendsView()) {
-                            Text("Find Friends")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 32)
-                                .padding(.vertical, 12)
-                                .background(Color.accentColor)
-                                .cornerRadius(25)
-                        }
+                    AppleEmptyState(
+                        icon: "person.2.fill",
+                        title: "No Friend Activity Yet",
+                        subtitle: "Follow friends to see their latest discoveries and reviews here!",
+                        actionTitle: "Find Friends"
+                    ) {
+                        // Navigate to FindFriendsView
+                        // This would need proper navigation handling
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -165,9 +148,20 @@ struct ActivityRowView: View {
             }
         }
         .padding(16)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.regularMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(.quaternary, lineWidth: 0.5)
+                )
+        )
+        .shadow(
+            color: .black.opacity(0.08),
+            radius: 4,
+            x: 0,
+            y: 2
+        )
     }
     
     private var activityDescription: String {

@@ -70,33 +70,20 @@ struct ListsView: View {
                 .padding(.horizontal)
                 
                 if pinStore.isLoading {
-                    VStack {
-                        ProgressView("Loading lists...")
-                        Spacer()
-                    }
+                    AppleProgressView(
+                        "Loading lists...",
+                        subtitle: "Fetching your collections",
+                        tint: .blue
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if filteredLists.isEmpty {
-                    VStack(spacing: 20) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-                        
-                        Text("No Lists Yet")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                        
-                        Text("Start organizing your pins by creating lists!")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        
-                        Button("Create Your First List") {
-                            showCreateList = true
-                        }
-                        .buttonStyle(.borderedProminent)
-                        
-                        Spacer()
+                    AppleEmptyState(
+                        icon: "folder.badge.plus",
+                        title: "No Lists Yet",
+                        subtitle: "Start organizing your pins by creating lists!",
+                        actionTitle: "Create Your First List"
+                    ) {
+                        showCreateList = true
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
