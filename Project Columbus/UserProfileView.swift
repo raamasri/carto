@@ -134,6 +134,31 @@ struct UserProfileView: View {
                 .font(.title)
                 .fontWeight(.bold)
             Spacer()
+            
+            // Settings and notifications buttons for current user
+            if profileUser.isCurrentUser {
+                HStack(spacing: 16) {
+                    NavigationLink(destination:
+                        NotificationView()
+                            .environmentObject(authManager)
+                            .environmentObject(SupabaseManager.shared)
+                    ) {
+                        Image(systemName: "bell")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                    }
+                    
+                    NavigationLink(destination:
+                        SettingsView()
+                            .environmentObject(authManager)
+                            .environmentObject(pinStore)
+                    ) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
         }
         .padding(.horizontal)
         .padding(.top, 8)
@@ -581,42 +606,17 @@ struct UserProfileView: View {
 
     var body: some View {
         print("🧭 Loading UserProfileView for username:", profileUser.username)
-        return NavigationStack {
-            Group {
-                if profileUser.username.isEmpty {
-                    // Loading state while placeholder data is present
-                    ProgressView("Loading Profile…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    VStack(spacing: 16) {
-                        profileHeader
-                        profileBody
-                    }
-                    .padding(.top, 4)
+        return Group {
+            if profileUser.username.isEmpty {
+                // Loading state while placeholder data is present
+                ProgressView("Loading Profile…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(spacing: 16) {
+                    profileHeader
+                    profileBody
                 }
-            }
-        }
-        .toolbar {
-            if profileUser.isCurrentUser ?? false {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 16) {
-                        NavigationLink(destination:
-                            NotificationView()
-                                .environmentObject(authManager)
-                                .environmentObject(SupabaseManager.shared)
-                        ) {
-                            Image(systemName: "bell")
-                        }
-                        
-                        NavigationLink(destination:
-                            SettingsView()
-                                .environmentObject(authManager)
-                                .environmentObject(pinStore)
-                        ) {
-                            Image(systemName: "gearshape.fill")
-                        }
-                    }
-                }
+                .padding(.top, 4)
             }
         }
         .padding(.top, 4)
