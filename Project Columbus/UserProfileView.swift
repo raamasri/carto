@@ -599,12 +599,22 @@ struct UserProfileView: View {
         .toolbar {
             if profileUser.isCurrentUser ?? false {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination:
-                        NotificationView()
-                            .environmentObject(authManager)
-                            .environmentObject(SupabaseManager.shared)
-                    ) {
-                        Image(systemName: "bell")
+                    HStack(spacing: 16) {
+                        NavigationLink(destination:
+                            NotificationView()
+                                .environmentObject(authManager)
+                                .environmentObject(SupabaseManager.shared)
+                        ) {
+                            Image(systemName: "bell")
+                        }
+                        
+                        NavigationLink(destination:
+                            SettingsView()
+                                .environmentObject(authManager)
+                                .environmentObject(pinStore)
+                        ) {
+                            Image(systemName: "gearshape.fill")
+                        }
                     }
                 }
             }

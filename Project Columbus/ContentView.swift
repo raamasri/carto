@@ -117,7 +117,7 @@ struct MainMapView: View {
     @State private var selectedPinForPopup: UUID? = nil
     @State private var animatePulse = false
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
-    @State private var showSettingsSheet = false
+
     @State private var searchText: String = ""
     @State private var searchResults: [MKLocalSearchCompletion] = []
     @State private var searchCompleter = MKLocalSearchCompleter()
@@ -928,21 +928,7 @@ struct MainMapView: View {
                 VStack {
                     Spacer()
                     HStack {
-                        Button(action: {
-                            showSettingsSheet = true
-                        }) {
-                            Image(systemName: "gearshape.fill")
-                                .foregroundColor(.gray)
-                                .padding()
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .shadow(radius: 4)
-                        }
-                        .sheet(isPresented: $showSettingsSheet) {
-                            SettingsView()
-                        }
-                        .padding(.bottom, 60)
-                        .padding(.leading)
+
 
                         Spacer()
 
