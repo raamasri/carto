@@ -25,16 +25,27 @@ struct ChatView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Messages list
+            // Messages list with iMessage-style layout
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 4) {
-                        ForEach(messages) { message in
-                            EnhancedMessageBubbleView(
-                                message: message,
-                                isFromCurrentUser: message.senderId.lowercased() == authManager.currentUserID?.lowercased(),
-                                conversation: conversation
-                            )
+                    LazyVStack(spacing: 2) {
+                        ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                            let showTimestamp = shouldShowTimestamp(for: message, at: index)
+                            let showAvatar = shouldShowAvatar(for: message, at: index)
+                            
+                            VStack(spacing: 4) {
+                                if showTimestamp {
+                                    TimestampView(date: message.createdAt)
+                                        .padding(.vertical, 8)
+                                }
+                                
+                                iMessageBubbleView(
+                                    message: message,
+                                    isFromCurrentUser: message.senderId.lowercased() == authManager.currentUserID?.lowercased(),
+                                    showAvatar: showAvatar,
+                                    conversation: conversation
+                                )
+                            }
                             .id(message.id)
                         }
                     }
@@ -56,77 +67,13 @@ struct ChatView: View {
                 }
             }
             
-            // Message input with rich media support
-            VStack(spacing: 8) {
-                // Rich media buttons
-                HStack(spacing: 16) {
-                    Button(action: { showImagePicker = true }) {
-                        Image(systemName: "photo")
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                    }
-                    
-                    Button(action: { showLocationPicker = true }) {
-                        Image(systemName: "location")
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                    }
-                    
-                    Button(action: { showPinPicker = true }) {
-                        Image(systemName: "mappin")
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                
-                // Text input
-                HStack(alignment: .bottom, spacing: 8) {
-                    HStack(spacing: 8) {
-                        TextField("Message", text: $newMessageText, axis: .vertical)
-                            .focused($isMessageFieldFocused)
-                            .lineLimit(1...4)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(20)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(Color(.systemGray4), lineWidth: 0.5)
-                            )
-                    }
-                    
-                    // Send button
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 
-                                           Color(.systemGray3) : 
-                                           Color(red: 0.0, green: 0.48, blue: 1.0))
-                            .background(
-                                Circle()
-                                    .fill(Color(.systemBackground))
-                                    .frame(width: 32, height: 32)
-                            )
-                    }
-                    .disabled(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .scaleEffect(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.9 : 1.0)
-                    .animation(.easeInOut(duration: 0.2), value: newMessageText.isEmpty)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-            }
-            .background(
-                Color(.systemBackground)
-                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: -1)
-            )
+            // iMessage-style input area
+            iMessageInputView()
         }
         .navigationTitle(conversation.title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(false)
+        .background(Color(.systemBackground))
         .onAppear {
             loadMessages()
             setupRealTimeSubscription()
@@ -154,6 +101,113 @@ struct ChatView: View {
                 showPinPicker = false
             }
         }
+    }
+    
+    // MARK: - iMessage-style Input View
+    @ViewBuilder
+    private func iMessageInputView() -> some View {
+        VStack(spacing: 0) {
+            // Divider
+            Divider()
+                .background(Color(.systemGray4))
+            
+            VStack(spacing: 12) {
+                // Media buttons row
+                HStack(spacing: 20) {
+                    Button(action: { showImagePicker = true }) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.blue)
+                            .frame(width: 32, height: 32)
+                            .background(Color(.systemGray6))
+                            .clipShape(Circle())
+                    }
+                    
+                    Button(action: { showLocationPicker = true }) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.blue)
+                            .frame(width: 32, height: 32)
+                            .background(Color(.systemGray6))
+                            .clipShape(Circle())
+                    }
+                    
+                    Button(action: { showPinPicker = true }) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.blue)
+                            .frame(width: 32, height: 32)
+                            .background(Color(.systemGray6))
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                
+                // Text input area
+                HStack(alignment: .bottom, spacing: 8) {
+                    // Text field container
+                    HStack(spacing: 8) {
+                        TextField("iMessage", text: $newMessageText, axis: .vertical)
+                            .focused($isMessageFieldFocused)
+                            .lineLimit(1...6)
+                            .font(.body)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(20)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(Color(.systemGray5), lineWidth: 1)
+                            )
+                    }
+                    
+                    // Send button - iMessage style
+                    Button(action: sendMessage) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle()
+                                    .fill(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 
+                                          Color(.systemGray3) : 
+                                          Color.blue)
+                            )
+                    }
+                    .disabled(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .scaleEffect(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.8 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: newMessageText.isEmpty)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+            }
+            .background(Color(.systemBackground))
+        }
+    }
+    
+    // MARK: - Helper Functions
+    private func shouldShowTimestamp(for message: Message, at index: Int) -> Bool {
+        guard index > 0 else { return true }
+        let previousMessage = messages[index - 1]
+        let timeDifference = message.createdAt.timeIntervalSince(previousMessage.createdAt)
+        return timeDifference > 300 // Show timestamp if more than 5 minutes apart
+    }
+    
+    private func shouldShowAvatar(for message: Message, at index: Int) -> Bool {
+        let isFromCurrentUser = message.senderId.lowercased() == authManager.currentUserID?.lowercased()
+        if isFromCurrentUser { return false }
+        
+        // Show avatar if it's the last message in a sequence from this sender
+        if index == messages.count - 1 { return true }
+        
+        let nextMessage = messages[index + 1]
+        let nextIsFromSameSender = nextMessage.senderId == message.senderId
+        let nextIsFromCurrentUser = nextMessage.senderId.lowercased() == authManager.currentUserID?.lowercased()
+        
+        return !nextIsFromSameSender || nextIsFromCurrentUser
     }
     
     private func setupRealTimeSubscription() {
@@ -333,6 +387,294 @@ struct ChatView: View {
             }
         }
     }
+}
+
+// MARK: - iMessage-style Components
+
+struct TimestampView: View {
+    let date: Date
+    
+    var body: some View {
+        Text(formatTimestamp(date))
+            .font(.caption2)
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+    }
+    
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        let now = Date()
+        let calendar = Calendar.current
+        
+        if calendar.isDate(date, inSameDayAs: now) {
+            formatter.dateFormat = "h:mm a"
+            return "Today \(formatter.string(from: date))"
+        } else if calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: now) ?? now) {
+            formatter.dateFormat = "h:mm a"
+            return "Yesterday \(formatter.string(from: date))"
+        } else {
+            formatter.dateFormat = "MMM d, h:mm a"
+            return formatter.string(from: date)
+        }
+    }
+}
+
+@ViewBuilder
+func iMessageBubbleView(message: Message, isFromCurrentUser: Bool, showAvatar: Bool, conversation: Conversation) -> some View {
+    HStack(alignment: .bottom, spacing: 8) {
+        if !isFromCurrentUser {
+            // Avatar space
+            if showAvatar {
+                Circle()
+                    .fill(Color.blue.opacity(0.7))
+                    .frame(width: 30, height: 30)
+                    .overlay(
+                        Text(getInitials(from: message.senderId))
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                    )
+            } else {
+                // Spacer to maintain alignment
+                Color.clear
+                    .frame(width: 30, height: 30)
+            }
+        }
+        
+        VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 2) {
+            // Message bubble
+            HStack {
+                if isFromCurrentUser {
+                    Spacer(minLength: 60)
+                }
+                
+                messageContentView(message: message, isFromCurrentUser: isFromCurrentUser)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(isFromCurrentUser ? 
+                                  Color.blue : 
+                                  Color(.systemGray5)
+                            )
+                    )
+                
+                if !isFromCurrentUser {
+                    Spacer(minLength: 60)
+                }
+            }
+            
+            // Status and timestamp
+            HStack(spacing: 4) {
+                if isFromCurrentUser {
+                    Spacer()
+                    statusIndicator(for: message)
+                    Text(formatMessageTime(message.createdAt))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text(formatMessageTime(message.createdAt))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, isFromCurrentUser ? 20 : 46)
+        }
+        
+        if isFromCurrentUser {
+            Color.clear
+                .frame(width: 8)
+        }
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 1)
+}
+
+@ViewBuilder
+private func messageContentView(message: Message, isFromCurrentUser: Bool) -> some View {
+    switch message.messageType {
+    case .text:
+        Text(message.content)
+            .font(.body)
+            .foregroundColor(isFromCurrentUser ? .white : .primary)
+            .multilineTextAlignment(.leading)
+            
+    case .image:
+        VStack(alignment: .leading, spacing: 8) {
+            // Image placeholder with iMessage styling
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemGray4))
+                .frame(width: 200, height: 150)
+                .overlay(
+                    VStack {
+                        Image(systemName: "photo.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(isFromCurrentUser ? .white.opacity(0.8) : .gray)
+                        Text("Photo")
+                            .font(.caption)
+                            .foregroundColor(isFromCurrentUser ? .white.opacity(0.8) : .gray)
+                    }
+                )
+            
+            if !message.content.isEmpty && message.content != "📷 Photo" {
+                Text(message.content)
+                    .font(.body)
+                    .foregroundColor(isFromCurrentUser ? .white : .primary)
+            }
+        }
+        
+    case .location:
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "location.fill")
+                    .foregroundColor(isFromCurrentUser ? .white : .blue)
+                Text("Location")
+                    .font(.headline)
+                    .foregroundColor(isFromCurrentUser ? .white : .primary)
+                Spacer()
+            }
+            
+            // Location preview with iMessage styling
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemGray4))
+                .frame(width: 200, height: 100)
+                .overlay(
+                    VStack {
+                        Image(systemName: "map.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(isFromCurrentUser ? .white.opacity(0.8) : .gray)
+                        Text("Tap to view")
+                            .font(.caption)
+                            .foregroundColor(isFromCurrentUser ? .white.opacity(0.8) : .gray)
+                    }
+                )
+            
+            if let locationData = parseLocationData(message.content) {
+                Text(locationData.name)
+                    .font(.subheadline)
+                    .foregroundColor(isFromCurrentUser ? .white.opacity(0.9) : .secondary)
+            }
+        }
+        
+    case .pin:
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "mappin.circle.fill")
+                    .foregroundColor(isFromCurrentUser ? .white : .red)
+                Text("Pin Shared")
+                    .font(.headline)
+                    .foregroundColor(isFromCurrentUser ? .white : .primary)
+                Spacer()
+            }
+            
+            if let pinData = parsePinData(message.content) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(pinData.locationName)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isFromCurrentUser ? .white : .primary)
+                    
+                    Text(pinData.city)
+                        .font(.caption)
+                        .foregroundColor(isFromCurrentUser ? .white.opacity(0.8) : .secondary)
+                    
+                    HStack {
+                        Text(pinData.reaction)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(isFromCurrentUser ? .white.opacity(0.2) : Color(.systemGray6))
+                            )
+                            .foregroundColor(isFromCurrentUser ? .white : .primary)
+                        
+                        if pinData.starRating > 0 {
+                            HStack(spacing: 2) {
+                                ForEach(0..<Int(pinData.starRating), id: \.self) { _ in
+                                    Image(systemName: "star.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(isFromCurrentUser ? .white : .yellow)
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                }
+            }
+        }
+    }
+}
+
+@ViewBuilder
+private func statusIndicator(for message: Message) -> some View {
+    switch message.status {
+    case .sending:
+        ProgressView()
+            .scaleEffect(0.6)
+            .tint(.secondary)
+            
+    case .sent:
+        Text("Sent")
+            .font(.caption2)
+            .foregroundColor(.secondary)
+            
+    case .delivered:
+        Text("Delivered")
+            .font(.caption2)
+            .foregroundColor(.secondary)
+            
+    case .read:
+        Text("Read")
+            .font(.caption2)
+            .foregroundColor(.blue)
+            
+    case .failed:
+        Image(systemName: "exclamationmark.circle.fill")
+            .font(.caption2)
+            .foregroundColor(.red)
+    }
+}
+
+private func formatMessageTime(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "h:mm a"
+    return formatter.string(from: date)
+}
+
+private func getInitials(from userId: String) -> String {
+    // Extract initials from user ID or handle
+    let components = userId.components(separatedBy: CharacterSet.alphanumerics.inverted)
+    let letters = components.compactMap { $0.first?.uppercased() }
+    return letters.prefix(2).joined()
+}
+
+private func parseLocationData(_ content: String) -> MessageLocationData? {
+    // Parse location data from message content
+    // This is a simplified version - you might want to store location data separately
+    return MessageLocationData(latitude: 0, longitude: 0, name: content.replacingOccurrences(of: "📍 ", with: ""))
+}
+
+private func parsePinData(_ content: String) -> MessagePinData? {
+    // Parse pin data from message content
+    // This is a simplified version - you might want to store pin data separately
+    let name = content.replacingOccurrences(of: "📌 ", with: "")
+    return MessagePinData(
+        id: UUID().uuidString,
+        locationName: name,
+        city: "Unknown",
+        latitude: 0,
+        longitude: 0,
+        reaction: "❤️",
+        reviewText: "",
+        starRating: 5,
+        authorHandle: "user"
+    )
 }
 
 struct EnhancedMessageBubbleView: View {
