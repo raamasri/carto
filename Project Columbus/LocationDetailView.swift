@@ -130,10 +130,40 @@ struct LocationDetailView: View {
         let listsContainingLocation = getListsContainingLocation()
         return listsContainingLocation.isEmpty ? .blue : .green
     }
+    
+    /// Creates the content to share when the share button is tapped
+    private var shareContent: String {
+        let placeName = mapItem.name ?? "Unknown Place"
+        let address = mapItem.placemark.title ?? "No address available"
+        let coordinate = mapItem.placemark.coordinate
+        let mapsURL = "https://maps.apple.com/?q=\(coordinate.latitude),\(coordinate.longitude)"
+        
+        return """
+        Check out this place I found: \(placeName)
+        
+        📍 \(address)
+        
+        🗺️ View on Maps: \(mapsURL)
+        """
+    }
 
     private var addButton: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
+                // Share Button
+                ShareLink(item: shareContent) {
+                    HStack {
+                        Spacer()
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.title2)
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.orange)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                }
+                
                 Button(action: {
                     showListDialog = true
                 }) {
