@@ -149,6 +149,7 @@ struct LocationDetailView: View {
 
     private var addButton: some View {
         VStack(spacing: 12) {
+            // Top row: Share and Directions buttons
             HStack(spacing: 12) {
                 // Share Button
                 ShareLink(item: shareContent) {
@@ -163,22 +164,8 @@ struct LocationDetailView: View {
                     .foregroundColor(.white)
                     .cornerRadius(10)
                 }
-                
-                Button(action: {
-                    showListDialog = true
-                }) {
-                    HStack {
-                        Spacer()
-                        Label(getButtonText(), systemImage: getButtonIcon())
-                            .font(.title2)
-                        Spacer()
-                    }
-                    .padding()
-                    .background(getButtonColor())
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                }
 
+                // Directions Button
                 Button(action: {
                     let launchOptions = [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving]
                     mapItem.openInMaps(launchOptions: launchOptions)
@@ -196,30 +183,46 @@ struct LocationDetailView: View {
                     .cornerRadius(10)
                 }
             }
-            .confirmationDialog("Choose a list", isPresented: $showListDialog, titleVisibility: .visible) {
-                ForEach(defaultLists, id: \.self) { list in
-                    Button(list) {
-                        let newPin = Pin(
-                            locationName: mapItem.name ?? "Unknown Place",
-                            city: mapItem.placemark.locality ?? "Unknown City",
-                            date: formattedDate(),
-                            latitude: mapItem.placemark.coordinate.latitude,
-                            longitude: mapItem.placemark.coordinate.longitude,
-                            reaction: .wantToGo,
-                            reviewText: nil,
-                            mediaURLs: [],
-                            mentionedFriends: [],
-                            starRating: nil,
-                            distance: nil,
-                            authorHandle: "@you",
-                            createdAt: Date(),
-                            tripName: nil
-                        )
-                        pinStore.addPin(newPin, to: list)
-                    }
+            
+            // Bottom row: Add to List button (full width)
+            Button(action: {
+                showListDialog = true
+            }) {
+                HStack {
+                    Spacer()
+                    Label(getButtonText(), systemImage: getButtonIcon())
+                        .font(.title2)
+                    Spacer()
                 }
-                Button("Cancel", role: .cancel) {}
+                .padding()
+                .background(getButtonColor())
+                .foregroundColor(.white)
+                .cornerRadius(10)
             }
+        }
+        .confirmationDialog("Choose a list", isPresented: $showListDialog, titleVisibility: .visible) {
+            ForEach(defaultLists, id: \.self) { list in
+                Button(list) {
+                    let newPin = Pin(
+                        locationName: mapItem.name ?? "Unknown Place",
+                        city: mapItem.placemark.locality ?? "Unknown City",
+                        date: formattedDate(),
+                        latitude: mapItem.placemark.coordinate.latitude,
+                        longitude: mapItem.placemark.coordinate.longitude,
+                        reaction: .wantToGo,
+                        reviewText: nil,
+                        mediaURLs: [],
+                        mentionedFriends: [],
+                        starRating: nil,
+                        distance: nil,
+                        authorHandle: "@you",
+                        createdAt: Date(),
+                        tripName: nil
+                    )
+                    pinStore.addPin(newPin, to: list)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
         }
     }
 
