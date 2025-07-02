@@ -913,18 +913,7 @@ struct MainMapView: View {
                 HStack {
                     Button(action: {
                         selectedTab = 0
-                        let allPins = pinStore.masterPins
-                        if !allPins.isEmpty {
-                            let averageLatitude = allPins.map { $0.latitude }.reduce(0, +) / Double(allPins.count)
-                            let averageLongitude = allPins.map { $0.longitude }.reduce(0, +) / Double(allPins.count)
-                            let center = CLLocationCoordinate2D(latitude: averageLatitude, longitude: averageLongitude)
-                            withAnimation {
-                                cameraPosition = .region(MKCoordinateRegion(
-                                    center: center,
-                                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                                ))
-                            }
-                        }
+                        centerMapOnFilteredPins()
                     }) {
                         Image(systemName: "house")
                             .font(.title2)

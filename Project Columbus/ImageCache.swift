@@ -16,6 +16,8 @@ import AppKit
 typealias PlatformImage = NSImage
 #endif
 
+
+
 final class ImageCache: ObservableObject {
     static let shared = ImageCache()
     
@@ -33,9 +35,24 @@ final class ImageCache: ObservableObject {
     // MARK: - Cache Statistics
     @Published var cacheStats = CacheStatistics()
     
-    // MARK: - Active Downloads
-    private var activeDownloads: [String: Task<PlatformImage?, Error>] = [:]
-    private let downloadsLock = NSLock()
+    // MARK: - Active Downloads (using actor for thread safety)
+    private actor DownloadManager {
+        private var activeDownloads: [String: Task<PlatformImage?, Error>] = [:]
+        
+        func getTask(for key: String) -> Task<PlatformImage?, Error>? {
+            return activeDownloads[key]
+        }
+        
+        func setTask(_ task: Task<PlatformImage?, Error>, for key: String) {
+            activeDownloads[key] = task
+        }
+        
+        func removeTask(for key: String) {
+            activeDownloads.removeValue(forKey: key)
+        }
+    }
+    
+    private let downloadManager = DownloadManager()
 
     private lazy var diskDirectory: URL = {
         let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -119,9 +136,7 @@ final class ImageCache: ObservableObject {
         }
         
         // Check if already downloading
-        downloadsLock.lock()
-        if let existingTask = activeDownloads[cacheKey] {
-            downloadsLock.unlock()
+        if let existingTask = await downloadManager.getTask(for: cacheKey) {
             return try? await existingTask.value
         }
         
@@ -129,13 +144,12 @@ final class ImageCache: ObservableObject {
         let downloadTask = Task<PlatformImage?, Error> {
             return try await downloadImage(from: url, cacheKey: cacheKey)
         }
-        activeDownloads[cacheKey] = downloadTask
-        downloadsLock.unlock()
+        await downloadManager.setTask(downloadTask, for: cacheKey)
         
         defer {
-            downloadsLock.lock()
-            activeDownloads.removeValue(forKey: cacheKey)
-            downloadsLock.unlock()
+            Task {
+                await downloadManager.removeTask(for: cacheKey)
+            }
         }
         
         return try? await downloadTask.value

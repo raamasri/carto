@@ -451,7 +451,7 @@ class SupabaseManager: ObservableObject {
             let basicUsers: [BasicUser] = try await client
                 .from("users")
                 .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
-                .in("id", value: followingIds)
+                .in("id", values: followingIds)
                 .execute()
                 .value
             
@@ -738,7 +738,7 @@ class SupabaseManager: ObservableObject {
             let basicUsers: [BasicUser] = try await client
                 .from("users")
                 .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
-                .in("id", value: followerIds)
+                .in("id", values: followerIds)
                 .execute()
                 .value
             
