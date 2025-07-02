@@ -172,7 +172,7 @@ struct PinCardView: View {
         (pin.reviewText?.isEmpty == false) || !(pin.mediaURLs?.isEmpty ?? true)
     }
 
-    // Enhanced header with rating, distance, and MAP button
+    // Enhanced header with rating, distance, and mini map
     private var enhancedHeader: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
@@ -216,21 +216,31 @@ struct PinCardView: View {
             
             Spacer()
             
-            // MAP button
-            Button(action: {
-                showLocationDetail = true
-            }) {
-                Text("MAP")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.blue)
-                    .cornerRadius(8)
-            }
-            .buttonStyle(.plain)
+            // Mini map
+            miniMap
         }
+    }
+
+    private var miniMap: some View {
+        Map(
+            coordinateRegion: .constant(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
+            )),
+            annotationItems: [pin]
+        ) { pin in
+            MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
+                Image(systemName: "mappin.circle.fill")
+                    .resizable()
+                    .frame(width: 22, height: 22)
+                    .foregroundColor(.red)
+                    .shadow(radius: 2)
+            }
+        }
+        .frame(width: 60, height: 60)
+        .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.blue, lineWidth: 2))
+        .onTapGesture { showLocationDetail = true }
     }
 
     // Enhanced photo carousel with add photo functionality
