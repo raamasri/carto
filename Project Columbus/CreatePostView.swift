@@ -592,6 +592,14 @@ struct CreatePostView: View {
                 let listName = reaction == .lovedIt ? "Favorites" : "Want to Go"
                 pinStore.addPin(finalPin, to: listName)
                 
+                // Create friend activity for this new pin
+                await SupabaseManager.shared.createFriendActivity(
+                    activityType: reaction == .lovedIt ? .ratedPlace : .visitedPlace,
+                    relatedPinId: finalPin.id,
+                    locationName: finalPin.locationName,
+                    description: reaction == .lovedIt ? "loved \(finalPin.locationName)" : "visited \(finalPin.locationName)"
+                )
+                
                 // Save offline if needed
                 if !DataManager.shared.checkConnectivity() {
                     await DataManager.shared.savePinOffline(finalPin)

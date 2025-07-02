@@ -8,7 +8,7 @@ struct AlertMessage: Identifiable {
 }
 
 struct LiveFeedView: View {
-    let tabs = ["History", "Friends", "Following", "For You"]
+    let tabs = ["History", "Friends", "Following", "For You", "Activity", "Recommendations"]
     @State private var followingUsers: [AppUser] = []
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
@@ -203,6 +203,16 @@ struct LiveFeedView: View {
                         .onAppear {
                             fetchFollowingUsersIfNeeded()
                         }
+                    case 4:
+                        // Activity Tab - Friend Activity Feed
+                        FriendActivityFeedView()
+                            .environmentObject(authManager)
+                            .environmentObject(pinStore)
+                    case 5:
+                        // Recommendations Tab - Friend Recommendations
+                        FriendRecommendationsView()
+                            .environmentObject(authManager)
+                            .environmentObject(pinStore)
                     default:
                         // For You Tab - Smart algorithm
                         List(getRecommendedPins().reversed()) { pin in
@@ -214,7 +224,7 @@ struct LiveFeedView: View {
                                 .environmentObject(pinStore)
                                 .environmentObject(authManager)
                             ) {
-                                PinCardView(pin: pin)
+                                EnhancedPinCardView(pin: pin)
                                     .environmentObject(pinStore)
                                     .environmentObject(authManager)
                                     .environmentObject(locationManager)
@@ -490,6 +500,142 @@ struct LiveFeedView: View {
         return scoredPins
             .sorted { $0.1 > $1.1 } // Sort by score descending
             .map { $0.0 } // Extract just the pins
+    }
+}
+
+// MARK: - Enhanced Pin Card with Social Features
+
+struct EnhancedPinCardView: View {
+    let pin: Pin
+    @EnvironmentObject var pinStore: PinStore
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var locationManager: AppLocationManager
+    @State private var showCommentsAndReactions = false
+    @State private var reactions: [PinReaction] = []
+    @State private var commentsCount = 0
+    @State private var userReaction: PinReactionType? = nil
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Original pin card content
+            PinCardView(pin: pin)
+                .environmentObject(pinStore)
+                .environmentObject(authManager)
+                .environmentObject(locationManager)
+            
+            // Social engagement section
+            HStack(spacing: 20) {
+                // Reactions summary
+                Button(action: {
+                    showCommentsAndReactions = true
+                }) {
+                    HStack(spacing: 6) {
+                        if reactions.isEmpty {
+                            Image(systemName: "heart")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Text("React")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        } else {
+                            // Show top reaction emojis
+                            let topReactions = getTopReactions()
+                            HStack(spacing: 2) {
+                                ForEach(topReactions.prefix(3), id: \.self) { reactionType in
+                                    Text(reactionType.emoji)
+                                        .font(.caption)
+                                }
+                            }
+                            Text("\(reactions.count)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                
+                // Comments summary
+                Button(action: {
+                    showCommentsAndReactions = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bubble.left")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text(commentsCount == 0 ? "Comment" : "\(commentsCount)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                // Quick reaction button
+                Button(action: {
+                    Task {
+                        await quickReaction()
+                    }
+                }) {
+                    Image(systemName: userReaction != nil ? "heart.fill" : "heart")
+                        .font(.subheadline)
+                        .foregroundColor(userReaction != nil ? .red : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+        .sheet(isPresented: $showCommentsAndReactions) {
+            CommentsAndReactionsView(pin: pin)
+                .environmentObject(authManager)
+        }
+        .task {
+            await loadSocialData()
+        }
+    }
+    
+    private func getTopReactions() -> [PinReactionType] {
+        let reactionCounts = Dictionary(grouping: reactions, by: { $0.reactionType })
+            .mapValues { $0.count }
+        return reactionCounts.sorted { $0.value > $1.value }.map { $0.key }
+    }
+    
+    private func loadSocialData() async {
+        guard let userId = authManager.currentUserID else { return }
+        
+        async let reactionsTask = SupabaseManager.shared.getReactions(for: pin.id)
+        async let commentsTask = SupabaseManager.shared.getComments(for: pin.id, currentUserId: userId)
+        
+        let (fetchedReactions, fetchedComments) = await (reactionsTask, commentsTask)
+        
+        await MainActor.run {
+            reactions = fetchedReactions
+            commentsCount = fetchedComments.count
+            userReaction = fetchedReactions.first(where: { $0.userId == userId })?.reactionType
+        }
+    }
+    
+    private func quickReaction() async {
+        if userReaction != nil {
+            // Remove reaction
+            let success = await SupabaseManager.shared.removeReaction(pinId: pin.id)
+            if success {
+                await MainActor.run {
+                    userReaction = nil
+                }
+                await loadSocialData()
+            }
+        } else {
+            // Add like reaction
+            let success = await SupabaseManager.shared.addReaction(pinId: pin.id, reactionType: .like)
+            if success {
+                await MainActor.run {
+                    userReaction = .like
+                }
+                await loadSocialData()
+            }
+        }
     }
 }
 

@@ -225,7 +225,7 @@ class SupabaseManager: ObservableObject {
             let pinsDB: [PinDB] = try await client
                 .from("pins")
                 .select("*")
-                .in("id", value: pinIds)
+                .in("id", values: pinIds)
                 .execute()
                 .value
             
@@ -816,7 +816,7 @@ class SupabaseManager: ObservableObject {
             let pinsDB: [PinDB] = try await client
                 .from("pins")
                 .select("*")
-                .in("user_id", value: followingIds)
+                .in("user_id", values: followingIds)
                 .order("created_at", ascending: false)
                 .limit(limit)
                 .execute()
@@ -1639,6 +1639,445 @@ class SupabaseManager: ObservableObject {
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiersToRemove)
         }
     }
+
+    /// Delete an image from storage
+    func deleteImage(from bucket: String, path: String) async throws {
+        _ = try await client.storage
+            .from(bucket)
+            .remove(paths: [path])
+    }
+    
+    // MARK: - Social Features - Comments
+    
+    /// Add a comment to a pin
+    func addComment(pinId: UUID, content: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        guard let currentUser = try? await getCurrentUserProfile() else { return false }
+        
+        do {
+            struct CommentData: Codable {
+                let id: String
+                let pin_id: String
+                let user_id: String
+                let username: String
+                let user_avatar_url: String?
+                let content: String
+                let created_at: String
+                let likes_count: Int
+            }
+            
+            let commentData = CommentData(
+                id: UUID().uuidString,
+                pin_id: pinId.uuidString,
+                user_id: session.user.id.uuidString,
+                username: currentUser.username,
+                user_avatar_url: currentUser.avatarURL,
+                content: content,
+                created_at: ISO8601DateFormatter().string(from: Date()),
+                likes_count: 0
+            )
+            
+            _ = try await client
+                .from("pin_comments")
+                .insert(commentData)
+                .execute()
+            
+            // Create friend activity
+            await createFriendActivity(
+                activityType: .commentedOnPin,
+                relatedPinId: pinId,
+                description: "commented on a pin"
+            )
+            
+            return true
+        } catch {
+            print("❌ Failed to add comment: \(error)")
+            return false
+        }
+    }
+    
+    /// Get comments for a pin
+    func getComments(for pinId: UUID, currentUserId: String) async -> [PinComment] {
+        do {
+            let commentsDB: [PinCommentDB] = try await client
+                .from("pin_comments")
+                .select("*")
+                .eq("pin_id", value: pinId.uuidString)
+                .order("created_at", ascending: true)
+                .execute()
+                .value
+            
+            // Check which comments are liked by current user
+            var comments: [PinComment] = []
+            for commentDB in commentsDB {
+                let isLiked = await isCommentLikedByUser(commentId: commentDB.id, userId: currentUserId)
+                comments.append(commentDB.toPinComment(isLikedByCurrentUser: isLiked))
+            }
+            
+            return comments
+        } catch {
+            print("❌ Failed to get comments: \(error)")
+            return []
+        }
+    }
+    
+    /// Like/unlike a comment
+    func toggleCommentLike(commentId: String) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            let userId = session.user.id.uuidString
+            
+            // Check if already liked
+            let existing: [CommentLikeDB] = try await client
+                .from("comment_likes")
+                .select("*")
+                .eq("comment_id", value: commentId)
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            if existing.isEmpty {
+                // Add like
+                struct LikeData: Codable {
+                    let id: String
+                    let comment_id: String
+                    let user_id: String
+                    let created_at: String
+                }
+                
+                let likeData = LikeData(
+                    id: UUID().uuidString,
+                    comment_id: commentId,
+                    user_id: userId,
+                    created_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                _ = try await client
+                    .from("comment_likes")
+                    .insert(likeData)
+                    .execute()
+            } else {
+                // Remove like
+                _ = try await client
+                    .from("comment_likes")
+                    .delete()
+                    .eq("comment_id", value: commentId)
+                    .eq("user_id", value: userId)
+                    .execute()
+            }
+            
+            return true
+        } catch {
+            print("❌ Failed to toggle comment like: \(error)")
+            return false
+        }
+    }
+    
+    /// Check if comment is liked by user
+    private func isCommentLikedByUser(commentId: String, userId: String) async -> Bool {
+        do {
+            let likes: [CommentLikeDB] = try await client
+                .from("comment_likes")
+                .select("*")
+                .eq("comment_id", value: commentId)
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            
+            return !likes.isEmpty
+        } catch {
+            return false
+        }
+    }
+    
+    // MARK: - Social Features - Reactions
+    
+    /// Add/update reaction to a pin
+    func addReaction(pinId: UUID, reactionType: PinReactionType) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        guard let currentUser = try? await getCurrentUserProfile() else { return false }
+        
+        do {
+            let userId = session.user.id.uuidString
+            
+            // Check if user already reacted to this pin
+            let existing: [PinReactionDB] = try await client
+                .from("pin_reactions")
+                .select("*")
+                .eq("pin_id", value: pinId.uuidString)
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            if existing.isEmpty {
+                // Add new reaction
+                struct ReactionData: Codable {
+                    let id: String
+                    let pin_id: String
+                    let user_id: String
+                    let username: String
+                    let user_avatar_url: String?
+                    let reaction_type: String
+                    let created_at: String
+                }
+                
+                let reactionData = ReactionData(
+                    id: UUID().uuidString,
+                    pin_id: pinId.uuidString,
+                    user_id: userId,
+                    username: currentUser.username,
+                    user_avatar_url: currentUser.avatarURL,
+                    reaction_type: reactionType.rawValue,
+                    created_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                _ = try await client
+                    .from("pin_reactions")
+                    .insert(reactionData)
+                    .execute()
+                
+                // Create friend activity
+                await createFriendActivity(
+                    activityType: .reactedToPin,
+                    relatedPinId: pinId,
+                    description: "reacted to a pin with \(reactionType.emoji)"
+                )
+            } else {
+                // Update existing reaction
+                _ = try await client
+                    .from("pin_reactions")
+                    .update(["reaction_type": reactionType.rawValue])
+                    .eq("pin_id", value: pinId.uuidString)
+                    .eq("user_id", value: userId)
+                    .execute()
+            }
+            
+            return true
+        } catch {
+            print("❌ Failed to add reaction: \(error)")
+            return false
+        }
+    }
+    
+    /// Remove reaction from a pin
+    func removeReaction(pinId: UUID) async -> Bool {
+        guard let session = try? await client.auth.session else { return false }
+        
+        do {
+            _ = try await client
+                .from("pin_reactions")
+                .delete()
+                .eq("pin_id", value: pinId.uuidString)
+                .eq("user_id", value: session.user.id.uuidString)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to remove reaction: \(error)")
+            return false
+        }
+    }
+    
+    /// Get reactions for a pin
+    func getReactions(for pinId: UUID) async -> [PinReaction] {
+        do {
+            let reactionsDB: [PinReactionDB] = try await client
+                .from("pin_reactions")
+                .select("*")
+                .eq("pin_id", value: pinId.uuidString)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            return reactionsDB.map { $0.toPinReaction() }
+        } catch {
+            print("❌ Failed to get reactions: \(error)")
+            return []
+        }
+    }
+    
+    // MARK: - Social Features - Friend Activity Feed
+    
+    /// Create friend activity entry
+    func createFriendActivity(activityType: FriendActivityType, relatedPinId: UUID? = nil, locationName: String? = nil, description: String) async {
+        guard let session = try? await client.auth.session else { return }
+        guard let currentUser = try? await getCurrentUserProfile() else { return }
+        
+        do {
+            struct ActivityData: Codable {
+                let id: String
+                let user_id: String
+                let username: String
+                let user_avatar_url: String?
+                let activity_type: String
+                let related_pin_id: String?
+                let location_name: String?
+                let description: String
+                let created_at: String
+            }
+            
+            let activityData = ActivityData(
+                id: UUID().uuidString,
+                user_id: session.user.id.uuidString,
+                username: currentUser.username,
+                user_avatar_url: currentUser.avatarURL,
+                activity_type: activityType.rawValue,
+                related_pin_id: relatedPinId?.uuidString,
+                location_name: locationName,
+                description: description,
+                created_at: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            _ = try await client
+                .from("friend_activities")
+                .insert(activityData)
+                .execute()
+        } catch {
+            print("❌ Failed to create friend activity: \(error)")
+        }
+    }
+    
+    /// Get friend activity feed
+    func getFriendActivityFeed(for userId: String, limit: Int = 50) async -> [FriendActivity] {
+        do {
+            // Get users that this user follows
+            let followingUsers = await getFollowingUsers(for: userId)
+            let followingIds = followingUsers.map { $0.id }
+            
+            if followingIds.isEmpty { return [] }
+            
+            // Get activities from followed users
+            let activitiesDB: [FriendActivityDB] = try await client
+                .from("friend_activities")
+                .select("*")
+                .in("user_id", values: followingIds)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute()
+                .value
+            
+            // Convert to FriendActivity objects and fetch related pins if needed
+            var activities: [FriendActivity] = []
+            for activityDB in activitiesDB {
+                var relatedPin: Pin? = nil
+                if let pinIdString = activityDB.related_pin_id,
+                   let pinId = UUID(uuidString: pinIdString) {
+                    relatedPin = await getPinById(pinId)
+                }
+                
+                activities.append(activityDB.toFriendActivity(relatedPin: relatedPin))
+            }
+            
+            return activities
+        } catch {
+            print("❌ Failed to get friend activity feed: \(error)")
+            return []
+        }
+    }
+    
+    /// Get a single pin by ID
+    private func getPinById(_ pinId: UUID) async -> Pin? {
+        do {
+            let pinDB: PinDB = try await client
+                .from("pins")
+                .select("*")
+                .eq("id", value: pinId.uuidString)
+                .single()
+                .execute()
+                .value
+            
+            return pinDB.toPin()
+        } catch {
+            print("❌ Failed to get pin by ID: \(error)")
+            return nil
+        }
+    }
+    
+    // MARK: - Social Features - Friend Recommendations
+    
+    /// Get friend recommendations based on activity
+    func getFriendRecommendations(for userId: String, limit: Int = 20) async -> [FriendRecommendation] {
+        do {
+            // Get user's following list
+            let followingUsers = await getFollowingUsers(for: userId)
+            let followingIds = followingUsers.map { $0.id }
+            
+            if followingIds.isEmpty { return [] }
+            
+            // Get pins that friends have rated highly (4+ stars)
+            let friendPins: [PinDB] = try await client
+                .from("pins")
+                .select("*")
+                .in("user_id", values: followingIds)
+                .gte("star_rating", value: 4.0)
+                .order("created_at", ascending: false)
+                .limit(100)
+                .execute()
+                .value
+            
+            // Group pins by location and calculate recommendations
+            var locationGroups: [String: [PinDB]] = [:]
+            for pin in friendPins {
+                let key = "\(pin.location_name)_\(pin.latitude)_\(pin.longitude)"
+                locationGroups[key, default: []].append(pin)
+            }
+            
+            var recommendations: [FriendRecommendation] = []
+            
+            for (_, pins) in locationGroups {
+                guard pins.count >= 2 else { continue } // Need at least 2 friends to recommend
+                
+                let averageRating = pins.compactMap { $0.star_rating }.reduce(0, +) / Double(pins.count)
+                let friendIds = pins.map { $0.user_id }
+                let friendUsernames = followingUsers.filter { friendIds.contains($0.id) }.map { $0.username }
+                let recentVisits = pins.compactMap { ISO8601DateFormatter().date(from: $0.created_at) }
+                
+                let confidence = min(1.0, Double(pins.count) / 5.0) // Higher confidence with more visits
+                let reasonText = "\(pins.count) friends visited and rated it \(String(format: "%.1f", averageRating)) stars"
+                
+                if let firstPin = pins.first {
+                    let recommendation = FriendRecommendation(
+                        recommendedPlace: firstPin.toPin(),
+                        recommendingFriendIds: friendIds,
+                        recommendingFriendUsernames: friendUsernames,
+                        averageRating: averageRating,
+                        totalVisits: pins.count,
+                        recentVisits: recentVisits,
+                        reasonText: reasonText,
+                        confidence: confidence
+                    )
+                    recommendations.append(recommendation)
+                }
+            }
+            
+            // Sort by confidence and rating
+            recommendations.sort { $0.confidence * $0.averageRating > $1.confidence * $1.averageRating }
+            
+            return Array(recommendations.prefix(limit))
+        } catch {
+            print("❌ Failed to get friend recommendations: \(error)")
+            return []
+        }
+    }
+    
+    /// Get current user profile (helper method)
+    private func getCurrentUserProfile() async throws -> AppUser {
+        guard let session = try? await client.auth.session else {
+            throw NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let basicUser: BasicUser = try await client
+            .from("users")
+            .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
+            .eq("id", value: session.user.id.uuidString)
+            .single()
+            .execute()
+            .value
+        
+        return basicUser.toAppUser(currentUserID: session.user.id.uuidString)
+    }
 }
 
 // MARK: - Apple Sign In Crypto Helper Extension
@@ -1713,12 +2152,6 @@ extension SupabaseManager {
         return try await uploadImage(imageData, to: "pin-images", path: path)
     }
     
-    /// Delete an image from storage
-    func deleteImage(from bucket: String, path: String) async throws {
-        _ = try await client.storage
-            .from(bucket)
-            .remove(paths: [path])
-    }
 }
 
 // MARK: - Location Features Extension (Temporarily Disabled)

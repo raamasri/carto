@@ -1211,3 +1211,294 @@ enum LocationActivityType: String, CaseIterable {
         }
     }
 }
+
+// MARK: - Social Features Models
+
+// Comment model for pins
+struct PinComment: Identifiable, Codable {
+    let id: UUID
+    let pinId: UUID
+    let userId: String
+    let username: String
+    let userAvatarURL: String?
+    let content: String
+    let createdAt: Date
+    let updatedAt: Date?
+    let parentCommentId: UUID? // For reply threads
+    var likesCount: Int
+    var isLikedByCurrentUser: Bool
+    
+    init(id: UUID = UUID(), pinId: UUID, userId: String, username: String, userAvatarURL: String? = nil, content: String, createdAt: Date = Date(), updatedAt: Date? = nil, parentCommentId: UUID? = nil, likesCount: Int = 0, isLikedByCurrentUser: Bool = false) {
+        self.id = id
+        self.pinId = pinId
+        self.userId = userId
+        self.username = username
+        self.userAvatarURL = userAvatarURL
+        self.content = content
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.parentCommentId = parentCommentId
+        self.likesCount = likesCount
+        self.isLikedByCurrentUser = isLikedByCurrentUser
+    }
+}
+
+// Reaction model for pins (likes, hearts, etc.)
+struct PinReaction: Identifiable, Codable {
+    let id: UUID
+    let pinId: UUID
+    let userId: String
+    let username: String
+    let userAvatarURL: String?
+    let reactionType: PinReactionType
+    let createdAt: Date
+    
+    init(id: UUID = UUID(), pinId: UUID, userId: String, username: String, userAvatarURL: String? = nil, reactionType: PinReactionType, createdAt: Date = Date()) {
+        self.id = id
+        self.pinId = pinId
+        self.userId = userId
+        self.username = username
+        self.userAvatarURL = userAvatarURL
+        self.reactionType = reactionType
+        self.createdAt = createdAt
+    }
+}
+
+// Types of reactions users can leave on pins
+enum PinReactionType: String, CaseIterable, Codable {
+    case like = "like"
+    case love = "love"
+    case wow = "wow"
+    case haha = "haha"
+    case sad = "sad"
+    case angry = "angry"
+    
+    var emoji: String {
+        switch self {
+        case .like: return "👍"
+        case .love: return "❤️"
+        case .wow: return "😮"
+        case .haha: return "😂"
+        case .sad: return "😢"
+        case .angry: return "😠"
+        }
+    }
+    
+    var systemImage: String {
+        switch self {
+        case .like: return "hand.thumbsup.fill"
+        case .love: return "heart.fill"
+        case .wow: return "face.dazzled"
+        case .haha: return "face.laughing"
+        case .sad: return "face.frowning"
+        case .angry: return "face.angry"
+        }
+    }
+}
+
+// Friend activity feed item
+struct FriendActivity: Identifiable, Codable {
+    let id: UUID
+    let userId: String
+    let username: String
+    let userAvatarURL: String?
+    let activityType: FriendActivityType
+    let relatedPinId: UUID?
+    let relatedPin: Pin?
+    let locationName: String?
+    let description: String
+    let createdAt: Date
+    
+    init(id: UUID = UUID(), userId: String, username: String, userAvatarURL: String? = nil, activityType: FriendActivityType, relatedPinId: UUID? = nil, relatedPin: Pin? = nil, locationName: String? = nil, description: String, createdAt: Date = Date()) {
+        self.id = id
+        self.userId = userId
+        self.username = username
+        self.userAvatarURL = userAvatarURL
+        self.activityType = activityType
+        self.relatedPinId = relatedPinId
+        self.relatedPin = relatedPin
+        self.locationName = locationName
+        self.description = description
+        self.createdAt = createdAt
+    }
+}
+
+// Types of friend activities to show in feed
+enum FriendActivityType: String, CaseIterable, Codable {
+    case visitedPlace = "visited_place"
+    case ratedPlace = "rated_place"
+    case addedToList = "added_to_list"
+    case commentedOnPin = "commented_on_pin"
+    case reactedToPin = "reacted_to_pin"
+    case createdList = "created_list"
+    case followedUser = "followed_user"
+    
+    var systemImage: String {
+        switch self {
+        case .visitedPlace: return "location.fill"
+        case .ratedPlace: return "star.fill"
+        case .addedToList: return "list.bullet"
+        case .commentedOnPin: return "bubble.left.fill"
+        case .reactedToPin: return "heart.fill"
+        case .createdList: return "folder.fill"
+        case .followedUser: return "person.badge.plus.fill"
+        }
+    }
+    
+    var actionText: String {
+        switch self {
+        case .visitedPlace: return "visited"
+        case .ratedPlace: return "rated"
+        case .addedToList: return "added to list"
+        case .commentedOnPin: return "commented on"
+        case .reactedToPin: return "reacted to"
+        case .createdList: return "created list"
+        case .followedUser: return "followed"
+        }
+    }
+}
+
+// Friend recommendation based on activity
+struct FriendRecommendation: Identifiable, Codable {
+    let id: UUID
+    let recommendedPlace: Pin
+    let recommendingFriendIds: [String] // Store friend IDs instead of full AppUser objects
+    let recommendingFriendUsernames: [String] // Store usernames for display
+    let averageRating: Double
+    let totalVisits: Int
+    let recentVisits: [Date]
+    let reasonText: String
+    let confidence: Double // 0.0 to 1.0 confidence score
+    
+    init(id: UUID = UUID(), recommendedPlace: Pin, recommendingFriendIds: [String], recommendingFriendUsernames: [String], averageRating: Double, totalVisits: Int, recentVisits: [Date], reasonText: String, confidence: Double) {
+        self.id = id
+        self.recommendedPlace = recommendedPlace
+        self.recommendingFriendIds = recommendingFriendIds
+        self.recommendingFriendUsernames = recommendingFriendUsernames
+        self.averageRating = averageRating
+        self.totalVisits = totalVisits
+        self.recentVisits = recentVisits
+        self.reasonText = reasonText
+        self.confidence = confidence
+    }
+}
+
+// MARK: - Database Models for Social Features
+
+struct PinCommentDB: Codable {
+    let id: String
+    let pin_id: String
+    let user_id: String
+    let username: String
+    let user_avatar_url: String?
+    let content: String
+    let created_at: String
+    let updated_at: String?
+    let parent_comment_id: String?
+    let likes_count: Int
+}
+
+struct PinReactionDB: Codable {
+    let id: String
+    let pin_id: String
+    let user_id: String
+    let username: String
+    let user_avatar_url: String?
+    let reaction_type: String
+    let created_at: String
+}
+
+struct CommentLikeDB: Codable {
+    let id: String
+    let comment_id: String
+    let user_id: String
+    let created_at: String
+}
+
+struct FriendActivityDB: Codable {
+    let id: String
+    let user_id: String
+    let username: String
+    let user_avatar_url: String?
+    let activity_type: String
+    let related_pin_id: String?
+    let location_name: String?
+    let description: String
+    let created_at: String
+}
+
+// MARK: - Conversion Extensions for Social Features
+
+extension PinCommentDB {
+    func toPinComment(isLikedByCurrentUser: Bool = false) -> PinComment {
+        return PinComment(
+            id: UUID(uuidString: id) ?? UUID(),
+            pinId: UUID(uuidString: pin_id) ?? UUID(),
+            userId: user_id,
+            username: username,
+            userAvatarURL: user_avatar_url,
+            content: content,
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            updatedAt: updated_at != nil ? ISO8601DateFormatter().date(from: updated_at!) : nil,
+            parentCommentId: parent_comment_id != nil ? UUID(uuidString: parent_comment_id!) : nil,
+            likesCount: likes_count,
+            isLikedByCurrentUser: isLikedByCurrentUser
+        )
+    }
+}
+
+extension PinReactionDB {
+    func toPinReaction() -> PinReaction {
+        return PinReaction(
+            id: UUID(uuidString: id) ?? UUID(),
+            pinId: UUID(uuidString: pin_id) ?? UUID(),
+            userId: user_id,
+            username: username,
+            userAvatarURL: user_avatar_url,
+            reactionType: PinReactionType(rawValue: reaction_type) ?? .like,
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
+        )
+    }
+}
+
+extension FriendActivityDB {
+    func toFriendActivity(relatedPin: Pin? = nil) -> FriendActivity {
+        return FriendActivity(
+            id: UUID(uuidString: id) ?? UUID(),
+            userId: user_id,
+            username: username,
+            userAvatarURL: user_avatar_url,
+            activityType: FriendActivityType(rawValue: activity_type) ?? .visitedPlace,
+            relatedPinId: related_pin_id != nil ? UUID(uuidString: related_pin_id!) : nil,
+            relatedPin: relatedPin,
+            locationName: location_name,
+            description: description,
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
+        )
+    }
+}
+
+// MARK: - Enhanced Pin Model with Social Features
+
+extension Pin {
+    // Add social engagement counts
+    var commentsCount: Int {
+        // This will be populated from the database
+        return 0
+    }
+    
+    var reactionsCount: Int {
+        // This will be populated from the database
+        return 0
+    }
+    
+    var isLikedByCurrentUser: Bool {
+        // This will be populated from the database
+        return false
+    }
+    
+    var topReactions: [PinReactionType] {
+        // This will be populated from the database
+        return []
+    }
+}
