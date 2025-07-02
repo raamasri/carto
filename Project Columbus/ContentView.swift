@@ -275,8 +275,11 @@ struct MainMapView: View {
         @Binding var showPOISheet: Bool
         @Binding var showFullPOIView: Bool
         @EnvironmentObject var pinStore: PinStore
+        @EnvironmentObject var authManager: AuthManager
         @State private var showAddedAlert = false
         @State private var showAddToList = false
+        @State private var friends: [AppUser] = []
+        @State private var isLoadingFriends = false
 
         var body: some View {
             VStack {
@@ -332,6 +335,7 @@ struct MainMapView: View {
         private var mainPopupContent: some View {
             VStack(alignment: .leading, spacing: 8) {
                 titleBar
+                friendsSection
                 addressView
                 lookAroundView
                 distanceView
@@ -343,6 +347,9 @@ struct MainMapView: View {
             .cornerRadius(AppSpacing.cornerRadius)
             .padding(.horizontal, 4)
             .padding(.bottom, 60)
+            .onAppear {
+                loadFriendsData()
+            }
         }
 
         private var titleBar: some View {
@@ -417,6 +424,76 @@ struct MainMapView: View {
             }
         }
 
+        private var friendsSection: some View {
+            Group {
+                if isLoadingFriends {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text("Loading friends...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                } else {
+                    let friendsAtLocation = getFriendsAtLocation()
+                    let averageRating = getAverageRating(from: friendsAtLocation)
+                    
+                    if !friendsAtLocation.isEmpty {
+                        HStack(spacing: 8) {
+                            // Friend avatars
+                            HStack(spacing: -8) {
+                                ForEach(Array(friendsAtLocation.prefix(4)), id: \.friend.id) { friendPin in
+                                    AsyncImage(url: URL(string: friendPin.friend.avatarURL ?? "")) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        Image(systemName: "person.circle.fill")
+                                            .resizable()
+                                            .foregroundColor(.gray)
+                                    }
+                                    .frame(width: 24, height: 24)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                                }
+                                
+                                if friendsAtLocation.count > 4 {
+                                    Text("+\(friendsAtLocation.count - 4)")
+                                        .font(.caption2)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.white)
+                                        .frame(width: 24, height: 24)
+                                        .background(Color.gray)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                                }
+                            }
+                            
+                            // Average rating
+                            if averageRating > 0 {
+                                HStack(spacing: 3) {
+                                    Text(String(format: "%.1f", averageRating))
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                    Image(systemName: "star.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(.yellow)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.yellow.opacity(0.1))
+                                .cornerRadius(4)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+        }
+
         private var addToListButton: some View {
             HStack {
                 Button(action: { showAddToList = true }) {
@@ -435,6 +512,56 @@ struct MainMapView: View {
                 }
             }
             .padding(.top, 8)
+        }
+
+        // MARK: - Friends Helper Functions
+        
+        private func loadFriendsData() {
+            guard let userID = authManager.currentUserID else { return }
+            
+            isLoadingFriends = true
+            Task {
+                let fetchedFriends = await SupabaseManager.shared.getFollowingUsers(for: userID)
+                await MainActor.run {
+                    friends = fetchedFriends
+                    isLoadingFriends = false
+                }
+            }
+        }
+        
+        private func getFriendsAtLocation() -> [(friend: AppUser, pin: Pin)] {
+            let coordinate = mapItem.placemark.coordinate
+            let locationName = mapItem.name ?? "Unknown Place"
+            
+            // Get all pins that match this location
+            let matchingPins = pinStore.masterPins.filter { pin in
+                // Check if coordinates are very close (within ~10 meters)
+                let latitudeDiff = abs(pin.latitude - coordinate.latitude)
+                let longitudeDiff = abs(pin.longitude - coordinate.longitude)
+                let isLocationMatch = latitudeDiff < 0.0001 && longitudeDiff < 0.0001
+                
+                // Also check if location names match
+                let isNameMatch = pin.locationName.lowercased().contains(locationName.lowercased()) ||
+                                locationName.lowercased().contains(pin.locationName.lowercased())
+                
+                return isLocationMatch || isNameMatch
+            }
+            
+            // Match pins to friends and return the pairs
+            return friends.compactMap { friend in
+                if let matchingPin = matchingPins.first(where: { pin in
+                    pin.authorHandle.contains(friend.username)
+                }) {
+                    return (friend: friend, pin: matchingPin)
+                }
+                return nil
+            }
+        }
+        
+        private func getAverageRating(from friendPins: [(friend: AppUser, pin: Pin)]) -> Double {
+            let ratings = friendPins.compactMap { $0.pin.starRating }
+            guard !ratings.isEmpty else { return 0 }
+            return ratings.reduce(0, +) / Double(ratings.count)
         }
 
         // MARK: - Helper Functions for List Status
@@ -944,6 +1071,7 @@ struct MainMapView: View {
 
             if let mapItem = selectedMapItem, showPOISheet {
                 POIPopup(mapItem: mapItem, userLocation: locationManager.location, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
+                    .environmentObject(authManager)
             }
         }
         .onAppear {
