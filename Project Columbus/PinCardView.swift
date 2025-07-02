@@ -339,6 +339,17 @@ struct AddToListSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var pinStore: PinStore
 
+    // Helper to check if a list contains this pin (by coordinates or name)
+    private func listContainsPin(_ list: PinList) -> Bool {
+        list.pins.contains { existingPin in
+            let latitudeDiff = abs(existingPin.latitude - pin.latitude)
+            let longitudeDiff = abs(existingPin.longitude - pin.longitude)
+            let isLocationMatch = latitudeDiff < 0.0001 && longitudeDiff < 0.0001
+            let isNameMatch = existingPin.locationName.lowercased() == pin.locationName.lowercased()
+            return isLocationMatch || isNameMatch
+        }
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             Text("Add to List")
@@ -352,12 +363,19 @@ struct AddToListSheet: View {
                     onSelect(list.name)
                     dismiss()
                 }) {
-                    Text(list.name)
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
+                    HStack {
+                        Text(list.name)
+                            .font(.headline)
+                        Spacer()
+                        if listContainsPin(list) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
                 }
             }
             

@@ -419,8 +419,14 @@ struct MainMapView: View {
 
         private var addToListButton: some View {
             HStack {
-                Button("Add to List") {
-                    showAddToList = true
+                Button(action: { showAddToList = true }) {
+                    Label(getButtonText(), systemImage: getButtonIcon())
+                        .font(.headline)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 16)
+                        .background(getButtonColor())
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
                 }
                 .padding(.leading)
                 Spacer()
@@ -429,6 +435,47 @@ struct MainMapView: View {
                 }
             }
             .padding(.top, 8)
+        }
+
+        // MARK: - Helper Functions for List Status
+        /// Finds all lists that contain a location with matching coordinates and name
+        private func getListsContainingLocation() -> [PinList] {
+            let coordinate = mapItem.placemark.coordinate
+            let locationName = mapItem.name ?? "Unknown Place"
+            
+            return pinStore.lists.filter { list in
+                list.pins.contains { pin in
+                    // Check if coordinates are very close (within ~10 meters)
+                    let latitudeDiff = abs(pin.latitude - coordinate.latitude)
+                    let longitudeDiff = abs(pin.longitude - coordinate.longitude)
+                    let isLocationMatch = latitudeDiff < 0.0001 && longitudeDiff < 0.0001
+                    // Also check if the name matches (case insensitive)
+                    let isNameMatch = pin.locationName.lowercased() == locationName.lowercased()
+                    return isLocationMatch || isNameMatch
+                }
+            }
+        }
+        /// Gets the button text based on whether the location is already in lists
+        private func getButtonText() -> String {
+            let listsContainingLocation = getListsContainingLocation()
+            if listsContainingLocation.isEmpty {
+                return "Add to List"
+            } else if listsContainingLocation.count == 1 {
+                let listName = listsContainingLocation.first!.name
+                return "In \(listName)"
+            } else {
+                return "In \(listsContainingLocation.count) lists"
+            }
+        }
+        /// Gets the button icon based on whether the location is already in lists
+        private func getButtonIcon() -> String {
+            let listsContainingLocation = getListsContainingLocation()
+            return listsContainingLocation.isEmpty ? "plus.circle.fill" : "checkmark.circle.fill"
+        }
+        /// Gets the button color based on whether the location is already in lists
+        private func getButtonColor() -> Color {
+            let listsContainingLocation = getListsContainingLocation()
+            return listsContainingLocation.isEmpty ? .blue : .green
         }
     }
     
