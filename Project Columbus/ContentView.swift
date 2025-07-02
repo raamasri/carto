@@ -706,466 +706,60 @@ struct MainMapView: View {
         }
     }
 
-    var mapView: some View {
-        ZStack {
-            Map(position: $cameraPosition, selection: $selectedPinForPopup) {
-                // Only show pins after initial loading is complete
-                if !pinStore.isLoading {
-                    ForEach(filteredPins, id: \.id) { pin in
-                        Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                            MainMapEnhancedPinAnnotation(pin: pin, pinStore: pinStore)
-                        }
-                        .tag(pin.id)
-                    }
-                }
-                
-                // Show user location
-                UserAnnotation()
-            }
-            .onChange(of: filteredPins) { _, _ in
-                if !pinStore.isLoading {
-                    centerMapOnFilteredPins()
-                }
-            }
-            
-            // Loading indicator while pins are being fetched
-            if pinStore.isLoading {
-                AppleProgressView(
-                    "Loading pins...",
-                    subtitle: "Fetching your saved locations",
-                    tint: .blue
-                )
-            }
-        }
-    }
-    
-    var searchOverlay: some View {
-        ZStack(alignment: .top) {
-            VStack(spacing: 0) {
-                Spacer().frame(height: 70) // offset below search bar
-                if !searchResults.isEmpty {
-                    ZStack {
-                        VStack(spacing: 0) {
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    ForEach(searchResults, id: \.self) { result in
-                                        Button(action: {
-                                            handleSearchSelection(result)
-                                            searchText = ""
-                                            searchResults = []
-                                            isSearchFieldFocused = false
-                                        }) {
-                                            VStack(alignment: .leading) {
-                                                Text(result.title)
-                                                    .font(.headline)
-                                                    .foregroundColor(Color.primary)
-                                                if !result.subtitle.isEmpty {
-                                                    Text(result.subtitle)
-                                                        .font(.caption)
-                                                        .foregroundColor(Color.secondary)
-                                                }
-                                            }
-                                            .padding()
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(maxHeight: CGFloat(searchResults.count) * 72)
-                        }
-                    }
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(20)
-                    .padding(.horizontal)
-                }
-            }
-            
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                TextField("Places, Memories, Ideas, #tags", text: $searchText)
-                    .autocorrectionDisabled()
-                    .focused($isSearchFieldFocused)
-                    .padding(8)
-                
-                if !searchText.isEmpty || !searchResults.isEmpty {
-                    Button(action: {
-                        searchText = ""
-                        searchResults = []
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
-                    }
-                }
-            }
-            .padding(AppSpacing.vertical)
-            .background(.ultraThinMaterial)
-            .blur(radius: 0.3)
-            .cornerRadius(AppSpacing.cornerRadius)
-            .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-            .padding(.horizontal, AppSpacing.horizontal)
-            .padding(.top, AppSpacing.vertical)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onChange(of: searchText) { oldValue, newValue in
-            searchCompleter.queryFragment = newValue
-        }
-    }
-    
-    var mapControlsOverlay: some View {
-        VStack {
-            Spacer()
-            HStack {
-                // Enhanced Refresh Button
-                Button(action: {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                    impactFeedback.impactOccurred()
-                    Task {
-                        await pinStore.refresh()
-                    }
-                }) {
-                    Image(systemName: pinStore.isLoading ? "arrow.clockwise" : "arrow.clockwise")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .frame(width: 48, height: 48)
-                        .background(
-                            Circle()
-                                .fill(.regularMaterial)
-                                .overlay(
-                                    Circle()
-                                        .stroke(.quaternary, lineWidth: 0.5)
-                                )
-                        )
-                        .appleCardShadow(elevation: .floating)
-                        .rotationEffect(.degrees(pinStore.isLoading ? 360 : 0))
-                        .animation(pinStore.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .spring(response: 0.4, dampingFraction: 0.8), value: pinStore.isLoading)
-                        .scaleEffect(1.0)
-                }
-                .disabled(pinStore.isLoading)
-                .buttonStyle(MapControlButtonStyle())
-                .padding(.bottom, 60)
-                Spacer()
-                // Enhanced Filter Button
-                Button(action: {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                    impactFeedback.impactOccurred()
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        showMapFilters.toggle()
-                    }
-                }) {
-                    ZStack {
-                        Image(systemName: showMapFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(showMapFilters ? .blue : .primary)
-                            .frame(width: 48, height: 48)
-                            .background(
-                                Circle()
-                                    .fill(.regularMaterial)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(.quaternary, lineWidth: 0.5)
-                                    )
-                            )
-                            .appleCardShadow(elevation: .floating)
-                            .scaleEffect(showMapFilters ? 1.05 : 1.0)
-                            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showMapFilters)
-                        
-                        if hasActiveFilters {
-                            Text("\(activeFilterCount)")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 18, height: 18)
-                                .background(
-                                    Circle()
-                                        .fill(.red)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(.white, lineWidth: 2)
-                                        )
-                                )
-                                .offset(x: 16, y: -16)
-                                .scaleEffect(1.0)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasActiveFilters)
-                        }
-                    }
-                }
-                .buttonStyle(MapControlButtonStyle())
-                .padding(.bottom, 60)
-                Spacer()
-                // Enhanced Recenter Button
-                Button(action: {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                    impactFeedback.impactOccurred()
-                    centerMapOnFilteredPins()
-                }) {
-                    Image(systemName: "viewfinder")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .frame(width: 48, height: 48)
-                        .background(
-                            Circle()
-                                .fill(.regularMaterial)
-                                .overlay(
-                                    Circle()
-                                        .stroke(.quaternary, lineWidth: 0.5)
-                                )
-                        )
-                        .appleCardShadow(elevation: .floating)
-                }
-                .buttonStyle(MapControlButtonStyle())
-                .padding(.bottom, 60)
-                Spacer()
-                // Enhanced Location Button
-                Button(action: {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                    impactFeedback.impactOccurred()
-                    requestUserLocation()
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        if let location = locationManager.location {
-                            cameraPosition = .region(MKCoordinateRegion(
-                                center: location,
-                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                            ))
-                        }
-                    }
-                }) {
-                    Image(systemName: "location.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.blue)
-                        .frame(width: 48, height: 48)
-                        .background(
-                            Circle()
-                                .fill(.regularMaterial)
-                                .overlay(
-                                    Circle()
-                                        .stroke(.quaternary, lineWidth: 0.5)
-                                )
-                        )
-                        .appleCardShadow(elevation: .floating)
-                }
-                .buttonStyle(MapControlButtonStyle())
-                .padding(.bottom, 60)
-            }
-            .padding(.horizontal)
-        }
-    }
-    
-    var mainContentView: some View {
-        Group {
-            if selectedTab == 0 {
-                mapTabView
-            } else if selectedTab == 4 {
-                profileTabView
-            } else if selectedTab == 5 {
-                listsTabView
-            } else if selectedTab == 1 {
-                FindFriendsView()
-            } else if selectedTab == 2 {
-                CreatePostView()
-            } else {
-                LiveFeedView()
-                    .environmentObject(pinStore)
-            }
-        }
-    }
-    
-    var mapTabView: some View {
-        ZStack {
-            mapView
-            
-            // Enhanced Filter Panel (Slides from bottom)
-            if showMapFilters {
-                filterPanelView
-            }
-        }
-        .mapStyle(styleForMapType(selectedMapType))
-        .edgesIgnoringSafeArea(.all)
-        .gesture(
-            DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                .onEnded { value in
-                    if value.translation.width > 100 {
-                        withAnimation {
-                            showSideMenu = true
-                        }
-                    } else if value.translation.width < -100 {
-                        withAnimation {
-                            showSideMenu = false
-                        }
-                    }
-                }
-        )
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 5)
-                .onChanged { _ in
-                    shouldTrackUser = false
-                    isUserManuallyMovingMap = true  // User has moved the map manually
-                }
-                .onEnded { _ in
-                    // Delay resetting to false to allow user to scroll without immediate re-centering
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                        isUserManuallyMovingMap = false
-                    }
-                }
-        )
-        .overlay(
-            Group {
-                if showSideMenu {
-                    SideMenuView(showSideMenu: $showSideMenu)
-                }
-            }
-        )
-    }
-    
-    var filterPanelView: some View {
-        VStack {
-            Spacer()
-            VStack(spacing: 12) {
-                // Enhanced handle bar for visual feedback
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(.tertiary)
-                    .frame(width: 40, height: 6)
-                    .padding(.top, 12)
-                    .scaleEffect(showMapFilters ? 1.0 : 0.8)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showMapFilters)
-                
-                MainMapFilterPanel(
-                    selectedList: $selectedListFilter,
-                    selectedTimeFilter: $selectedTimeFilter,
-                    selectedStarFilter: $selectedStarFilter,
-                    searchText: $mapSearchText,
-                    availableLists: pinStore.lists
-                )
-                .id("filter-panel-\(pinStore.lists.count)")
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.regularMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(.quaternary, lineWidth: 0.5)
-                    )
-            )
-            .shadow(
-                color: .black.opacity(0.15),
-                radius: 16,
-                x: 0,
-                y: -8
-            )
-            .padding(.horizontal, 8)
-            .padding(.bottom, 160)
-            .transition(
-                .asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
-                    removal: .move(edge: .bottom).combined(with: .opacity)
-                )
-            )
-        }
-        .ignoresSafeArea(.container, edges: .bottom)
-    }
-    
-    var profileTabView: some View {
-        Group {
-            if let currentUser = authManager.currentUser {
-                UserProfileView(profileUser: currentUser)
-                    .environmentObject(pinStore)
-                    .environmentObject(authManager)
-                    .onAppear {
-                        // User profile loaded
-                    }
-            } else {
-                Text("Loading user profile...")
-                    .onAppear {
-                        print("📍 selectedTab 4 triggered. currentUser = nil")
-                    }
-            }
-        }
-        .task {
-            if authManager.currentUser == nil {
-                print("🔄 Re-fetching current user from Supabase...")
-                await authManager.fetchCurrentUser()
-            }
-        }
-    }
-    
-    var listsTabView: some View {
-        EnhancedListsView()
-            .environmentObject(pinStore)
-            .environmentObject(authManager)
-            .environmentObject(locationManager)
-    }
-    
-    var bottomNavigationBar: some View {
-        VStack {
-            Spacer()
-            HStack(spacing: 0) {
-                EnhancedNavBarButton(icon: "house", isSelected: selectedTab == 0) {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                    impactFeedback.impactOccurred()
-                    selectedTab = 0
-                    centerMapOnFilteredPins()
-                }
-                Spacer()
-                EnhancedNavBarButton(icon: "person.2", isSelected: selectedTab == 1) {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                    impactFeedback.impactOccurred()
-                    selectedTab = 1
-                }
-                Spacer()
-                EnhancedNavBarButton(icon: "plus.circle", isSelected: selectedTab == 2) {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                    impactFeedback.impactOccurred()
-                    selectedTab = 2
-                }
-                Spacer()
-                EnhancedNavBarButton(icon: "newspaper", isSelected: selectedTab == 3) {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                    impactFeedback.impactOccurred()
-                    selectedTab = 3
-                }
-                Spacer()
-                EnhancedNavBarButton(icon: "person.circle", isSelected: selectedTab == 4) {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                    impactFeedback.impactOccurred()
-                    selectedTab = 4
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: 0)
-            )
-            .overlay(
-                Rectangle()
-                    .frame(height: 0.5)
-                    .foregroundStyle(.separator)
-                    .opacity(0.3),
-                alignment: .top
-            )
-        }
-        .ignoresSafeArea(.container, edges: .bottom)
-    }
-
     var body: some View {
         ZStack {
             if selectedTab == 0 {
+
                 ZStack {
-                    mapView
+                    ZStack {
+                Map(position: $cameraPosition, selection: $selectedPinForPopup) {
+                            // Only show pins after initial loading is complete
+                            if !pinStore.isLoading {
+                                ForEach(filteredPins, id: \.id) { pin in
+                                    Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
+                                        MainMapEnhancedPinAnnotation(pin: pin, pinStore: pinStore)
+                                    }
+                            .tag(pin.id)
+                                }
+                            }
+                            
+                            // Show user location
+                            UserAnnotation()
+                        }
+                        .onChange(of: filteredPins) { _, _ in
+                            if !pinStore.isLoading {
+                                centerMapOnFilteredPins()
+                            }
+                        }
+                        
+                        // Loading indicator while pins are being fetched
+                        if pinStore.isLoading {
+                            VStack {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                    .tint(.blue)
+                                Text("Loading pins...")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 8)
+                            }
+                            .padding()
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(12)
+                            .shadow(radius: 4)
+                        }
+                    }
                     
-                    // Enhanced Filter Panel (Slides from bottom)
+                    // Filter Panel (Slides from bottom)
                     if showMapFilters {
                         VStack {
                             Spacer()
                             VStack(spacing: 12) {
-                                // Enhanced handle bar for visual feedback
+                                // Handle bar for visual feedback
                                 RoundedRectangle(cornerRadius: 3)
-                                    .fill(.tertiary)
+                                    .fill(Color.gray.opacity(0.3))
                                     .frame(width: 40, height: 6)
-                                    .padding(.top, 12)
-                                    .scaleEffect(showMapFilters ? 1.0 : 0.8)
-                                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showMapFilters)
+                                    .padding(.top, 8)
                                 
                                 MainMapFilterPanel(
                                     selectedList: $selectedListFilter,
@@ -1174,32 +768,15 @@ struct MainMapView: View {
                                     searchText: $mapSearchText,
                                     availableLists: pinStore.lists
                                 )
-                                .id("filter-panel-\(pinStore.lists.count)")
+                                .id("filter-panel-\(pinStore.lists.count)") // Force refresh when lists change
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(.regularMaterial)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 20)
-                                            .stroke(.quaternary, lineWidth: 0.5)
-                                    )
-                            )
-                            .shadow(
-                                color: .black.opacity(0.15),
-                                radius: 16,
-                                x: 0,
-                                y: -8
-                            )
-                            .padding(.horizontal, 8)
-                            .padding(.bottom, 160)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
-                                    removal: .move(edge: .bottom).combined(with: .opacity)
-                                )
-                            )
+                            .padding()
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(16, corners: [.topLeft, .topRight])
+                            .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: -4)
+                            .padding(.horizontal, 0)
+                            .padding(.bottom, 160) // Increased spacing to float above control buttons
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         .ignoresSafeArea(.container, edges: .bottom)
                     }
@@ -1275,14 +852,205 @@ struct MainMapView: View {
             }
 
             if selectedTab == 0 {
-                searchOverlay
+                ZStack(alignment: .top) {
+                    VStack(spacing: 0) {
+                        Spacer().frame(height: 70) // offset below search bar
+                    if !searchResults.isEmpty {
+                        ZStack {
+                            VStack(spacing: 0) {
+                                ScrollView {
+                                    VStack(spacing: 0) {
+                                        ForEach(searchResults, id: \.self) { result in
+                                            Button(action: {
+                                                handleSearchSelection(result)
+                                                searchText = ""
+                                                searchResults = []
+                                                isSearchFieldFocused = false
+                                            }) {
+                                                VStack(alignment: .leading) {
+                                                    Text(result.title)
+                                                        .font(.headline)
+                                                        .foregroundColor(Color.primary)
+                                                    if !result.subtitle.isEmpty {
+                                                        Text(result.subtitle)
+                                                            .font(.caption)
+                                                            .foregroundColor(Color.secondary)
+                                                    }
+                                                }
+                                                .padding()
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                        }
+                                    }
+                                }
+                                .frame(maxHeight: CGFloat(searchResults.count) * 72)
+                            }
+                        }
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(20)
+                        .padding(.horizontal)
+                    }
+                    }
+                    
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.gray)
+                    TextField("Places, Memories, Ideas, #tags", text: $searchText)
+                        .autocorrectionDisabled()
+                        .focused($isSearchFieldFocused)
+                        .padding(8)
+ 
+                    if !searchText.isEmpty || !searchResults.isEmpty {
+                        Button(action: {
+                            searchText = ""
+                            searchResults = []
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    }
+                    .padding(AppSpacing.vertical)
+                    .background(.ultraThinMaterial)
+                    .blur(radius: 0.3)
+                    .cornerRadius(AppSpacing.cornerRadius)
+                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    .padding(.horizontal, AppSpacing.horizontal)
+                    .padding(.top, AppSpacing.vertical)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .onChange(of: searchText) { oldValue, newValue in
+                        searchCompleter.queryFragment = newValue
+                    }
             }
 
             if selectedTab == 0 {
-                mapControlsOverlay
+                VStack {
+                    Spacer()
+                    HStack {
+                        // Refresh Button
+                        Button(action: {
+                            Task {
+                                await pinStore.refresh()
+                            }
+                        }) {
+                            Image(systemName: pinStore.isLoading ? "arrow.clockwise" : "arrow.clockwise")
+                                .font(.title2)
+                                .foregroundColor(.gray)
+                                .padding(16)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                                .rotationEffect(.degrees(pinStore.isLoading ? 360 : 0))
+                                .animation(pinStore.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: pinStore.isLoading)
+                        }
+                        .disabled(pinStore.isLoading)
+                        .padding(.bottom, 60)
+                        Spacer()
+                        // Filter Button
+                        Button(action: {
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                showMapFilters.toggle()
+                            }
+                        }) {
+                            ZStack {
+                                Image(systemName: showMapFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                                    .font(.title2)
+                                    .foregroundColor(showMapFilters ? .blue : .gray)
+                                    .padding(16)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
+                                    .shadow(radius: 4)
+                                if hasActiveFilters {
+                                    Text("\(activeFilterCount)")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .frame(width: 16, height: 16)
+                                        .background(Color.red)
+                                        .clipShape(Circle())
+                                        .offset(x: 12, y: -12)
+                                }
+                            }
+                        }
+                        .padding(.bottom, 60)
+                        Spacer()
+                        // Recenter Button
+                        Button(action: {
+                            centerMapOnFilteredPins()
+                        }) {
+                            Image(systemName: "viewfinder")
+                                .font(.title2)
+                                .foregroundColor(.gray)
+                                .padding(16)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                        }
+                        .padding(.bottom, 60)
+                        Spacer()
+                        // Location Button
+                        Button(action: {
+                            requestUserLocation()
+                            withAnimation {
+                                if let location = locationManager.location {
+                                    cameraPosition = .region(MKCoordinateRegion(
+                                        center: location,
+                                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                    ))
+                                }
+                            }
+                        }) {
+                            Image(systemName: "location.fill")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                                .padding(16)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                        }
+                        .padding(.bottom, 60)
+                    }
+                    .padding(.horizontal)
+                }
             }
 
-            bottomNavigationBar
+            VStack {
+                Spacer()
+                HStack {
+                    Button(action: {
+                        selectedTab = 0
+                        centerMapOnFilteredPins()
+                    }) {
+                        Image(systemName: "house")
+                            .font(.title2)
+                            .foregroundColor(selectedTab == 0 ? .blue : .gray)
+                    }
+                    .padding(.horizontal, 8)
+                    Spacer()
+                    NavBarButton(icon: "person.2", selected: $selectedTab, index: 1)
+                        .padding(.horizontal, 8)
+                    Spacer()
+                    NavBarButton(icon: "plus.circle", selected: $selectedTab, index: 2)
+                        .padding(.horizontal, 8)
+                    Spacer()
+                    NavBarButton(icon: "newspaper", selected: $selectedTab, index: 3)
+                        .padding(.horizontal, 8)
+                    Spacer()
+                    NavBarButton(icon: "person.circle", selected: $selectedTab, index: 4)
+                        .padding(.horizontal, 8)
+                }
+                .padding()
+                .padding(.bottom, 25)
+                .background(
+                    Color.black.opacity(0.2)
+                        .background(.ultraThinMaterial)
+                        .blur(radius: 0.3)
+                        .clipShape(RoundedRectangle(cornerRadius: 0))
+                        .padding(.horizontal, 0)
+                )
+            }
+            .ignoresSafeArea(.container, edges: .bottom)
 
             if let mapItem = selectedMapItem, showPOISheet {
                 POIPopup(mapItem: mapItem, userLocation: locationManager.location, showPOISheet: $showPOISheet, showFullPOIView: $showFullPOIView)
@@ -1648,44 +1416,6 @@ struct NavBarButton: View {
     }
 }
 
-struct EnhancedNavBarButton: View {
-    let icon: String
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 22, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? .blue : .secondary)
-                    .scaleEffect(isSelected ? 1.1 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-                
-                // Selection indicator
-                Circle()
-                    .fill(isSelected ? .blue : .clear)
-                    .frame(width: 4, height: 4)
-                    .scaleEffect(isSelected ? 1.0 : 0.5)
-                    .opacity(isSelected ? 1.0 : 0.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(TabBarButtonStyle())
-    }
-}
-
-struct TabBarButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
-            .opacity(configuration.isPressed ? 0.7 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
 
 
 // MARK: - Live Feed View Placeholder
@@ -1768,276 +1498,6 @@ extension View {
     func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape(RoundedCorner(radius: radius, corners: corners))
     }
-    
-    /// Applies Apple-like shadow styling
-    func appleCardShadow(elevation: ShadowElevation = .medium) -> some View {
-        self.shadow(
-            color: elevation.shadowColor,
-            radius: elevation.shadowRadius,
-            x: elevation.shadowOffset.width,
-            y: elevation.shadowOffset.height
-        )
-    }
-    
-    /// Applies haptic feedback on tap
-    func hapticFeedback(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .medium) -> some View {
-        self.onTapGesture {
-            let impactFeedback = UIImpactFeedbackGenerator(style: style)
-            impactFeedback.impactOccurred()
-        }
-    }
-    
-    /// Applies enhanced button press animation
-    func pressableScale(scale: CGFloat = 0.96) -> some View {
-        self.scaleEffect(1.0)
-            .animation(.easeInOut(duration: 0.1), value: false)
-    }
-}
-
-// MARK: - Shadow Elevation System
-
-enum ShadowElevation {
-    case none
-    case low
-    case medium
-    case high
-    case floating
-    
-    var shadowColor: Color {
-        switch self {
-        case .none: return .clear
-        case .low: return .black.opacity(0.08)
-        case .medium: return .black.opacity(0.12)
-        case .high: return .black.opacity(0.16)
-        case .floating: return .black.opacity(0.24)
-        }
-    }
-    
-    var shadowRadius: CGFloat {
-        switch self {
-        case .none: return 0
-        case .low: return 2
-        case .medium: return 4
-        case .high: return 8
-        case .floating: return 16
-        }
-    }
-    
-    var shadowOffset: CGSize {
-        switch self {
-        case .none: return .zero
-        case .low: return CGSize(width: 0, height: 1)
-        case .medium: return CGSize(width: 0, height: 2)
-        case .high: return CGSize(width: 0, height: 4)
-        case .floating: return CGSize(width: 0, height: 8)
-        }
-    }
-}
-
-// MARK: - Enhanced Button Styles
-
-struct ApplePrimaryButtonStyle: ButtonStyle {
-    let isDestructive: Bool
-    
-    init(isDestructive: Bool = false) {
-        self.isDestructive = isDestructive
-    }
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isDestructive ? Color.red : Color.blue)
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-            .appleCardShadow(elevation: .medium)
-    }
-}
-
-struct AppleSecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 17, weight: .medium))
-            .foregroundColor(.blue)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.blue.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(.blue.opacity(0.3), lineWidth: 1)
-                    )
-            )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
-struct AppleCircularButtonStyle: ButtonStyle {
-    let size: CGFloat
-    let backgroundColor: Color
-    
-    init(size: CGFloat = 44, backgroundColor: Color = .blue) {
-        self.size = size
-        self.backgroundColor = backgroundColor
-    }
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: size * 0.4, weight: .semibold))
-            .foregroundColor(.white)
-            .frame(width: size, height: size)
-            .background(
-                Circle()
-                    .fill(backgroundColor)
-            )
-            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
-            .appleCardShadow(elevation: .medium)
-    }
-}
-
-struct MapControlButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Enhanced Card Style
-
-struct AppleCardStyle: ViewModifier {
-    let padding: CGFloat
-    let elevation: ShadowElevation
-    
-    init(padding: CGFloat = 16, elevation: ShadowElevation = .medium) {
-        self.padding = padding
-        self.elevation = elevation
-    }
-    
-    func body(content: Content) -> some View {
-        content
-            .padding(padding)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.regularMaterial)
-            )
-            .appleCardShadow(elevation: elevation)
-    }
-}
-
-extension View {
-    func appleCard(padding: CGFloat = 16, elevation: ShadowElevation = .medium) -> some View {
-        modifier(AppleCardStyle(padding: padding, elevation: elevation))
-    }
-}
-
-// MARK: - Enhanced Loading States
-
-struct AppleProgressView: View {
-    let title: String
-    let subtitle: String?
-    let tint: Color
-    
-    init(_ title: String, subtitle: String? = nil, tint: Color = .blue) {
-        self.title = title
-        self.subtitle = subtitle
-        self.tint = tint
-    }
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.2)
-                .tint(tint)
-            
-            VStack(spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                
-                if let subtitle = subtitle {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.regularMaterial)
-        )
-        .appleCardShadow(elevation: .medium)
-    }
-}
-
-// MARK: - Enhanced Empty States
-
-struct AppleEmptyState: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let actionTitle: String?
-    let action: (() -> Void)?
-    
-    init(
-        icon: String,
-        title: String,
-        subtitle: String,
-        actionTitle: String? = nil,
-        action: (() -> Void)? = nil
-    ) {
-        self.icon = icon
-        self.title = title
-        self.subtitle = subtitle
-        self.actionTitle = actionTitle
-        self.action = action
-    }
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            VStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 64, weight: .ultraLight))
-                    .foregroundColor(.secondary)
-                
-                VStack(spacing: 8) {
-                    Text(title)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                    
-                    Text(subtitle)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                }
-            }
-            
-            if let actionTitle = actionTitle, let action = action {
-                Button(action: action) {
-                    Text(actionTitle)
-                }
-                .buttonStyle(ApplePrimaryButtonStyle())
-                .frame(maxWidth: 200)
-            }
-        }
-        .padding(.horizontal, 32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 struct RoundedCorner: Shape {
@@ -2054,22 +1514,22 @@ struct RoundedCorner: Shape {
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+    struct ContentView_Previews: PreviewProvider {
+        static var previews: some View {
+            ContentView()
+        }
     }
-}
 
-func styleForMapType(_ type: String) -> MapStyle {
-    switch type {
-    case "Satellite":
-        return .imagery
-    case "Hybrid":
-        return .hybrid
-    default:
-        return .standard
+    func styleForMapType(_ type: String) -> MapStyle {
+        switch type {
+        case "Satellite":
+            return .imagery
+        case "Hybrid":
+            return .hybrid
+        default:
+            return .standard
+        }
     }
-}
 
 
 

@@ -348,53 +348,29 @@ struct PinCardView: View {
                     .foregroundColor(.gray)
                 }
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.regularMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(.quaternary, lineWidth: 0.5)
-                    )
-            )
-            .shadow(
-                color: .black.opacity(hasReviewOrMedia ? 0.15 : 0.08),
-                radius: hasReviewOrMedia ? 8 : 4,
-                x: 0,
-                y: hasReviewOrMedia ? 4 : 2
-            )
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(14)
+            .shadow(color: Color.black.opacity(hasReviewOrMedia ? 0.12 : 0.05), radius: hasReviewOrMedia ? 5 : 2, x: 0, y: 2)
 
             // Add to List button (only for non-current user pins)
             if !isCurrentUserAuthor {
                 Button(action: {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                    impactFeedback.impactOccurred()
                     print("Add to List tapped for \(pin.locationName)")
                     showAddToList = true
                 }) {
                     ZStack {
                         Circle()
-                            .fill(.blue)
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                Circle()
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
+                            .fill(Color.blue)
+                            .frame(width: 32, height: 32)
                         Image(systemName: "plus")
                             .foregroundColor(.white)
                             .font(.system(size: 18, weight: .bold))
                     }
                 }
-                .padding(12)
-                .shadow(
-                    color: .blue.opacity(0.3),
-                    radius: 8,
-                    x: 0,
-                    y: 4
-                )
-                .scaleEffect(1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showAddToList)
-                .buttonStyle(PinCardButtonStyle())
+                .padding(10)
+                .shadow(radius: 2)
+                .buttonStyle(.plain)
             }
         }
         .sheet(isPresented: $showAddToList) {
@@ -581,16 +557,5 @@ struct AddToListSheet: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Button Styles
-
-struct PinCardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }

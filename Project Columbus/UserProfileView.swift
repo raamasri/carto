@@ -403,14 +403,21 @@ struct UserProfileView: View {
                                         }
                                     }
                                     
-                                    // Enhanced loading indicator while pins are being fetched
+                                    // Loading indicator while pins are being fetched
                                     if pinStore.isLoading {
-                                        AppleProgressView(
-                                            "Loading pins...",
-                                            subtitle: "Fetching your saved locations",
-                                            tint: .blue
-                                        )
-                                        .padding(.horizontal)
+                                        VStack {
+                                            ProgressView()
+                                                .scaleEffect(1.2)
+                                                .tint(.blue)
+                                            Text("Loading pins...")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                                .padding(.top, 8)
+                                        }
+                                        .padding()
+                                        .background(.ultraThinMaterial)
+                                        .cornerRadius(12)
+                                        .shadow(radius: 4)
                                     }
                                 }
                                 
@@ -609,13 +616,9 @@ struct UserProfileView: View {
         print("🧭 Loading UserProfileView for username:", profileUser.username)
         return Group {
             if profileUser.username.isEmpty {
-                // Enhanced loading state while placeholder data is present
-                AppleProgressView(
-                    "Loading Profile…",
-                    subtitle: "Fetching user information",
-                    tint: .blue
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Loading state while placeholder data is present
+                ProgressView("Loading Profile…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 16) {
                     profileHeader
@@ -1249,19 +1252,30 @@ struct UserListsView: View {
             
             if isLoading {
                 let _ = print("🔄 Showing loading state")
-                AppleProgressView(
-                    "Loading lists...",
-                    subtitle: "Fetching user's collections",
-                    tint: .blue
-                )
+                VStack {
+                    ProgressView("Loading lists...")
+                    Spacer()
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if filteredLists.isEmpty {
                 let _ = print("📂 Showing empty state")
-                AppleEmptyState(
-                    icon: "folder.badge.plus",
-                    title: isCurrentUser ? "No Lists Yet" : "No Public Lists",
-                    subtitle: isCurrentUser ? "Start organizing your pins by creating lists!" : "This user hasn't created any public lists yet."
-                )
+                VStack(spacing: 20) {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                    
+                    Text(isCurrentUser ? "No Lists Yet" : "No Public Lists")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text(isCurrentUser ? "Start organizing your pins by creating lists!" : "This user hasn't created any public lists yet.")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Spacer()
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let _ = print("📋 Showing list state with \(filteredLists.count) lists")
