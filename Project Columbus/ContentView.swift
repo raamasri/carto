@@ -312,6 +312,22 @@ struct MainMapView: View {
                 tripName: nil
             )
         }
+        
+        /// Creates the content to share when the share button is tapped
+        private var shareContent: String {
+            let placeName = mapItem.name ?? "Unknown Place"
+            let address = mapItem.placemark.title ?? "No address available"
+            let coordinate = mapItem.placemark.coordinate
+            let mapsURL = "https://maps.apple.com/?q=\(coordinate.latitude),\(coordinate.longitude)"
+            
+            return """
+            Check out this place I found: \(placeName)
+            
+            📍 \(address)
+            
+            🗺️ View on Maps: \(mapsURL)
+            """
+        }
 
         private var mainPopupContent: some View {
             VStack(alignment: .leading, spacing: 8) {
@@ -334,31 +350,16 @@ struct MainMapView: View {
                 Text(mapItem.name ?? "Unknown Place")
                     .font(.title.bold())
                     .lineLimit(1)
-                    .padding(.trailing, 100)
+                    .padding(.trailing, 50)
 
-                HStack(spacing: 10) {
-                    Button(action: {
-                        let placemark = mapItem.placemark
-                        let mapItem = MKMapItem(placemark: placemark)
-                        mapItem.name = placemark.name
-                        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
-                    }) {
-                        Image(systemName: "arrow.turn.up.right")
-                            .foregroundColor(.white)
-                            .padding(10)
-                            .background(Color.blue)
-                            .clipShape(Circle())
-                    }
-
-                    Button(action: {
-                        showPOISheet = false
-                    }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.white)
-                            .padding(10)
-                            .background(Color.gray)
-                            .clipShape(Circle())
-                    }
+                Button(action: {
+                    showPOISheet = false
+                }) {
+                    Image(systemName: "xmark")
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(Color.gray)
+                        .clipShape(Circle())
                 }
             }
         }
@@ -397,6 +398,32 @@ struct MainMapView: View {
                 }
                 .padding(.leading)
                 Spacer()
+                
+                // Share button
+                ShareLink(item: shareContent) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(Color.orange)
+                        .clipShape(Circle())
+                }
+                
+                // Directions button (existing arrow button functionality)
+                Button(action: {
+                    let placemark = mapItem.placemark
+                    let mapItem = MKMapItem(placemark: placemark)
+                    mapItem.name = placemark.name
+                    mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+                }) {
+                    Image(systemName: "arrow.turn.up.right")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                }
+                
                 Button("Show More") {
                     showFullPOIView = true
                 }

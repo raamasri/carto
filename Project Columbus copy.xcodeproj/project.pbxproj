@@ -449,14 +449,14 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.69.3.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
+							MARKETING_VERSION = 0.69.3.6;
+			PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_VERSION = 5.0;
+			TARGETED_DEVICE_FAMILY = "1,2";
+		};
+		name = Debug;
 		};
 		38BB88612D8766DA00D84636 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -487,14 +487,14 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.69.3.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
+							MARKETING_VERSION = 0.69.3.6;
+			PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_VERSION = 5.0;
+			TARGETED_DEVICE_FAMILY = "1,2";
+		};
+		name = Release;
 		};
 		38BB88632D8766DA00D84636 /* Debug */ = {
 			isa = XCBuildConfiguration;
