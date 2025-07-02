@@ -10,6 +10,7 @@ import SwiftUI
 import MapKit
 import Foundation
 import AVKit
+import PhotosUI
 // Pin is defined in Models.swift in the same module
 
 struct PinCardView: View {
@@ -20,14 +21,41 @@ struct PinCardView: View {
     @State private var showFriendReviewList = false
     @State private var friends: [AppUser] = []
     @State private var isLoadingFriends = false
+    @State private var showLocationDetail = false
+    @State private var selectedPhotoIndex = 0
+    @State private var showAddPhotoSheet = false
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var locationManager: AppLocationManager
 
     // Helper: Relative date string
     private var relativeDateString: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         return formatter.localizedString(for: pin.createdAt, relativeTo: Date())
+    }
+
+    // Helper: Calculate distance from current location
+    private var distanceFromUser: String? {
+        guard let currentLocation = locationManager.currentLocation else { return nil }
+        let pinLocation = CLLocation(latitude: pin.latitude, longitude: pin.longitude)
+        let distance = currentLocation.distance(from: pinLocation)
+        
+        // Convert to miles and format
+        let miles = distance * 0.000621371
+        if miles < 0.1 {
+            return "< 0.1mi"
+        } else if miles < 10 {
+            return String(format: "%.1fmi", miles)
+        } else {
+            return String(format: "%.0fmi", miles)
+        }
+    }
+
+    // Helper: Check if current user is the author
+    private var isCurrentUserAuthor: Bool {
+        guard let currentUsername = authManager.currentUsername else { return false }
+        return pin.authorHandle.contains(currentUsername)
     }
 
     // Helper: Styled review text with mentions
@@ -115,7 +143,7 @@ struct PinCardView: View {
         return Group {
             if isLoadingFriends {
                 ProgressView().frame(width: 24, height: 24)
-            } else {
+            } else if count > 0 {
                 FriendAvatarsRowContent(
                     friendPins: friendPins,
                     count: count,
@@ -144,123 +172,157 @@ struct PinCardView: View {
         (pin.reviewText?.isEmpty == false) || !(pin.mediaURLs?.isEmpty ?? true)
     }
 
-    private var miniMap: some View {
-        Map(
-            coordinateRegion: .constant(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
-                span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
-            )),
-            annotationItems: [pin]
-        ) { pin in
-            MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                Image(systemName: "mappin.circle.fill")
-                    .resizable()
-                    .frame(width: 22, height: 22)
-                    .foregroundColor(.red)
-                    .shadow(radius: 2)
-            }
-        }
-        .frame(width: 60, height: 60)
-        .cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.blue, lineWidth: 2))
-        .onTapGesture { showFullMap = true }
-        .sheet(isPresented: $showFullMap) {
-            VStack {
-                Map(
-                    coordinateRegion: .constant(MKCoordinateRegion(
-                        center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
-                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                    )),
-                    annotationItems: [pin]
-                ) { pin in
-                    MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                        Image(systemName: "mappin.circle.fill")
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                            .foregroundColor(.red)
-                            .shadow(radius: 3)
+    // Enhanced header with rating, distance, and MAP button
+    private var enhancedHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(pin.locationName)
+                        .font(.headline)
+                        .lineLimit(2)
+                    
+                    if let rating = pin.starRating {
+                        HStack(spacing: 2) {
+                            Text(String(format: "%.1f", rating))
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                            Image(systemName: "star.fill")
+                                .font(.caption)
+                                .foregroundColor(.yellow)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.yellow.opacity(0.1))
+                        .cornerRadius(6)
                     }
                 }
-                .edgesIgnoringSafeArea(.all)
-                Button("Close") { showFullMap = false }
-                    .padding()
+                
+                HStack(spacing: 8) {
+                    Text(pin.city)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    if let distance = distanceFromUser {
+                        HStack(spacing: 2) {
+                            Image(systemName: "location")
+                                .font(.caption2)
+                            Text(distance)
+                                .font(.caption)
+                        }
+                        .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // MAP button
+            Button(action: {
+                showLocationDetail = true
+            }) {
+                Text("MAP")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.blue)
+                    .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // Enhanced photo carousel with add photo functionality
+    private var photoCarousel: some View {
+        Group {
+            if let media = pin.mediaURLs, !media.isEmpty {
+                ZStack(alignment: .bottomTrailing) {
+                    TabView(selection: $selectedPhotoIndex) {
+                        ForEach(Array(media.enumerated()), id: \.offset) { index, urlString in
+                            if urlString.hasSuffix(".mp4"), let url = URL(string: urlString) {
+                                VideoPlayer(player: AVPlayer(url: url))
+                                    .aspectRatio(16/9, contentMode: .fit)
+                                    .clipped()
+                                    .tag(index)
+                            } else if let url = URL(string: urlString) {
+                                AsyncImage(url: url) { phase in
+                                    if let image = phase.image {
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .clipped()
+                                    } else {
+                                        Color.gray
+                                    }
+                                }
+                                .tag(index)
+                            } else {
+                                Color.gray.tag(index)
+                            }
+                        }
+                    }
+                    .frame(height: 220)
+                    .tabViewStyle(.page(indexDisplayMode: .always))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    
+                    // Photo + button (only for current user's pins)
+                    if isCurrentUserAuthor {
+                        Button(action: {
+                            showAddPhotoSheet = true
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "photo")
+                                    .font(.caption)
+                                Text("+")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(8)
+                    }
+                }
             }
         }
     }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            VStack(alignment: .leading, spacing: 14) {
-                // Header: Place, city, star, mini map
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(pin.locationName)
-                                .font(.headline)
-                            if let rating = pin.starRating {
-                                Text("\(String(format: "%.1f", rating)) ★")
-                                    .font(.subheadline).bold()
-                                    .foregroundColor(.yellow)
-                            }
-                        }
-                        Text(pin.city)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    miniMap
-                }
-                // Avatars row (if any)
+            VStack(alignment: .leading, spacing: 12) {
+                // Enhanced header with rating, distance, MAP button
+                enhancedHeader
+                
+                // Friends avatars row (if any)
                 friendsAvatarsRow
-                // Minimal card (just a pin, no review/media)
-                if !hasReviewOrMedia {
+                
+                // Review text (expanded)
+                if let review = pin.reviewText, !review.isEmpty {
+                    styledReview(review)
+                        .font(.body)
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(nil) // Allow full expansion
+                        .padding(.vertical, 4)
+                }
+                
+                // Enhanced photo carousel
+                photoCarousel
+                
+                // Trip tag and timestamp
+                HStack(spacing: 8) {
+                    tripTag
                     Text(relativeDateString)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    Spacer()
                 }
-                // Full card (review/media)
-                if hasReviewOrMedia {
-                    if let review = pin.reviewText, !review.isEmpty {
-                        styledReview(review)
-                            .font(.body)
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 2)
-                    }
-                    if let media = pin.mediaURLs, !media.isEmpty {
-                        TabView {
-                            ForEach(media, id: \.self) { urlString in
-                                if urlString.hasSuffix(".mp4"), let url = URL(string: urlString) {
-                                    VideoPlayer(player: AVPlayer(url: url))
-                                        .aspectRatio(16/9, contentMode: .fit)
-                                        .clipped()
-                                } else if let url = URL(string: urlString) {
-                                    AsyncImage(url: url) { phase in
-                                        if let image = phase.image {
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .clipped()
-                                        } else {
-                                            Color.gray
-                                        }
-                                    }
-                                } else {
-                                    Color.gray
-                                }
-                            }
-                        }
-                        .frame(height: 220)
-                        .tabViewStyle(.page)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    HStack(spacing: 8) {
-                        tripTag
-                        Text(relativeDateString)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
+                
                 // Action icons and author
                 HStack {
                     Text(pin.authorHandle)
@@ -281,29 +343,41 @@ struct PinCardView: View {
             .cornerRadius(14)
             .shadow(color: Color.black.opacity(hasReviewOrMedia ? 0.12 : 0.05), radius: hasReviewOrMedia ? 5 : 2, x: 0, y: 2)
 
-            // Add to List button
-            Button(action: {
-                print("Add to List tapped for \(pin.locationName)")
-                showAddToList = true
-            }) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "plus")
-                        .foregroundColor(.white)
-                        .font(.system(size: 18, weight: .bold))
+            // Add to List button (only for non-current user pins)
+            if !isCurrentUserAuthor {
+                Button(action: {
+                    print("Add to List tapped for \(pin.locationName)")
+                    showAddToList = true
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "plus")
+                            .foregroundColor(.white)
+                            .font(.system(size: 18, weight: .bold))
+                    }
                 }
+                .padding(10)
+                .shadow(radius: 2)
+                .buttonStyle(.plain)
             }
-            .padding(10)
-            .shadow(radius: 2)
-            .buttonStyle(.plain)
         }
         .sheet(isPresented: $showAddToList) {
             AddToListSheet(pin: pin) { list in
                 pinStore.addPin(pin, to: list)
                 showAddedAlert = true
             }
+        }
+        .sheet(isPresented: $showLocationDetail) {
+            LocationDetailView(
+                mapItem: pin.toMapItem(),
+                onAddPin: { _ in }
+            )
+            .environmentObject(pinStore)
+        }
+        .sheet(isPresented: $showAddPhotoSheet) {
+            AddPhotoToExistingPinSheet(pin: pin)
         }
         .alert("Added to List!", isPresented: $showAddedAlert) {
             Button("OK", role: .cancel) { }
@@ -328,6 +402,88 @@ struct PinCardView: View {
                 allPins: pinStore.masterPins,
                 friends: friends
             )
+        }
+    }
+}
+
+// MARK: - Add Photo to Existing Pin Sheet
+struct AddPhotoToExistingPinSheet: View {
+    let pin: Pin
+    @Environment(\.dismiss) var dismiss
+    @State private var showingPhotoPicker = false
+    @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var isUploading = false
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("Add Photos to \(pin.locationName)")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .multilineTextAlignment(.center)
+                
+                Text("Add more photos or videos to this location")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                Button(action: {
+                    showingPhotoPicker = true
+                }) {
+                    HStack {
+                        Image(systemName: "photo.on.rectangle.angled")
+                        Text("Select Photos")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .cornerRadius(12)
+                }
+                
+                if isUploading {
+                    ProgressView("Uploading photos...")
+                        .padding()
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Add Photos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .photosPicker(
+            isPresented: $showingPhotoPicker,
+            selection: $selectedItems,
+            maxSelectionCount: 5,
+            matching: .any(of: [.images, .videos])
+        )
+        .onChange(of: selectedItems) { _, newItems in
+            if !newItems.isEmpty {
+                uploadPhotos(newItems)
+            }
+        }
+    }
+    
+    private func uploadPhotos(_ items: [PhotosPickerItem]) {
+        isUploading = true
+        // TODO: Implement photo upload functionality
+        // This would involve:
+        // 1. Converting PhotosPickerItems to Data
+        // 2. Uploading to Supabase Storage
+        // 3. Updating the pin's mediaURLs array
+        // 4. Refreshing the pin store
+        
+        // For now, just simulate upload
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            isUploading = false
+            dismiss()
         }
     }
 }

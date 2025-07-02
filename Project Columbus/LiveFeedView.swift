@@ -12,6 +12,7 @@ struct LiveFeedView: View {
     @State private var followingUsers: [AppUser] = []
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var locationManager: AppLocationManager
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -57,6 +58,8 @@ struct LiveFeedView: View {
                                     ) {
                                         PinCardView(pin: pin)
                                             .environmentObject(pinStore)
+                                            .environmentObject(authManager)
+                                            .environmentObject(locationManager)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -80,6 +83,8 @@ struct LiveFeedView: View {
                             ) {
                                 PinCardView(pin: pin)
                                     .environmentObject(pinStore)
+                                    .environmentObject(authManager)
+                                    .environmentObject(locationManager)
                             }
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -151,6 +156,8 @@ struct LiveFeedView: View {
                                             ) {
                                                 PinCardView(pin: pin)
                                                     .environmentObject(pinStore)
+                                                    .environmentObject(authManager)
+                                                    .environmentObject(locationManager)
                                             }
                                             .buttonStyle(.plain)
                                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -205,6 +212,8 @@ struct LiveFeedView: View {
                             ) {
                                 PinCardView(pin: pin)
                                     .environmentObject(pinStore)
+                                    .environmentObject(authManager)
+                                    .environmentObject(locationManager)
                             }
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
