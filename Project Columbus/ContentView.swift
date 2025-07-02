@@ -350,16 +350,42 @@ struct MainMapView: View {
                 Text(mapItem.name ?? "Unknown Place")
                     .font(.title.bold())
                     .lineLimit(1)
-                    .padding(.trailing, 50)
+                    .padding(.trailing, 150)
 
-                Button(action: {
-                    showPOISheet = false
-                }) {
-                    Image(systemName: "xmark")
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(Color.gray)
-                        .clipShape(Circle())
+                HStack(spacing: 10) {
+                    // Share Button
+                    ShareLink(item: shareContent) {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(Color.orange)
+                            .clipShape(Circle())
+                    }
+                    
+                    // Directions Button
+                    Button(action: {
+                        let placemark = mapItem.placemark
+                        let mapItem = MKMapItem(placemark: placemark)
+                        mapItem.name = placemark.name
+                        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+                    }) {
+                        Image(systemName: "arrow.turn.up.right")
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(Color.blue)
+                            .clipShape(Circle())
+                    }
+                    
+                    // Close Button
+                    Button(action: {
+                        showPOISheet = false
+                    }) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(Color.gray)
+                            .clipShape(Circle())
+                    }
                 }
             }
         }
@@ -398,32 +424,6 @@ struct MainMapView: View {
                 }
                 .padding(.leading)
                 Spacer()
-                
-                // Share button
-                ShareLink(item: shareContent) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .padding(8)
-                        .background(Color.orange)
-                        .clipShape(Circle())
-                }
-                
-                // Directions button (existing arrow button functionality)
-                Button(action: {
-                    let placemark = mapItem.placemark
-                    let mapItem = MKMapItem(placemark: placemark)
-                    mapItem.name = placemark.name
-                    mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
-                }) {
-                    Image(systemName: "arrow.turn.up.right")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .padding(8)
-                        .background(Color.blue)
-                        .clipShape(Circle())
-                }
-                
                 Button("Show More") {
                     showFullPOIView = true
                 }
