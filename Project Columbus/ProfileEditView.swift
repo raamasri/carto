@@ -162,15 +162,15 @@ struct ProfileEditView: View {
                                             .foregroundColor(.secondary)
                                         TextField("Enter username", text: $username)
                                             .textFieldStyle(RoundedBorderTextFieldStyle())
-                                            .autocapitalization(.none)
-                                            .disableAutocorrection(true)
-                                    }
-                                    
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
+                        
                                     VStack(alignment: .leading, spacing: 8) {
                                         Text("Bio")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
-                                        TextEditor(text: $bio)
+                            TextEditor(text: $bio)
                                             .frame(minHeight: 80)
                                             .padding(8)
                                             .background(Color(.systemGray6))
@@ -274,17 +274,17 @@ struct ProfileEditView: View {
                                 .shadow(radius: 2)
                                 
                                 // Save Button
-                                Button(action: saveProfile) {
-                                    HStack {
-                                        if isUpdating {
-                                            ProgressView()
-                                                .scaleEffect(0.8)
-                                                .padding(.trailing, 8)
-                                        }
-                                        Text(isUpdating ? "Saving..." : "Save Changes")
+                            Button(action: saveProfile) {
+                                HStack {
+                                    if isUpdating {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                            .padding(.trailing, 8)
+                                    }
+                                    Text(isUpdating ? "Saving..." : "Save Changes")
                                             .fontWeight(.semibold)
                                     }
-                                    .frame(maxWidth: .infinity)
+                                        .frame(maxWidth: .infinity)
                                     .padding()
                                     .background(username.isEmpty ? Color.gray : Color.blue)
                                     .foregroundColor(.white)

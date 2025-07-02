@@ -48,7 +48,7 @@ final class ImageCache: ObservableObject {
         setupCache()
         schedulePeriodicCleanup()
     }
-    
+
     // MARK: - Setup
     private func setupCache() {
         memoryCache.totalCostLimit = maxMemoryCacheSize
@@ -163,7 +163,7 @@ final class ImageCache: ObservableObject {
         }
         return image
     }
-    
+
     private func saveImageToDisk(_ image: PlatformImage, key: String) {
         let fileURL = diskDirectory.appendingPathComponent(key)
         

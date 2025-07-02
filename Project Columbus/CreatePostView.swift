@@ -59,14 +59,14 @@ struct CreatePostView: View {
                             .foregroundColor(.primary)
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            TextField("Search for a place", text: $placeName)
+                    TextField("Search for a place", text: $placeName)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .focused($isPlaceFieldFocused)
-                                .onChange(of: placeName) { oldValue, newValue in
-                                    completer.queryFragment = newValue
-                                }
-                            
-                            if isPlaceFieldFocused && !searchResults.isEmpty {
+                        .focused($isPlaceFieldFocused)
+                        .onChange(of: placeName) { oldValue, newValue in
+                            completer.queryFragment = newValue
+                        }
+                    
+                    if isPlaceFieldFocused && !searchResults.isEmpty {
                                 VStack(spacing: 0) {
                                     ForEach(searchResults, id: \.self) { completion in
                                         Button(action: {
@@ -89,22 +89,22 @@ struct CreatePostView: View {
                                         .background(Color(.systemGray6))
                                         
                                         if completion != searchResults.last {
-                                            Divider()
-                                        }
+                                        Divider()
                                     }
-                                }
-                                .background(Color(.systemBackground))
-                                .cornerRadius(8)
-                                .shadow(radius: 2)
-                            }
-                            
-                            Button {
-                                useCurrentLocation()
-                            } label: {
-                                Label("Use Current Location", systemImage: "location.circle")
-                                    .foregroundColor(.blue)
                             }
                         }
+                                .background(Color(.systemBackground))
+                        .cornerRadius(8)
+                                .shadow(radius: 2)
+                    }
+                    
+                    Button {
+                        useCurrentLocation()
+                    } label: {
+                        Label("Use Current Location", systemImage: "location.circle")
+                            .foregroundColor(.blue)
+                    }
+                }
                     }
                     .padding()
                     .background(Color(.systemBackground))
@@ -158,19 +158,19 @@ struct CreatePostView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                             
-                            HStack {
-                                ForEach(1..<11) { star in
-                                    Image(systemName: star <= rating ? "star.fill" : "star")
-                                        .foregroundColor(.yellow)
+                    HStack {
+                        ForEach(1..<11) { star in
+                            Image(systemName: star <= rating ? "star.fill" : "star")
+                                .foregroundColor(.yellow)
                                         .font(.title3)
-                                        .onTapGesture {
+                                .onTapGesture {
                                             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                                rating = star
-                                            }
-                                        }
+                                        rating = star
+                                    }
                                 }
-                                Spacer()
-                                Text("\(rating)/10")
+                        }
+                        Spacer()
+                        Text("\(rating)/10")
                                     .foregroundColor(.secondary)
                                     .font(.subheadline)
                             }
@@ -183,14 +183,14 @@ struct CreatePostView: View {
                                 .foregroundColor(.secondary)
                             TextField("e.g., Weekend Getaway, Business Trip", text: $tripName)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                        }
                     }
+                }
                     .padding()
                     .background(Color(.systemBackground))
                     .cornerRadius(12)
                     .shadow(radius: 2)
-                    
-                    // MARK: - Recommendation Section
+                
+                // MARK: - Recommendation Section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Recommendation")
                             .font(.headline)
@@ -198,24 +198,24 @@ struct CreatePostView: View {
                         
                         Toggle("Recommend this place", isOn: $recommendation)
                         
-                        if recommendation {
+                    if recommendation {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Recommended To")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 
-                                Picker("Recommended To", selection: $recommendedTo) {
-                                    ForEach(recommendedOptions, id: \.self) { option in
-                                        Text(option)
-                                    }
-                                }
-                                .pickerStyle(SegmentedPickerStyle())
-                                
+                        Picker("Recommended To", selection: $recommendedTo) {
+                            ForEach(recommendedOptions, id: \.self) { option in
+                                Text(option)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+
                                 Text("Why do you recommend this place?")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 
-                                TextEditor(text: $recommendationComment)
+                        TextEditor(text: $recommendationComment)
                                     .frame(minHeight: 80)
                                     .padding(8)
                                     .background(Color(.systemGray6))
@@ -227,16 +227,16 @@ struct CreatePostView: View {
                     .background(Color(.systemBackground))
                     .cornerRadius(12)
                     .shadow(radius: 2)
-                    
-                    // MARK: - Post Content Section
+                
+                // MARK: - Post Content Section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Your Experience")
                             .font(.headline)
                             .foregroundColor(.primary)
                         
-                        ZStack(alignment: .topLeading) {
-                            TextEditor(text: $postContent)
-                                .focused($isPostContentFocused)
+                    ZStack(alignment: .topLeading) {
+                        TextEditor(text: $postContent)
+                            .focused($isPostContentFocused)
                                 .frame(minHeight: 120)
                                 .padding(8)
                                 .background(Color(.systemGray6))
@@ -250,7 +250,7 @@ struct CreatePostView: View {
                                     .allowsHitTesting(false)
                             }
                         }
-                    }
+                            }
                     .padding()
                     .background(Color(.systemBackground))
                     .cornerRadius(12)
@@ -268,19 +268,19 @@ struct CreatePostView: View {
                                 maxSelectionCount: 10,
                                 matching: .images
                             ) {
-                                HStack {
-                                    Image(systemName: "photo.on.rectangle")
-                                        .font(.title2)
+                        HStack {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.title2)
                                     Text("Add Photos")
                                         .fontWeight(.medium)
-                                }
-                                .padding()
-                                .frame(maxWidth: .infinity)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
                                 .background(Color.blue.opacity(0.1))
-                                .foregroundColor(.blue)
-                                .cornerRadius(10)
-                            }
-                            
+                        .foregroundColor(.blue)
+                        .cornerRadius(10)
+                    }
+                    
                             Button {
                                 showingVideoPicker = true
                             } label: {
@@ -300,13 +300,13 @@ struct CreatePostView: View {
                         
                         // Display selected media
                         if !selectedImages.isEmpty || !selectedVideos.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
+                        ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 12) {
                                     // Display images
                                     ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
                                         ZStack(alignment: .topTrailing) {
-                                            Image(uiImage: image)
-                                                .resizable()
+                                    Image(uiImage: image)
+                                        .resizable()
                                                 .scaledToFill()
                                                 .frame(width: 100, height: 100)
                                                 .cornerRadius(8)
@@ -328,7 +328,7 @@ struct CreatePostView: View {
                                     ForEach(Array(selectedVideos.enumerated()), id: \.offset) { index, videoURL in
                                         ZStack(alignment: .topTrailing) {
                                             VideoPlayer(player: AVPlayer(url: videoURL))
-                                                .frame(width: 100, height: 100)
+                                        .frame(width: 100, height: 100)
                                                 .cornerRadius(8)
                                                 .clipped()
                                             
@@ -342,12 +342,12 @@ struct CreatePostView: View {
                                             }
                                             .padding(4)
                                         }
-                                    }
                                 }
-                                .padding(.vertical, 4)
                             }
+                            .padding(.vertical, 4)
                         }
                     }
+                }
                     .padding()
                     .background(Color(.systemBackground))
                     .cornerRadius(12)
@@ -371,8 +371,8 @@ struct CreatePostView: View {
                     .background(Color(.systemBackground))
                     .cornerRadius(12)
                     .shadow(radius: 2)
-                    
-                    // MARK: - Submit Button
+                
+                // MARK: - Submit Button
                     Button(action: createPost) {
                         HStack {
                             if isCreatingPost {
@@ -381,12 +381,12 @@ struct CreatePostView: View {
                                     .padding(.trailing, 8)
                             }
                             Text(isCreatingPost ? "Creating Post..." : "Create Post")
-                                .fontWeight(.semibold)
+                            .fontWeight(.semibold)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
+                            .frame(maxWidth: .infinity)
+                            .padding()
                         .background(isFormValid && !isCreatingPost ? Color.blue : Color.gray)
-                        .foregroundColor(.white)
+                            .foregroundColor(.white)
                         .cornerRadius(12)
                     }
                     .disabled(!isFormValid || isCreatingPost)
@@ -402,8 +402,8 @@ struct CreatePostView: View {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }
+                }
             }
-        }
         .onChange(of: selectedPhotoItems) { _, newItems in
             Task {
                 await loadSelectedPhotos(newItems)
@@ -432,15 +432,15 @@ struct CreatePostView: View {
     // MARK: - Helper Functions
     
     private func setupLocationServices() {
-        completer.resultTypes = [.address, .pointOfInterest]
-        completer.region = locationManager.region
-        let wrapper = SearchCompleterDelegateWrapper { completions in
-            searchResults = completions
+            completer.resultTypes = [.address, .pointOfInterest]
+            completer.region = locationManager.region
+            let wrapper = SearchCompleterDelegateWrapper { completions in
+                searchResults = completions
+            }
+            completerDelegateWrapper = wrapper
+            completer.delegate = wrapper
+            mapRegion = locationManager.region
         }
-        completerDelegateWrapper = wrapper
-        completer.delegate = wrapper
-        mapRegion = locationManager.region
-    }
     
     private func selectPlace(_ completion: MKLocalSearchCompletion) {
         isPlaceFieldFocused = false
@@ -457,8 +457,8 @@ struct CreatePostView: View {
                         center: mapItem.placemark.coordinate,
                         span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                     )
-                }
-            }
+        }
+    }
         }
     }
     
@@ -634,11 +634,11 @@ class SearchCompleterDelegateWrapper: NSObject, MKLocalSearchCompleterDelegate {
 struct VideoPickerView: UIViewControllerRepresentable {
     @Binding var selectedVideos: [URL]
     @Environment(\.presentationMode) var presentationMode
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var configuration = PHPickerConfiguration()
         configuration.selectionLimit = 5 // Limit video selection
@@ -647,20 +647,20 @@ struct VideoPickerView: UIViewControllerRepresentable {
         picker.delegate = context.coordinator
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
-    
+
     class Coordinator: NSObject, PHPickerViewControllerDelegate {
         var parent: VideoPickerView
-        
+
         init(_ parent: VideoPickerView) {
             self.parent = parent
         }
-        
+
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             parent.selectedVideos = []
             let dispatchGroup = DispatchGroup()
-            
+
             for result in results {
                 dispatchGroup.enter()
                 if result.itemProvider.hasItemConformingToTypeIdentifier("public.movie") {
@@ -683,7 +683,7 @@ struct VideoPickerView: UIViewControllerRepresentable {
                     dispatchGroup.leave()
                 }
             }
-            
+
             dispatchGroup.notify(queue: .main) {
                 picker.dismiss(animated: true)
             }

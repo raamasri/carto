@@ -29,7 +29,7 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
     private var lastLocationUpdate: Date = Date()
     private let minimumUpdateInterval: TimeInterval = 30 // 30 seconds
     private let minimumDistanceThreshold: CLLocationDistance = 10 // 10 meters
-    
+
     override init() {
         super.init()
         manager.delegate = self
@@ -82,7 +82,7 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
     }
     
     // MARK: - CLLocationManagerDelegate
-    
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         

@@ -288,7 +288,7 @@ class DataManager: ObservableObject {
             let endIndex = min(startIndex + pageSize, cachedPins.count)
             
             if startIndex >= cachedPins.count {
-                return []
+        return []
             }
             
             await MainActor.run {

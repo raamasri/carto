@@ -375,7 +375,7 @@ struct MainMapView: View {
                             .background(Color.blue)
                             .clipShape(Circle())
                     }
-                    
+
                     // Close Button
                     Button(action: {
                         showPOISheet = false
@@ -585,14 +585,14 @@ struct MainMapView: View {
 
                 ZStack {
                     ZStack {
-                        Map(position: $cameraPosition, selection: $selectedPinForPopup) {
+                Map(position: $cameraPosition, selection: $selectedPinForPopup) {
                             // Only show pins after initial loading is complete
                             if !pinStore.isLoading {
                                 ForEach(filteredPins, id: \.id) { pin in
                                     Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
                                         MainMapEnhancedPinAnnotation(pin: pin, pinStore: pinStore)
                                     }
-                                    .tag(pin.id)
+                            .tag(pin.id)
                                 }
                             }
                             
@@ -644,9 +644,9 @@ struct MainMapView: View {
                                 .id("filter-panel-\(pinStore.lists.count)") // Force refresh when lists change
                             }
                             .padding()
-                            .background(Color(.systemBackground))
+                            .background(.ultraThinMaterial)
                             .cornerRadius(16, corners: [.topLeft, .topRight])
-                            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: -5)
+                            .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: -4)
                             .padding(.horizontal, 0)
                             .padding(.bottom, 160) // Increased spacing to float above control buttons
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -816,7 +816,7 @@ struct MainMapView: View {
                         .padding(.leading)
 
                         Spacer()
-                        
+
                         // Refresh Button
                         Button(action: {
                             Task {
@@ -885,13 +885,13 @@ struct MainMapView: View {
 
                         Button(action: {
                             // Always recenter on current location when pressed
-                            requestUserLocation()
-                            withAnimation {
-                                if let location = locationManager.location {
-                                    cameraPosition = .region(MKCoordinateRegion(
-                                        center: location,
-                                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                                    ))
+                                requestUserLocation()
+                                withAnimation {
+                                    if let location = locationManager.location {
+                                        cameraPosition = .region(MKCoordinateRegion(
+                                            center: location,
+                                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                        ))
                                 }
                             }
                         }) {

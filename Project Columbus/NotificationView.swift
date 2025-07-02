@@ -74,7 +74,7 @@ struct NotificationView: View {
             }
         }
     }
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -130,7 +130,7 @@ struct NotificationView: View {
                     VStack(spacing: 16) {
                         Image(systemName: selectedTab.icon)
                             .font(.system(size: 48))
-                            .foregroundColor(.gray)
+                                    .foregroundColor(.gray)
                         
                         Text(emptyStateMessage)
                             .font(.headline)

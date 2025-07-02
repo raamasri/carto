@@ -40,11 +40,11 @@ struct ChatView: View {
                                 }
                                 
                                 iMessageBubbleView(
-                                    message: message,
+                                message: message,
                                     isFromCurrentUser: message.senderId.lowercased() == authManager.currentUserID?.lowercased(),
                                     showAvatar: showAvatar,
                                     conversation: conversation
-                                )
+                            )
                             }
                             .id(message.id)
                         }
@@ -147,41 +147,41 @@ struct ChatView: View {
                 .padding(.top, 12)
                 
                 // Text input area
-                HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
                     // Text field container
-                    HStack(spacing: 8) {
+                HStack(spacing: 8) {
                         TextField("iMessage", text: $newMessageText, axis: .vertical)
-                            .focused($isMessageFieldFocused)
+                        .focused($isMessageFieldFocused)
                             .lineLimit(1...6)
                             .font(.body)
-                            .padding(.horizontal, 16)
+                        .padding(.horizontal, 16)
                             .padding(.vertical, 12)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(20)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(20)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
                                     .stroke(Color(.systemGray5), lineWidth: 1)
-                            )
-                    }
-                    
+                        )
+                }
+                
                     // Send button - iMessage style
-                    Button(action: sendMessage) {
+                Button(action: sendMessage) {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
                             .frame(width: 32, height: 32)
-                            .background(
-                                Circle()
+                        .background(
+                            Circle()
                                     .fill(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 
                                           Color(.systemGray3) : 
                                           Color.blue)
-                            )
-                    }
-                    .disabled(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .scaleEffect(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.8 : 1.0)
-                    .animation(.easeInOut(duration: 0.2), value: newMessageText.isEmpty)
+                        )
                 }
-                .padding(.horizontal, 16)
+                .disabled(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .scaleEffect(newMessageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.8 : 1.0)
+                .animation(.easeInOut(duration: 0.2), value: newMessageText.isEmpty)
+            }
+            .padding(.horizontal, 16)
                 .padding(.bottom, 16)
             }
             .background(Color(.systemBackground))
@@ -323,8 +323,8 @@ struct ChatView: View {
             imageData: imageData
         )
         
-        await MainActor.run {
-            if let index = messages.firstIndex(where: { $0.id == optimisticMessage.id }) {
+                await MainActor.run {
+                    if let index = messages.firstIndex(where: { $0.id == optimisticMessage.id }) {
                 messages[index].status = success ? .sent : .failed
             }
         }
