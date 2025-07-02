@@ -9,6 +9,7 @@ struct FriendReviewListView: View {
     let friends: [AppUser]
     @Environment(\.dismiss) var dismiss
     @State private var selectedUser: AppUser? = nil
+    @EnvironmentObject private var pinStore: PinStore
 
     // Filter pins for this place and by friends
     private var friendPins: [(pin: Pin, user: AppUser)] {
@@ -48,6 +49,7 @@ struct FriendReviewListView: View {
             }
             .sheet(item: $selectedUser) { user in
                 UserProfileView(profileUser: user)
+                    .environmentObject(pinStore)
             }
         }
     }

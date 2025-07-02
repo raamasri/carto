@@ -51,7 +51,7 @@ struct SearchView: View {
                             .padding()
                     } else {
                         List(userSearchResults) { user in
-                            NavigationLink(destination: UserProfileView(profileUser: user)) {
+                            NavigationLink(destination: UserProfileView(profileUser: user).environmentObject(pinStore)) {
                                 HStack {
                                     AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
                                         image

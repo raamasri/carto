@@ -20,7 +20,7 @@ struct PinTail: Shape {
     }
 }
 
-/// A map‑pin style annotation that shows the friend’s profile image in a circular pod
+/// A map‑pin style annotation that shows the friend's profile image in a circular pod
 /// with a small tail underneath so it looks like a real map pin.
 struct FriendPinView: View {
     let imageName: String            // system symbol or asset name
@@ -123,7 +123,7 @@ struct FriendHistoryView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text("Alice: Hey, what’s up?")
+                                Text("Alice: Hey, what's up?")
                                     .padding(10)
                                     .background(Color.white.opacity(0.8))
                                     .foregroundColor(.black)
@@ -174,6 +174,7 @@ struct FriendHistoryView: View {
 struct FindFriendsView: View {
     @EnvironmentObject var locationManager: AppLocationManager
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var pinStore: PinStore
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
@@ -414,6 +415,7 @@ struct FindFriendsView: View {
             .sheet(isPresented: $showProfile) {
                 if let user = selectedUser {
                     UserProfileView(profileUser: user)
+                        .environmentObject(pinStore)
                 }
             }
         }

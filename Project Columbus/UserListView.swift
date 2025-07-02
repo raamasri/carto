@@ -5,6 +5,7 @@
 //  Created by raama srivatsan on 4/21/25.
 //
 import SwiftUI
+import Foundation
 
 enum UserListType {
     case followers
@@ -18,10 +19,11 @@ struct UserListView: View {
     @State private var users: [AppUser] = []
     @State private var isLoading = true
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var pinStore: PinStore
     
     var body: some View {
         List(users, id: \.id) { user in
-            NavigationLink(destination: UserProfileView(profileUser: user)) {
+            NavigationLink(destination: UserProfileView(profileUser: user).environmentObject(pinStore)) {
                 HStack {
                     if let avatar = user.avatarURL, !avatar.isEmpty {
                         if let cached = ImageCache.shared.image(forKey: user.id) {
