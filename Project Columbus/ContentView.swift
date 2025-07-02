@@ -383,7 +383,7 @@ struct MainMapView: View {
         private var distanceView: some View {
             Group {
                 if let distance = userLocation.map({ CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)) }) {
-                    Text(String(format: "Distance: %.2f km", distance / 1000))
+                    Text(DistanceFormatter.formatDistanceWithLabel(distance))
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }

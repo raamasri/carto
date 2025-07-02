@@ -20,6 +20,7 @@ struct SettingsView: View {
     @AppStorage("showMyLocation") private var showMyLocation: Bool = true
     @AppStorage("showReactions") private var showReactions: Bool = true
     @AppStorage("useCellularData") private var useCellularData: Bool = true
+    @AppStorage("useImperialUnits") private var useImperialUnits: Bool = true
     
     // Notification Settings
     @AppStorage("friendActivityNotifications") private var friendActivityNotifications: Bool = true
@@ -84,6 +85,11 @@ struct SettingsView: View {
                             // This will trigger UI updates in the map views
                             pinStore.objectWillChange.send()
                         }
+                    
+                    Picker("Distance Units", selection: $useImperialUnits) {
+                        Text("Miles (Imperial)").tag(true)
+                        Text("Kilometers (Metric)").tag(false)
+                    }
                 }
                 
                 // Enhanced Location Privacy Section
@@ -337,6 +343,10 @@ extension UserDefaults {
     static var isPrivateAccount: Bool {
         standard.bool(forKey: "isPrivateAccount")
     }
+    
+    static var useImperialUnits: Bool {
+        standard.object(forKey: "useImperialUnits") as? Bool ?? true
+    }
 }
 
 // Parent view that provides the AuthManager environment object to SettingsView
@@ -350,6 +360,7 @@ struct ParentView: View {
             "showReactions": true,
             "useCellularData": true,
             "isPrivateAccount": false,
+            "useImperialUnits": true,
             "friendActivityNotifications": true,
             "nearbyPinsNotifications": true,
             "newFollowersNotifications": false,

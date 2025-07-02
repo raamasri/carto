@@ -441,7 +441,7 @@ struct PinRowView: View {
                     .foregroundColor(.gray)
                 
                 if let distance = pin.distance {
-                    Text(String(format: "%.1f km", distance))
+                    Text(DistanceFormatter.formatDistanceFromKilometers(distance))
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
