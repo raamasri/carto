@@ -12,7 +12,7 @@ struct CreatePostView: View {
     @State private var placeName: String = ""
     @State private var location: String = ""
     @State private var rating: Int = 0
-    @State private var recommendation: Bool = false
+    @State private var recommendation: Bool? = nil
     @State private var recommendedTo: String = "Everyone"
     private let recommendedOptions = ["Everyone", "Family", "Friends"]
     @State private var postContent: String = ""
@@ -38,6 +38,8 @@ struct CreatePostView: View {
     @State private var reaction: Reaction = .lovedIt
     @State private var tripName: String = ""
     @State private var isPrivatePost: Bool = false
+    @State private var selectedListName: String = ""
+    @State private var newListName: String = ""
     
     @FocusState private var isPlaceFieldFocused: Bool
     @FocusState private var isPostContentFocused: Bool
@@ -118,37 +120,28 @@ struct CreatePostView: View {
                             .foregroundColor(.primary)
                         
                         // Reaction Selection
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("How did you feel about this place?")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            HStack(spacing: 20) {
-                                Button(action: { reaction = .lovedIt }) {
-                                    HStack {
-                                        Image(systemName: "heart.fill")
-                                            .foregroundColor(reaction == .lovedIt ? .white : .red)
-                                        Text("Loved It")
-                                            .foregroundColor(reaction == .lovedIt ? .white : .primary)
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(reaction == .lovedIt ? Color.red : Color(.systemGray6))
-                                    .cornerRadius(20)
+                        HStack(spacing: 16) {
+                            Button(action: { reaction = .lovedIt }) {
+                                HStack {
+                                    Image(systemName: "heart.fill")
+                                    Text("Loved It")
                                 }
-                                
-                                Button(action: { reaction = .wantToGo }) {
-                                    HStack {
-                                        Image(systemName: "bookmark.fill")
-                                            .foregroundColor(reaction == .wantToGo ? .white : .blue)
-                                        Text("Want to Go")
-                                            .foregroundColor(reaction == .wantToGo ? .white : .primary)
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(reaction == .wantToGo ? Color.blue : Color(.systemGray6))
-                                    .cornerRadius(20)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(reaction == .lovedIt ? Color.red : Color(.systemGray5))
+                                .foregroundColor(reaction == .lovedIt ? .white : .primary)
+                                .cornerRadius(20)
+                            }
+                            Button(action: { reaction = .wantToGo }) {
+                                HStack {
+                                    Image(systemName: "bookmark.fill")
+                                    Text("Want to Go")
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(reaction == .wantToGo ? Color.blue : Color(.systemGray5))
+                                .foregroundColor(reaction == .wantToGo ? .white : .primary)
+                                .cornerRadius(20)
                             }
                         }
                         
@@ -190,36 +183,67 @@ struct CreatePostView: View {
                     .cornerRadius(12)
                     .shadow(radius: 2)
                 
+                // MARK: - Add to List Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Add to List")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Picker("Select Existing List", selection: $selectedListName) {
+                        Text("None").tag("")
+                        ForEach(pinStore.lists.map { $0.name }, id: \.self) { listName in
+                            Text(listName).tag(listName)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    
+                    HStack {
+                        TextField("Or create new list", text: $newListName)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        Button("Add") {
+                            if !newListName.trimmingCharacters(in: .whitespaces).isEmpty {
+                                pinStore.createCustomList(name: newListName.trimmingCharacters(in: .whitespaces))
+                                selectedListName = newListName.trimmingCharacters(in: .whitespaces)
+                                newListName = ""
+                            }
+                        }
+                        .disabled(newListName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .shadow(radius: 2)
+                
                 // MARK: - Recommendation Section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Recommendation")
                             .font(.headline)
                             .foregroundColor(.primary)
-                        
-                        Toggle("Recommend this place", isOn: $recommendation)
-                        
-                    if recommendation {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Recommended To")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                
-                        Picker("Recommended To", selection: $recommendedTo) {
-                            ForEach(recommendedOptions, id: \.self) { option in
-                                Text(option)
+                        HStack(spacing: 24) {
+                            Button(action: { recommendation = true }) {
+                                HStack {
+                                    Image(systemName: "hand.thumbsup.fill")
+                                        .foregroundColor(recommendation == true ? .green : .gray)
+                                    Text("Recommend")
+                                        .foregroundColor(recommendation == true ? .green : .primary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(recommendation == true ? Color.green.opacity(0.2) : Color(.systemGray5))
+                                .cornerRadius(20)
                             }
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-
-                                Text("Why do you recommend this place?")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                
-                        TextEditor(text: $recommendationComment)
-                                    .frame(minHeight: 80)
-                                    .padding(8)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(8)
+                            Button(action: { recommendation = false }) {
+                                HStack {
+                                    Image(systemName: "hand.thumbsdown.fill")
+                                        .foregroundColor(recommendation == false ? .red : .gray)
+                                    Text("Don't Recommend")
+                                        .foregroundColor(recommendation == false ? .red : .primary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(recommendation == false ? Color.red.opacity(0.2) : Color(.systemGray5))
+                                .cornerRadius(20)
                             }
                         }
                     }
@@ -398,12 +422,12 @@ struct CreatePostView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
+                    Button("Clear") {
+                        clearForm()
                     }
                 }
-                }
             }
+        }
         .onChange(of: selectedPhotoItems) { _, newItems in
             Task {
                 await loadSelectedPhotos(newItems)
@@ -588,9 +612,10 @@ struct CreatePostView: View {
                 let pinId = try await SupabaseManager.shared.createPin(pin: finalPin)
                 print("✅ Created pin with ID: \(pinId)")
                 
-                // Add to appropriate lists based on reaction
-                let listName = reaction == .lovedIt ? "Favorites" : "Want to Go"
-                pinStore.addPin(finalPin, to: listName)
+                // Add to selected or new list if specified
+                if !selectedListName.isEmpty {
+                    pinStore.addPin(finalPin, to: selectedListName)
+                }
                 
                 // Create friend activity for this new pin
                 await SupabaseManager.shared.createFriendActivity(
@@ -618,6 +643,28 @@ struct CreatePostView: View {
                 }
             }
         }
+    }
+    
+    private func clearForm() {
+        placeName = ""
+        location = ""
+        rating = 0
+        recommendation = nil
+        recommendedTo = "Everyone"
+        postContent = ""
+        selectedImages = []
+        selectedVideos = []
+        selectedPhotoItems = []
+        selectedMapItem = nil
+        reaction = .lovedIt
+        tripName = ""
+        isPrivatePost = false
+        recommendationComment = ""
+        selectedListName = ""
+        newListName = ""
+        // Reset focus
+        isPlaceFieldFocused = false
+        isPostContentFocused = false
     }
 }
 

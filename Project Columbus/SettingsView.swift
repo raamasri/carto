@@ -237,11 +237,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss.wrappedValue.dismiss()
-                    }
-                }
+                // Removed Done button; Back button is sufficient
             }
             .alert(item: $deletionResultMessage) { message in
                 Alert(title: Text(message.value))
