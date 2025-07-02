@@ -50,6 +50,8 @@ struct UserProfileView: View {
     @State private var isBlocked = false
     @State private var blockReportMessage = ""
     @State private var showBlockReportAlert = false
+    @State private var showShareSheet = false
+    @State private var shareItems: [Any] = []
     
     // Enhanced Map Filter States
     @State private var showMapFilters = false
@@ -271,17 +273,15 @@ struct UserProfileView: View {
                                     .background(Color.gray.opacity(0.2))
                                     .cornerRadius(8)
                             }
-                            NavigationLink(destination:
-                                NotificationView()
-                                    .environmentObject(authManager)
-                                    .environmentObject(SupabaseManager.shared)
-                            ) {
-                                Text("Notifications")
+                            Button(action: {
+                                shareProfile()
+                            }) {
+                                Text("Share Profile")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                     .frame(maxWidth: .infinity)
                                     .padding(8)
-                                    .background(Color.gray.opacity(0.2))
+                                    .background(Color.blue.opacity(0.2))
                                     .cornerRadius(8)
                             }
                         }
@@ -603,6 +603,14 @@ struct UserProfileView: View {
             span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: lonDelta)
         )
     }
+    
+    private func shareProfile() {
+        let profileURL = "https://carto.app/profile/\(profileUser.username)"
+        let shareText = "Check out \(displayedUser.full_name.isEmpty ? "@\(displayedUser.username)" : displayedUser.full_name)'s profile on CARTO!"
+        
+        shareItems = [shareText, URL(string: profileURL)!]
+        showShareSheet = true
+    }
 
     var body: some View {
         print("🧭 Loading UserProfileView for username:", profileUser.username)
@@ -831,6 +839,9 @@ struct UserProfileView: View {
                 }
             )
         }
+        .sheet(isPresented: $showShareSheet) {
+            ActivityViewController(activityItems: shareItems)
+        }
         .alert("Block/Report Status", isPresented: $showBlockReportAlert) {
             Button("OK") { }
         } message: {
@@ -943,6 +954,20 @@ struct FollowButton: View {
                 .cornerRadius(8)
         }
         .padding(.horizontal)
+    }
+}
+
+// ActivityViewController for iOS Share Sheet
+struct ActivityViewController: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
+        // No updates needed
     }
 }
 
