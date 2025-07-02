@@ -692,6 +692,8 @@ struct MainMapView: View {
                 Group {
                     if let currentUser = authManager.currentUser {
                         UserProfileView(profileUser: currentUser)
+                            .environmentObject(pinStore)
+                            .environmentObject(authManager)
                             .onAppear {
                                 // User profile loaded
                             }
