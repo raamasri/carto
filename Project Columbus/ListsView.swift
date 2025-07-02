@@ -268,6 +268,7 @@ struct CreateListSheet: View {
 struct ListDetailView: View {
     let list: PinList
     @EnvironmentObject var pinStore: PinStore
+    @EnvironmentObject var authManager: AuthManager
     @State private var searchText = ""
     @State private var selectedPin: Pin?
     @State private var showFullPOIView = false
@@ -350,6 +351,8 @@ struct ListDetailView: View {
                         // Add the pin to the current list if user chooses to add it
                         pinStore.addPin(pin, to: list.name)
                     })
+                    .environmentObject(authManager)
+                    .environmentObject(pinStore)
                 }
             }
             .onAppear {

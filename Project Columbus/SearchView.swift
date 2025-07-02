@@ -17,6 +17,7 @@ struct SearchView: View {
 
     @State private var selectedMapItem: MKMapItem? = nil
     @EnvironmentObject var pinStore: PinStore
+    @EnvironmentObject var authManager: AuthManager
 
     @State private var quickAddedItemIDs: Set<String> = [] // Track added pins by coordinate string
 
@@ -114,6 +115,8 @@ struct SearchView: View {
                     LocationDetailView(mapItem: selected) { newPin in
                         pinStore.masterPins.append(newPin)
                     }
+                    .environmentObject(authManager)
+                    .environmentObject(pinStore)
                 }
             }
         }

@@ -1020,6 +1020,8 @@ struct MainMapView: View {
         .navigationDestination(isPresented: $showFullPOIView) {
             if let mapItem = selectedMapItem {
                 LocationDetailView(mapItem: mapItem, onAddPin: { _ in })
+                    .environmentObject(authManager)
+                    .environmentObject(pinStore)
             }
         }
         .overlay(alignment: .bottomTrailing) {

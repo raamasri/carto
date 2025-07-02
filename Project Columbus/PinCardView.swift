@@ -385,6 +385,7 @@ struct PinCardView: View {
                 onAddPin: { _ in }
             )
             .environmentObject(pinStore)
+            .environmentObject(authManager)
         }
         .sheet(isPresented: $showAddPhotoSheet) {
             AddPhotoToExistingPinSheet(pin: pin)

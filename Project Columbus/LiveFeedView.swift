@@ -55,6 +55,7 @@ struct LiveFeedView: View {
                                             onAddPin: { _ in }
                                         )
                                         .environmentObject(pinStore)
+                                        .environmentObject(authManager)
                                     ) {
                                         PinCardView(pin: pin)
                                             .environmentObject(pinStore)
@@ -80,6 +81,7 @@ struct LiveFeedView: View {
                                     onAddPin: { _ in }
                                 )
                                 .environmentObject(pinStore)
+                                .environmentObject(authManager)
                             ) {
                                 PinCardView(pin: pin)
                                     .environmentObject(pinStore)
@@ -153,6 +155,7 @@ struct LiveFeedView: View {
                                                     onAddPin: { _ in }
                                                 )
                                                 .environmentObject(pinStore)
+                                                .environmentObject(authManager)
                                             ) {
                                                 PinCardView(pin: pin)
                                                     .environmentObject(pinStore)
@@ -209,6 +212,7 @@ struct LiveFeedView: View {
                                     onAddPin: { _ in }
                                 )
                                 .environmentObject(pinStore)
+                                .environmentObject(authManager)
                             ) {
                                 PinCardView(pin: pin)
                                     .environmentObject(pinStore)
