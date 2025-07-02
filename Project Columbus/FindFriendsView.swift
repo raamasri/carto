@@ -428,13 +428,21 @@ struct FindFriendsView: View {
         isLoadingRecommendations = true
         defer { isLoadingRecommendations = false }
         
-        // Filter out current user and blocked users
+        // Filter out blocked users but include current user for nearby section
         let availableUsers = allUsers.filter { user in
             user.id != currentUserID && !user.isCurrentUser
         }
         
-        // 1. Nearby Users (within 50km)
-        let nearby = availableUsers.filter { user in
+        // 1. Nearby Users (within 50km) - include current user first
+        var nearbyList: [AppUser] = []
+        
+        // Add current user if they have location
+        if let currentUser = allUsers.first(where: { $0.isCurrentUser }) {
+            nearbyList.append(currentUser)
+        }
+        
+        // Add other nearby users
+        let nearbyOthers = availableUsers.filter { user in
             guard let userLat = user.latitude, let userLng = user.longitude else { return false }
             let userLocation = CLLocation(latitude: userLat, longitude: userLng)
             let distance = currentLocation.distance(from: userLocation)
@@ -445,7 +453,9 @@ struct FindFriendsView: View {
             let loc1 = CLLocation(latitude: lat1, longitude: lng1)
             let loc2 = CLLocation(latitude: lat2, longitude: lng2)
             return currentLocation.distance(from: loc1) < currentLocation.distance(from: loc2)
-        }.prefix(5)
+        }.prefix(4) // Limit to 4 since we already have current user
+        
+        nearbyList.append(contentsOf: nearbyOthers)
         
         // 2. Mutual Friends (users who follow people you follow)
         let followingUsers = await SupabaseManager.shared.getFollowingUsers(for: currentUserID)
@@ -469,12 +479,12 @@ struct FindFriendsView: View {
         
         // 3. Activity-based recommendations (users with similar pin activity)
         let recommended = availableUsers.filter { user in
-            !nearby.contains(where: { $0.id == user.id }) &&
+            !nearbyList.contains(where: { $0.id == user.id }) &&
             !mutual.contains(where: { $0.id == user.id })
         }.shuffled().prefix(5)
         
         await MainActor.run {
-            nearbyUsers = Array(nearby)
+            nearbyUsers = nearbyList
             mutualFriendUsers = Array(mutual)
             recommendedUsers = Array(recommended)
         }
@@ -486,6 +496,7 @@ struct RecommendationSection: View {
     let subtitle: String
     let users: [AppUser]
     let onUserTap: (AppUser) -> Void
+    @State private var userLocationNames: [String: String] = [:]
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -502,7 +513,10 @@ struct RecommendationSection: View {
                 HStack(spacing: 12) {
                     ForEach(users) { user in
                         Button(action: {
-                            onUserTap(user)
+                            // Don't open profile for current user
+                            if !user.isCurrentUser {
+                                onUserTap(user)
+                            }
                         }) {
                             VStack(spacing: 8) {
                                 if let avatarURL = user.avatarURL, !avatarURL.isEmpty,
@@ -524,11 +538,18 @@ struct RecommendationSection: View {
                                 }
                                 
                                 VStack(spacing: 2) {
-                                    Text(user.username)
+                                    Text(user.isCurrentUser ? "Your location" : user.username)
                                         .font(.caption)
                                         .fontWeight(.semibold)
                                         .lineLimit(1)
-                                    if !user.full_name.isEmpty {
+                                    
+                                    if user.isCurrentUser {
+                                        // Show approximate location for current user
+                                        Text(userLocationNames[user.id] ?? "Loading...")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                    } else if !user.full_name.isEmpty {
                                         Text(user.full_name)
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
@@ -545,5 +566,49 @@ struct RecommendationSection: View {
             }
         }
         .padding(.horizontal)
+        .onAppear {
+            // Reverse geocode location for current user
+            for user in users where user.isCurrentUser {
+                reverseGeocodeUserLocation(user)
+            }
+        }
+    }
+    
+    private func reverseGeocodeUserLocation(_ user: AppUser) {
+        guard let latitude = user.latitude, let longitude = user.longitude else { return }
+        
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        let geocoder = CLGeocoder()
+        
+        geocoder.reverseGeocodeLocation(location) { placemarks, error in
+            if let placemark = placemarks?.first {
+                DispatchQueue.main.async {
+                    // Create a readable location string like "San Jose, CA"
+                    var locationString = ""
+                    
+                    if let locality = placemark.locality {
+                        locationString = locality
+                    }
+                    
+                    if let administrativeArea = placemark.administrativeArea {
+                        if !locationString.isEmpty {
+                            locationString += ", \(administrativeArea)"
+                        } else {
+                            locationString = administrativeArea
+                        }
+                    }
+                    
+                    if locationString.isEmpty {
+                        locationString = placemark.name ?? "Unknown location"
+                    }
+                    
+                    userLocationNames[user.id] = locationString
+                }
+            } else {
+                DispatchQueue.main.async {
+                    userLocationNames[user.id] = "Location unavailable"
+                }
+            }
+        }
     }
 }
