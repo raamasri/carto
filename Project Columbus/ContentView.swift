@@ -1470,6 +1470,7 @@ struct ContentView: View {
                 }
             }
             .preferredColorScheme(colorScheme)
+            .withDeepLinkHandling()
             .onReceive(NotificationCenter.default.publisher(for: .showBiometricPrompt)) { _ in
                 showBiometricPrompt = true
             }
