@@ -435,12 +435,12 @@ struct LocationDetailView: View {
                 }) {
                     HStack {
                         Spacer()
-                        Image(systemName: "car.fill")
+                        Image(systemName: "arrow.turn.up.right")
                             .font(.title2)
                         Spacer()
                     }
                     .padding()
-                    .background(Color.black)
+                    .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(10)
                 }
