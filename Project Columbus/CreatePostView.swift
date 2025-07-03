@@ -62,6 +62,13 @@ struct CreatePostView: View {
     
     @FocusState private var isPlaceFieldFocused: Bool
     @FocusState private var isPostContentFocused: Bool
+    
+    // Optional pre-populated data
+    private let prePopulatedMapItem: MKMapItem?
+    
+    init(prePopulatedMapItem: MKMapItem? = nil) {
+        self.prePopulatedMapItem = prePopulatedMapItem
+    }
 
     var isFormValid: Bool {
         !placeName.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -454,6 +461,10 @@ struct CreatePostView: View {
         }
         .onAppear {
             setupLocationServices()
+            // Pre-populate data if mapItem is provided
+            if let mapItem = prePopulatedMapItem {
+                populateFromMapItem(mapItem)
+            }
         }
         .sheet(isPresented: $showingVideoPicker) {
             VideoPickerView(selectedVideos: $selectedVideos)
@@ -838,6 +849,22 @@ struct CreatePostView: View {
         isPlaceFieldFocused = false
         isPostContentFocused = false
     }
+    
+    // MARK: - Pre-population Helper
+    
+    private func populateFromMapItem(_ mapItem: MKMapItem) {
+        placeName = mapItem.name ?? "Unknown Place"
+        selectedMapItem = mapItem
+        mapRegion = MKCoordinateRegion(
+            center: mapItem.placemark.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
+        
+        // Set a default post content to help user get started
+        postContent = "Just visited \(mapItem.name ?? "this place")! "
+        
+        print("📍 Pre-populated CreatePostView with: \(mapItem.name ?? "Unknown")")
+    }
 }
 
 // MARK: - Supporting Views and Classes
@@ -1066,4 +1093,6 @@ struct NearbyPlacesView: View {
             return "Place"
         }
     }
+    
+
 }

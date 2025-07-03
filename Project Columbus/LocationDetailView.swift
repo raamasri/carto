@@ -411,6 +411,27 @@ struct LocationDetailView: View {
 
     private var addButton: some View {
         VStack(spacing: 12) {
+            // Make a Post button (full width)
+            NavigationLink(destination: CreatePostView(prePopulatedMapItem: mapItem)
+                .environmentObject(authManager)
+                .environmentObject(pinStore)
+                .onAppear {
+                    print("📱 CreatePostView appeared from LocationDetailView")
+                }
+            ) {
+                HStack {
+                    Spacer()
+                    Label("Make a Post", systemImage: "plus.bubble")
+                        .font(.title2)
+                    Spacer()
+                }
+                .frame(height: 50)
+                .background(Color.green)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
             // Top row: Share and Directions buttons
             HStack(spacing: 12) {
                 // Share Button
