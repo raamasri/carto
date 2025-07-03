@@ -33,6 +33,24 @@ struct LiveFeedView: View {
     var body: some View {
         return NavigationView {
             VStack(spacing: 0) {
+                // Custom header with title and video button
+                HStack {
+                    Text("Live Feed")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    Spacer()
+                    
+                    Button(action: {
+                        showVideoFeed = true
+                    }) {
+                        Image(systemName: "play.rectangle.fill")
+                            .font(.title2)
+                            .foregroundColor(.primary)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
                 Picker("Tabs", selection: $selectedTab) {
                     ForEach(0..<tabs.count, id: \.self) { index in
                         Text(tabs[index]).tag(index)
@@ -262,19 +280,7 @@ struct LiveFeedView: View {
                     }
                 }
             }
-            .navigationTitle("Live Feed")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showVideoFeed = true
-                    }) {
-                        Image(systemName: "play.rectangle.fill")
-                            .font(.title2)
-                            .foregroundColor(.primary)
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .sheet(isPresented: $showMap) {
                 if let pin = selectedPin {
                     ZStack(alignment: .topTrailing) {
