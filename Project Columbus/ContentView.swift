@@ -126,7 +126,7 @@ struct MainMapView: View {
     @State private var showFullPOIView: Bool = false
     @State private var showPOISheet: Bool = false
     @FocusState private var isSearchFieldFocused: Bool
-    @State private var showDirectMessaging = false
+
     
     // Sidebar sheet state variables
     @State private var showVideoFeed = false
@@ -1158,23 +1158,23 @@ struct MainMapView: View {
         .overlay(alignment: .bottomTrailing) {
             // Floating messaging button - only show on FindFriendsView tab
             if selectedTab == 1 {
-                Button(action: {
-                    showDirectMessaging = true
-                }) {
+                NavigationLink(destination: DirectMessagingView()
+                    .environmentObject(authManager)
+                    .onAppear {
+                        print("📱 DirectMessagingView appeared from floating button")
+                    }
+                ) {
                     Image(systemName: "message.fill")
                         .font(.title2)
                         .foregroundColor(.primary)
+                        .frame(width: 50, height: 50)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .shadow(radius: 4)
                 }
-                .frame(width: 50, height: 50)
-                .background(.ultraThinMaterial)
-                .clipShape(Circle())
-                .shadow(radius: 4)
+                .buttonStyle(PlainButtonStyle())
                 .padding(.bottom, 80) // Position just above navbar
                 .padding(.trailing, 20)
-                .sheet(isPresented: $showDirectMessaging) {
-                    DirectMessagingView()
-                        .environmentObject(authManager)
-                }
             }
         }
         .overlay(
