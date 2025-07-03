@@ -197,19 +197,27 @@ struct PinCardView: View {
                     }
                 }
                 
-                HStack(spacing: 8) {
-                    Text(pin.city)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    if !pin.city.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin.circle")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Text(pin.city)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                     
                     if let distance = distanceFromUser {
-                        HStack(spacing: 2) {
+                        HStack(spacing: 4) {
                             Image(systemName: "location")
                                 .font(.caption2)
+                                .foregroundColor(.secondary)
                             Text(distance)
                                 .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-                        .foregroundColor(.secondary)
                     }
                 }
             }

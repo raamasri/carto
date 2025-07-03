@@ -151,28 +151,55 @@ struct LocationDetailView: View {
     }
 
     private var infoSection: some View {
-        Group {
-            if let category = mapItem.pointOfInterestCategory {
-                Label(category.displayName, systemImage: "tag")
-            }
-
-            if let phone = mapItem.phoneNumber {
-                Label(phone, systemImage: "phone")
-            }
-
-            if let url = mapItem.url {
-                Link("Website", destination: url)
-            }
-
+        VStack(alignment: .leading, spacing: 12) {
+            // Address section - made more prominent
             if let address = mapItem.placemark.title {
-                Label(address, systemImage: "mappin.circle")
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Address")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    HStack(spacing: 8) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundColor(.red)
+                            .font(.title3)
+                        
+                        Text(address)
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding()
+                .background(.regularMaterial)
+                .cornerRadius(12)
             }
+            
+            // Other information
+            VStack(alignment: .leading, spacing: 8) {
+                if let category = mapItem.pointOfInterestCategory {
+                    Label(category.displayName, systemImage: "tag")
+                        .font(.subheadline)
+                }
 
-            Label("Lat: \(mapItem.placemark.coordinate.latitude), Lon: \(mapItem.placemark.coordinate.longitude)", systemImage: "location")
+                if let phone = mapItem.phoneNumber {
+                    Label(phone, systemImage: "phone")
+                        .font(.subheadline)
+                }
 
-            if let tz = mapItem.timeZone {
-                Label(tz.identifier, systemImage: "clock")
+                if let url = mapItem.url {
+                    Link("Website", destination: url)
+                        .font(.subheadline)
+                }
+
+                Label("Lat: \(String(format: "%.6f", mapItem.placemark.coordinate.latitude)), Lon: \(String(format: "%.6f", mapItem.placemark.coordinate.longitude))", systemImage: "location")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if let tz = mapItem.timeZone {
+                    Label(tz.identifier, systemImage: "clock")
+                        .font(.subheadline)
+                }
             }
         }
     }
