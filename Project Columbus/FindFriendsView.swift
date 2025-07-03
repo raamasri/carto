@@ -195,7 +195,7 @@ struct FindFriendsView: View {
     
     // Sidebar state variables
     @State private var showSideMenu = false
-    @State private var selectedTab = 0
+    @State private var selectedTab = 0 // Not used in FindFriends but needed for sidebar
     @State private var showVideoFeed = false
     @State private var showUserProfile = false
     @State private var showAccountMenu = false
@@ -251,11 +251,11 @@ struct FindFriendsView: View {
                 }
                 .overlay(alignment: .top) {
                     VStack(spacing: 0) {
-                        // Search bar with hamburger menu
+                        // Search bar with hamburger menu - always visible
                         HStack {
                             // Hamburger menu button
                             Button(action: {
-                                print("📱 Hamburger menu tapped in FindFriendsView")
+                                print("📱 Hamburger menu pressed - setting showSideMenu = true")
                                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                                     showSideMenu = true
                                 }
@@ -433,21 +433,28 @@ struct FindFriendsView: View {
                         }
                     }
                 }
-                
-                // Sidebar overlay
-                if showSideMenu {
-                    FindFriendsNavigationSidebar(
-                        showSideMenu: $showSideMenu,
-                        selectedTab: $selectedTab,
-                        authManager: authManager,
-                        showVideoFeed: $showVideoFeed,
-                        showUserProfile: $showUserProfile,
-                        showAccountMenu: $showAccountMenu,
-                        showProfileEdit: $showProfileEdit,
-                        showAccountSettings: $showAccountSettings
-                    )
-                }
             } // end ZStack
+            .overlay(
+                // Sidebar overlay - highest z-index to be always on top
+                HStack {
+                    if showSideMenu {
+                        FindFriendsNavigationSidebar(
+                            showSideMenu: $showSideMenu,
+                            selectedTab: $selectedTab,
+                            authManager: authManager,
+                            showVideoFeed: $showVideoFeed,
+                            showUserProfile: $showUserProfile,
+                            showAccountMenu: $showAccountMenu,
+                            showProfileEdit: $showProfileEdit,
+                            showAccountSettings: $showAccountSettings
+                        )
+                        .transition(.move(edge: .leading))
+                        .zIndex(999) // Ensure it's always on top
+                    }
+                    Spacer()
+                }
+                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showSideMenu)
+            )
             .sheet(isPresented: $showProfile) {
                 if let user = selectedUser {
                     UserProfileView(profileUser: user)
@@ -455,51 +462,50 @@ struct FindFriendsView: View {
                         .environmentObject(pinStore)
                 }
             }
+            // Sheet presentations for sidebar actions
             .sheet(isPresented: $showVideoFeed) {
                 VideoFeedView()
                     .environmentObject(authManager)
-                    .environmentObject(pinStore)
                     .onAppear {
-                        print("📱 VideoFeedView sheet appeared from FindFriendsView")
+                        print("📱 VideoFeedView sheet appeared")
                     }
             }
             .sheet(isPresented: $showUserProfile) {
-                if let currentUser = authManager.currentUser {
-                    UserProfileView(profileUser: currentUser)
+                if let user = authManager.currentUser {
+                    UserProfileView(profileUser: user)
                         .environmentObject(authManager)
                         .environmentObject(pinStore)
-                        .onAppear {
-                            print("📱 UserProfileView sheet appeared from FindFriendsView")
-                        }
                 }
             }
             .sheet(isPresented: $showProfileEdit) {
                 ProfileEditView()
                     .environmentObject(authManager)
-                    .onAppear {
-                        print("📱 ProfileEditView sheet appeared from FindFriendsView")
-                    }
             }
             .sheet(isPresented: $showAccountSettings) {
                 SettingsView()
                     .environmentObject(authManager)
-                    .onAppear {
-                        print("📱 SettingsView sheet appeared from FindFriendsView")
-                    }
             }
             .actionSheet(isPresented: $showAccountMenu) {
                 ActionSheet(
-                    title: Text("Account"),
+                    title: Text("Account Options"),
                     buttons: [
                         .default(Text("Edit Profile")) {
                             showProfileEdit = true
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                showSideMenu = false
+                            }
                         },
                         .default(Text("Account Settings")) {
                             showAccountSettings = true
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                showSideMenu = false
+                            }
                         },
                         .destructive(Text("Log Out")) {
                             authManager.logOut()
-                            showSideMenu = false
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                showSideMenu = false
+                            }
                         },
                         .cancel()
                     ]
@@ -575,6 +581,224 @@ struct FindFriendsView: View {
             mutualFriendUsers = Array(mutual)
             recommendedUsers = Array(recommended)
         }
+    }
+}
+
+// MARK: - Find Friends Navigation Sidebar
+
+struct FindFriendsNavigationSidebar: View {
+    @Binding var showSideMenu: Bool
+    @Binding var selectedTab: Int
+    let authManager: AuthManager
+    @Binding var showVideoFeed: Bool
+    @Binding var showUserProfile: Bool
+    @Binding var showAccountMenu: Bool
+    @Binding var showProfileEdit: Bool
+    @Binding var showAccountSettings: Bool
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Navigation")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Spacer()
+                        Button(action: {
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                showSideMenu = false
+                            }
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.title2)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    
+                    Divider()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 10)
+                
+                // Navigation Items
+                VStack(spacing: 8) {
+                    // Home
+                    Button(action: {
+                        dismiss()
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }) {
+                        SidebarMenuItemView(
+                            icon: "house.fill",
+                            title: "Home",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Videos
+                    Button(action: {
+                        print("📱 Videos button pressed - setting showVideoFeed = true")
+                        showVideoFeed = true
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }) {
+                        SidebarMenuItemView(
+                            icon: "play.rectangle.fill",
+                            title: "Videos",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Live Feed
+                    Button(action: {
+                        dismiss()
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }) {
+                        SidebarMenuItemView(
+                            icon: "dot.radiowaves.left.and.right",
+                            title: "Live Feed",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Find Friends - SELECTED
+                    SidebarMenuItemView(
+                        icon: "person.2.fill",
+                        title: "Find Friends",
+                        isSelected: true
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    
+                    // Messages
+                    NavigationLink(destination: DirectMessagingView()
+                        .environmentObject(authManager)
+                        .onAppear {
+                            print("📱 DirectMessagingView appeared")
+                        }
+                    ) {
+                        SidebarMenuItemView(
+                            icon: "message.fill",
+                            title: "Messages",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        print("📱 Messages navigation link tapped")
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    })
+                    
+                    // My Profile
+                    Button(action: {
+                        dismiss()
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }) {
+                        SidebarMenuItemView(
+                            icon: "person.circle.fill",
+                            title: "My Profile",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Settings
+                    NavigationLink(destination: SettingsView()
+                        .environmentObject(authManager)
+                        .onAppear {
+                            print("📱 SettingsView appeared")
+                        }
+                    ) {
+                        SidebarMenuItemView(
+                            icon: "gearshape.fill",
+                            title: "Settings",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        print("📱 Settings navigation link tapped")
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    })
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Footer with user info
+                VStack(alignment: .leading, spacing: 8) {
+                    Divider()
+                    
+                    if let user = authManager.currentUser {
+                        Button(action: {
+                            showAccountMenu = true
+                        }) {
+                            HStack(spacing: 12) {
+                                // User avatar with cached loading
+                                SidebarUserAvatar(user: user)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(user.full_name)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
+                                    Text("@\(user.username)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.up")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+            .frame(width: 280)
+            .background(.ultraThinMaterial)
+            .shadow(color: Color.black.opacity(0.2), radius: 10, x: 5, y: 0)
+            .onAppear {
+                print("🔄 [FindFriends Sidebar] Refreshing current user data")
+                Task {
+                    await authManager.fetchCurrentUser()
+                }
+            }
+            
+            Spacer()
+        }
+        .background(
+            Color.black.opacity(0.3)
+                .onTapGesture {
+                    print("📱 Background tapped - closing sidebar")
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        showSideMenu = false
+                    }
+                }
+                .allowsHitTesting(true)
+        )
     }
 }
 
@@ -697,211 +921,5 @@ struct RecommendationSection: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - FindFriends Navigation Sidebar
-
-struct FindFriendsNavigationSidebar: View {
-    @Binding var showSideMenu: Bool
-    @Binding var selectedTab: Int
-    let authManager: AuthManager
-    @Binding var showVideoFeed: Bool
-    @Binding var showUserProfile: Bool
-    @Binding var showAccountMenu: Bool
-    @Binding var showProfileEdit: Bool
-    @Binding var showAccountSettings: Bool
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("Navigation")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        print("📱 Sidebar close button tapped")
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            showSideMenu = false
-                        }
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.title2)
-                            .foregroundColor(.gray)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 10)
-                
-                Divider()
-                
-                // Navigation Items
-                VStack(spacing: 8) {
-                    // Home
-                    SidebarMenuItem(
-                        icon: "house.fill",
-                        title: "Home",
-                        isSelected: selectedTab == 0
-                    ) {
-                        selectedTab = 0
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            showSideMenu = false
-                        }
-                    }
-                    
-                    // Videos
-                    SidebarMenuItem(
-                        icon: "play.rectangle.fill",
-                        title: "Videos",
-                        isSelected: false
-                    ) {
-                        print("📱 Videos button pressed - setting showVideoFeed = true")
-                        showVideoFeed = true
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            showSideMenu = false
-                        }
-                    }
-                    
-                    // Live Feed
-                    SidebarMenuItem(
-                        icon: "dot.radiowaves.left.and.right",
-                        title: "Live Feed",
-                        isSelected: selectedTab == 1
-                    ) {
-                        selectedTab = 1
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            showSideMenu = false
-                        }
-                    }
-                    
-                    // Find Friends (current view)
-                    SidebarMenuItemView(
-                        icon: "person.2.fill",
-                        title: "Find Friends",
-                        isSelected: true
-                    )
-                    .padding(.horizontal, 20)
-                    
-                    // Messages
-                    NavigationLink(destination: DirectMessagingView()
-                        .environmentObject(authManager)
-                        .onAppear {
-                            print("📱 DirectMessagingView appeared from FindFriendsView")
-                        }
-                    ) {
-                        SidebarMenuItemView(
-                            icon: "message.fill",
-                            title: "Messages",
-                            isSelected: false
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .simultaneousGesture(TapGesture().onEnded {
-                        print("📱 Messages navigation link tapped")
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            showSideMenu = false
-                        }
-                    })
-                    
-                    // My Profile
-                    SidebarMenuItem(
-                        icon: "person.circle.fill",
-                        title: "My Profile",
-                        isSelected: selectedTab == 4
-                    ) {
-                        selectedTab = 4
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            showSideMenu = false
-                        }
-                    }
-                    
-                    // Settings
-                    NavigationLink(destination: SettingsView()
-                        .environmentObject(authManager)
-                        .onAppear {
-                            print("📱 SettingsView appeared from FindFriendsView")
-                        }
-                    ) {
-                        SidebarMenuItemView(
-                            icon: "gearshape.fill",
-                            title: "Settings",
-                            isSelected: false
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .simultaneousGesture(TapGesture().onEnded {
-                        print("📱 Settings navigation link tapped")
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            showSideMenu = false
-                        }
-                    })
-                }
-                .padding(.horizontal, 20)
-                
-                Spacer()
-                
-                // Footer with user info
-                VStack(alignment: .leading, spacing: 8) {
-                    Divider()
-                    
-                    if let user = authManager.currentUser {
-                        Button(action: {
-                            showAccountMenu = true
-                        }) {
-                            HStack(spacing: 12) {
-                                // User avatar with cached loading
-                                SidebarUserAvatar(user: user)
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(user.full_name)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.primary)
-                                    Text("@\(user.username)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.up")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
-            }
-            .frame(width: 280)
-            .background(.ultraThinMaterial)
-            .shadow(color: Color.black.opacity(0.2), radius: 10, x: 5, y: 0)
-            .onAppear {
-                print("🔄 [FindFriends Sidebar] Refreshing current user data")
-                Task {
-                    await authManager.fetchCurrentUser()
-                }
-            }
-            
-            Spacer()
-        }
-        .background(
-            Color.black.opacity(0.3)
-                .onTapGesture {
-                    print("📱 Background tapped - closing sidebar")
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        showSideMenu = false
-                    }
-                }
-                .allowsHitTesting(true)
-        )
     }
 }
