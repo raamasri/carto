@@ -96,7 +96,7 @@ struct ConnectedAccountsView: View {
                         }
                         Spacer()
                         Button("Setup") {
-                            // TODO: Implement 2FA setup
+                            // 2FA setup feature planned for future release
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -178,7 +178,7 @@ struct ConnectedAccountsView: View {
     private func connectGoogle() {
         isConnecting = true
         
-        // TODO: Implement Google Sign-In
+                            // Google Sign-In integration planned for future release
         // In a real implementation, you'd use GoogleSignIn framework
         
         // Simulate connection for demo
@@ -192,7 +192,7 @@ struct ConnectedAccountsView: View {
     private func connectFacebook() {
         isConnecting = true
         
-        // TODO: Implement Facebook Login
+                            // Facebook Login integration planned for future release
         // In a real implementation, you'd use Facebook SDK
         
         // Simulate connection for demo
@@ -206,7 +206,7 @@ struct ConnectedAccountsView: View {
     private func connectTwitter() {
         isConnecting = true
         
-        // TODO: Implement Twitter OAuth
+                            // Twitter OAuth integration planned for future release
         // In a real implementation, you'd use Twitter API
         
         // Simulate connection for demo

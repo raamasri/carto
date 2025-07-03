@@ -38,7 +38,9 @@ struct Project_ColumbusApp: App {
                 .environmentObject(authManager)
                 .environmentObject(locationManager)
                 .onAppear {
-                    authManager.checkSession()
+                    Task {
+                        await authManager.checkSession()
+                    }
                     updateLocationOnAppLaunch()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in

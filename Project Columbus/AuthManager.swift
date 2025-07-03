@@ -11,6 +11,36 @@ import LocalAuthentication
 import Security
 import SwiftUI
 
+// MARK: - Auth Error Types
+enum AuthError: LocalizedError {
+    case accountAlreadyExists
+    case invalidCredentials
+    case networkError
+    case biometricNotAvailable
+    case biometricAuthenticationFailed
+    case sessionExpired
+    case unknown(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .accountAlreadyExists:
+            return "An account with this email already exists."
+        case .invalidCredentials:
+            return "Invalid email or password."
+        case .networkError:
+            return "Network connection error. Please try again."
+        case .biometricNotAvailable:
+            return "Biometric authentication is not available on this device."
+        case .biometricAuthenticationFailed:
+            return "Biometric authentication failed."
+        case .sessionExpired:
+            return "Your session has expired. Please log in again."
+        case .unknown(let message):
+            return message
+        }
+    }
+}
+
 @MainActor
 class AuthManager: ObservableObject {
     @AppStorage("biometricEnabled") private var biometricEnabled: Bool = false
@@ -18,7 +48,9 @@ class AuthManager: ObservableObject {
     @Published var appleSignInErrorMessage: String?
     
     init() {
-        checkSession()
+        Task {
+            await checkSession()
+        }
     }
     
     @Published var isLoggedIn = false
@@ -72,24 +104,27 @@ class AuthManager: ObservableObject {
             // Check for "account already exists" type of error
             let lowercasedMessage = error.localizedDescription.lowercased()
             if lowercasedMessage.contains("user already registered") || lowercasedMessage.contains("already exists") {
-                throw NSError(domain: "", code: 409, userInfo: [NSLocalizedDescriptionKey: "An account with this email already exists."])
+                throw AuthError.accountAlreadyExists
             }
 
             throw error
         }
     }
     
-    func logOut() {
-        Task {
-            do {
-                try await SupabaseManager.shared.client.auth.signOut()
-                DispatchQueue.main.async {
-                    self.currentUsername = nil
-                    self.isLoggedIn = false
-                    self.currentUserID = nil
-                }
-            } catch {
-                // Handle logout error silently
+    func logOut() async {
+        do {
+            try await SupabaseManager.shared.client.auth.signOut()
+            await MainActor.run {
+                self.currentUsername = nil
+                self.isLoggedIn = false
+                self.currentUserID = nil
+            }
+        } catch {
+            // Handle logout error silently
+            await MainActor.run {
+                self.currentUsername = nil
+                self.isLoggedIn = false
+                self.currentUserID = nil
             }
         }
     }
@@ -153,23 +188,19 @@ class AuthManager: ObservableObject {
         }
     }
     
-    func checkSession() {
-        Task {
-            do {
-                let session = try await SupabaseManager.shared.client.auth.session
-                DispatchQueue.main.async {
-                    self.isLoggedIn = !session.accessToken.isEmpty
-                    self.currentUsername = session.user.email
-                    self.currentUserID = session.user.id.uuidString
-                }
-                Task {
-                    await self.fetchCurrentUser()
-                }
-            } catch {
-                // Log error but don't expose sensitive session details
-                DispatchQueue.main.async {
-                    self.isLoggedIn = false
-                }
+    func checkSession() async {
+        do {
+            let session = try await SupabaseManager.shared.client.auth.session
+            await MainActor.run {
+                self.isLoggedIn = !session.accessToken.isEmpty
+                self.currentUsername = session.user.email
+                self.currentUserID = session.user.id.uuidString
+            }
+            await fetchCurrentUser()
+        } catch {
+            // Log error but don't expose sensitive session details
+            await MainActor.run {
+                self.isLoggedIn = false
             }
         }
     }
@@ -241,7 +272,7 @@ class AuthManager: ObservableObject {
         let credentialsData = "\(username):\(password)".data(using: .utf8)!
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: "carto.credentials",
+            kSecAttrAccount as String: "carto.credentials", // TODO: Use AppConstants.Keychain.credentialsKey
             kSecValueData as String: credentialsData
         ]
         SecItemDelete(query as CFDictionary)
@@ -251,7 +282,7 @@ class AuthManager: ObservableObject {
     func retrieveCredentialsFromKeychain() -> (username: String, password: String)? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: "carto.credentials",
+            kSecAttrAccount as String: "carto.credentials", // TODO: Use AppConstants.Keychain.credentialsKey
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]

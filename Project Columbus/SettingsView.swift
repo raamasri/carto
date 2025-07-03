@@ -307,7 +307,9 @@ struct SettingsView: View {
     }
     
     private func performLogout() {
-        authManager.logOut()
+        Task {
+            await authManager.logOut()
+        }
     }
     
     private func deleteAccount() {

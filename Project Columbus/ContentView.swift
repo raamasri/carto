@@ -1235,7 +1235,9 @@ struct MainMapView: View {
                         }
                     },
                     .destructive(Text("Log Out")) {
-                        authManager.logOut()
+                        Task {
+                            await authManager.logOut()
+                        }
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
                         }
