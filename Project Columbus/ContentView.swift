@@ -1754,20 +1754,38 @@ struct NavigationSidebar: View {
                             showAccountMenu = true
                         }) {
                             HStack(spacing: 12) {
-                                AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
+                                // User avatar with proper loading and debug logging
+                                if let avatarURL = user.avatarURL, !avatarURL.isEmpty, let url = URL(string: avatarURL) {
+                                    AsyncImage(url: url) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(Color.gray.opacity(0.3))
+                                            .overlay(
+                                                Image(systemName: "person.fill")
+                                                    .foregroundColor(.gray)
+                                            )
+                                    }
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(Circle())
+                                    .onAppear {
+                                        print("🖼️ [Sidebar] Loading avatar from URL: \(avatarURL)")
+                                    }
+                                } else {
+                                    // Fallback for no avatar
                                     Circle()
                                         .fill(Color.gray.opacity(0.3))
                                         .overlay(
                                             Image(systemName: "person.fill")
                                                 .foregroundColor(.gray)
                                         )
+                                        .frame(width: 40, height: 40)
+                                        .onAppear {
+                                            print("🖼️ [Sidebar] No avatar URL available. avatarURL: '\(user.avatarURL ?? "nil")'")
+                                        }
                                 }
-                                .frame(width: 40, height: 40)
-                                .clipShape(Circle())
                                 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(user.full_name)
@@ -1795,6 +1813,12 @@ struct NavigationSidebar: View {
             .frame(width: 280)
             .background(.ultraThinMaterial)
             .shadow(color: Color.black.opacity(0.2), radius: 10, x: 5, y: 0)
+            .onAppear {
+                print("🔄 [Sidebar] Refreshing current user data")
+                Task {
+                    await authManager.fetchCurrentUser()
+                }
+            }
             
             Spacer()
         }
