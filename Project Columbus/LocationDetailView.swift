@@ -83,18 +83,28 @@ struct LocationDetailView: View {
         print("  - country: \(placemark.country ?? "nil")")
         print("  - isoCountryCode: \(placemark.isoCountryCode ?? "nil")")
         
-        // Try using the title first (which often contains the full address)
-        if let title = placemark.title, !title.isEmpty, title != placemark.name {
+        // Strategy 1: Try using the title first (which often contains the full address)
+        if let title = placemark.title, 
+           !title.isEmpty, 
+           title != placemark.name,
+           title != "United States",
+           title != placemark.country {
             print("  - Using title as address: \(title)")
             return title
         }
         
+        // Strategy 2: Build address from components
         // Add street number and name
         if let subThoroughfare = placemark.subThoroughfare,
            let thoroughfare = placemark.thoroughfare {
             addressComponents.append("\(subThoroughfare) \(thoroughfare)")
         } else if let thoroughfare = placemark.thoroughfare {
             addressComponents.append(thoroughfare)
+        }
+        
+        // Add subLocality if available (neighborhood/district)
+        if let subLocality = placemark.subLocality {
+            addressComponents.append(subLocality)
         }
         
         // Add locality (city)
@@ -112,19 +122,29 @@ struct LocationDetailView: View {
             addressComponents.append(postalCode)
         }
         
-        // Add country (only if we don't have more specific components)
-        if addressComponents.isEmpty, let country = placemark.country {
-            addressComponents.append(country)
+        // Strategy 3: If we only have very generic info, try to at least show city/state
+        if addressComponents.isEmpty {
+            if let locality = placemark.locality,
+               let administrativeArea = placemark.administrativeArea {
+                addressComponents.append("\(locality), \(administrativeArea)")
+            } else if let locality = placemark.locality {
+                addressComponents.append(locality)
+            } else if let administrativeArea = placemark.administrativeArea {
+                addressComponents.append(administrativeArea)
+            }
+        }
+        
+        // Strategy 4: Last resort - show coordinates in human-readable format
+        if addressComponents.isEmpty {
+            let coordinate = placemark.coordinate
+            let latString = String(format: "%.4f", coordinate.latitude)
+            let lonString = String(format: "%.4f", coordinate.longitude)
+            print("  - Using coordinates as fallback")
+            return "Near \(latString), \(lonString)"
         }
         
         print("  - Final addressComponents: \(addressComponents)")
-        
-        // Return formatted address or fallback message
-        if addressComponents.isEmpty {
-            return "Address not available"
-        } else {
-            return addressComponents.joined(separator: ", ")
-        }
+        return addressComponents.joined(separator: ", ")
     }
     
     private var friendsSection: some View {
