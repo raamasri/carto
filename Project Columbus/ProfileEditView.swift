@@ -20,6 +20,9 @@ struct ProfileEditView: View {
     @State private var profileImageData: Data? = nil
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var showImagePicker = false
+    @State private var showPhotoActionSheet = false
+    @State private var showCamera = false
+    @State private var showPhotoLibrary = false
     
     // Privacy settings
     @State private var isPrivateAccount: Bool = false
@@ -42,24 +45,31 @@ struct ProfileEditView: View {
         NavigationView {
             Group {
                 if isLoading {
-                    ProgressView("Loading Profile...")
+                    VStack {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Loading Profile...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 8)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
-                        VStack(spacing: 24) {
-                            // Profile Image Section - Enhanced and Always Visible
+                        VStack(spacing: 0) {
+                            // Profile Photo Section - Instagram Style
                             VStack(spacing: 16) {
                                 ZStack {
-                                    // Background circle
+                                    // Profile image container
                                     Circle()
                                         .fill(Color(.systemGray6))
-                                        .frame(width: 120, height: 120)
+                                        .frame(width: 100, height: 100)
                                     
-                                    // Profile image or placeholder
                                     if let image = profileImage {
                                         image
                                             .resizable()
                                             .scaledToFill()
-                                            .frame(width: 120, height: 120)
+                                            .frame(width: 100, height: 100)
                                             .clipShape(Circle())
                                     } else {
                                         Image(systemName: "person.circle.fill")
@@ -70,232 +80,193 @@ struct ProfileEditView: View {
                                     // Upload progress overlay
                                     if isUploadingAvatar {
                                         Circle()
-                                            .fill(Color.black.opacity(0.6))
-                                            .frame(width: 120, height: 120)
+                                            .fill(Color.black.opacity(0.5))
+                                            .frame(width: 100, height: 100)
                                             .overlay(
                                                 ProgressView()
                                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                                    .scaleEffect(1.2)
                                             )
-                                    }
-                                    
-                                    // Camera icon overlay
-                                    if !isUploadingAvatar {
-                                        VStack {
-                                            Spacer()
-                                            HStack {
-                                                Spacer()
-                                                Circle()
-                                                    .fill(Color.blue)
-                                                    .frame(width: 32, height: 32)
-                                                    .overlay(
-                                                        Image(systemName: "camera.fill")
-                                                            .font(.system(size: 14))
-                                                            .foregroundColor(.white)
-                                                    )
-                                                    .offset(x: -8, y: -8)
-                                            }
-                                        }
                                     }
                                 }
                                 .onTapGesture {
-                                    // Trigger photo picker when tapping the avatar
-                                    // Note: PhotosPicker will be triggered by the button below
+                                    showPhotoActionSheet = true
                                 }
                                 
-                                VStack(spacing: 8) {
-                                    PhotosPicker(
-                                        selection: $selectedPhotoItem,
-                                        matching: .images,
-                                        photoLibrary: .shared()
-                                    ) {
-                                        HStack {
-                                            Image(systemName: "photo")
-                                                .font(.system(size: 16))
-                                            Text("Change Profile Photo")
-                                                .font(.subheadline)
-                                                .fontWeight(.medium)
-                                        }
+                                Button(action: { showPhotoActionSheet = true }) {
+                                    Text("Change Profile Photo")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
                                         .foregroundColor(.blue)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(Color.blue.opacity(0.1))
-                                        .cornerRadius(20)
-                                    }
-                                    .disabled(isUploadingAvatar)
-                                    
-                                    if profileImage != nil && !isUploadingAvatar {
-                                        Button(action: {
-                                            profileImage = nil
-                                            profileImageData = nil
-                                            selectedPhotoItem = nil
-                                        }) {
-                                            Text("Remove Photo")
-                                                .font(.caption)
-                                                .foregroundColor(.red)
-                                        }
+                                }
+                                .disabled(isUploadingAvatar)
+                                
+                                if profileImage != nil && !isUploadingAvatar {
+                                    Button(action: {
+                                        profileImage = nil
+                                        profileImageData = nil
+                                        selectedPhotoItem = nil
+                                    }) {
+                                        Text("Remove Photo")
+                                            .font(.subheadline)
+                                            .foregroundColor(.red)
                                     }
                                 }
                             }
-                            .padding(.top, 20)
-                            .padding(.bottom, 10)
+                            .padding(.top, 32)
+                            .padding(.bottom, 32)
                             
-                            // Form sections
-                            VStack(spacing: 16) {
-                                // Basic Info Section
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Basic Information")
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
+                            // Form Content
+                            VStack(spacing: 0) {
+                                // Basic Information Section
+                                VStack(spacing: 0) {
+                                    sectionHeader("Basic Information")
                                     
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Full Name")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                        TextField("Enter your full name", text: $fullName)
-                                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    VStack(spacing: 1) {
+                                        formRow(
+                                            title: "Full Name",
+                                            text: $fullName,
+                                            placeholder: "Enter your full name"
+                                        )
+                                        
+                                        formRow(
+                                            title: "Username",
+                                            text: $username,
+                                            placeholder: "Enter username"
+                                        )
+                                        .autocapitalization(.none)
+                                        .disableAutocorrection(true)
                                     }
+                                    .background(Color(.systemBackground))
+                                    .cornerRadius(10)
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 16)
                                     
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Username")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                        TextField("Enter username", text: $username)
-                                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .autocapitalization(.none)
-                                .disableAutocorrection(true)
-                        }
-                        
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Bio")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                            TextEditor(text: $bio)
+                                    // Bio Section
+                                    VStack(spacing: 0) {
+                                        HStack {
+                                            Text("Bio")
+                                                .font(.subheadline)
+                                                .foregroundColor(.primary)
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 12)
+                                        .background(Color(.systemBackground))
+                                        
+                                        TextEditor(text: $bio)
                                             .frame(minHeight: 80)
-                                            .padding(8)
-                                            .background(Color(.systemGray6))
-                                            .cornerRadius(8)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(Color(.systemBackground))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 0)
+                                                    .stroke(Color(.separator), lineWidth: 0.5)
+                                            )
                                     }
+                                    .cornerRadius(10)
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 32)
                                 }
-                                .padding()
-                                .background(Color(.systemBackground))
-                                .cornerRadius(12)
-                                .shadow(radius: 2)
                                 
                                 // Interests Section
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Interests")
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
+                                VStack(spacing: 0) {
+                                    sectionHeader("Interests")
                                     
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 10) {
+                                    LazyVGrid(columns: [
+                                        GridItem(.adaptive(minimum: 80), spacing: 8)
+                                    ], spacing: 8) {
                                         ForEach(interests, id: \.self) { interest in
-                                            Text(interest)
-                                                .font(.caption)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(selectedInterests.contains(interest) ? Color.blue : Color(.systemGray5))
-                                                .foregroundColor(selectedInterests.contains(interest) ? .white : .primary)
-                                                .cornerRadius(16)
-                                                .onTapGesture {
-                                                    if selectedInterests.contains(interest) {
-                                                        selectedInterests.remove(interest)
-                                                    } else {
-                                                        selectedInterests.insert(interest)
-                                                    }
+                                            Button(action: {
+                                                if selectedInterests.contains(interest) {
+                                                    selectedInterests.remove(interest)
+                                                } else {
+                                                    selectedInterests.insert(interest)
                                                 }
+                                            }) {
+                                                Text(interest)
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
+                                                    .padding(.horizontal, 12)
+                                                    .padding(.vertical, 8)
+                                                    .background(
+                                                        selectedInterests.contains(interest) ? 
+                                                        Color.blue : Color(.systemGray6)
+                                                    )
+                                                    .foregroundColor(
+                                                        selectedInterests.contains(interest) ? 
+                                                        .white : .primary
+                                                    )
+                                                    .cornerRadius(16)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
                                         }
                                     }
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 32)
                                 }
-                                .padding()
-                                .background(Color(.systemBackground))
-                                .cornerRadius(12)
-                                .shadow(radius: 2)
                                 
                                 // Privacy Settings Section
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Privacy Settings")
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
+                                VStack(spacing: 0) {
+                                    sectionHeader("Privacy Settings")
                                     
-                                    VStack(spacing: 12) {
-                                        HStack {
-                                            VStack(alignment: .leading) {
-                                                Text("Private Account")
-                                                    .font(.subheadline)
-                                                Text("Only approved followers can see your posts")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            Spacer()
-                                            Toggle("", isOn: $isPrivateAccount)
-                                        }
+                                    VStack(spacing: 1) {
+                                        privacyRow(
+                                            title: "Private Account",
+                                            subtitle: "Only approved followers can see your posts",
+                                            isOn: $isPrivateAccount
+                                        )
                                         
-                                        HStack {
-                                            VStack(alignment: .leading) {
-                                                Text("Show Location")
-                                                    .font(.subheadline)
-                                                Text("Allow others to see your location on pins")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            Spacer()
-                                            Toggle("", isOn: $showLocation)
-                                        }
+                                        privacyRow(
+                                            title: "Show Location",
+                                            subtitle: "Allow others to see your location on pins",
+                                            isOn: $showLocation
+                                        )
                                         
-                                        HStack {
-                                            VStack(alignment: .leading) {
-                                                Text("Direct Messages")
-                                                    .font(.subheadline)
-                                                Text("Allow anyone to send you messages")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            Spacer()
-                                            Toggle("", isOn: $allowDirectMessages)
-                                        }
+                                        privacyRow(
+                                            title: "Direct Messages",
+                                            subtitle: "Allow anyone to send you messages",
+                                            isOn: $allowDirectMessages
+                                        )
                                         
-                                        HStack {
-                                            VStack(alignment: .leading) {
-                                                Text("Activity Status")
-                                                    .font(.subheadline)
-                                                Text("Show when you're active on the app")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            Spacer()
-                                            Toggle("", isOn: $showActivityStatus)
-                                        }
+                                        privacyRow(
+                                            title: "Activity Status",
+                                            subtitle: "Show when you're active on the app",
+                                            isOn: $showActivityStatus
+                                        )
                                     }
+                                    .background(Color(.systemBackground))
+                                    .cornerRadius(10)
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 32)
                                 }
-                                .padding()
-                                .background(Color(.systemBackground))
-                                .cornerRadius(12)
-                                .shadow(radius: 2)
                                 
                                 // Save Button
-                            Button(action: saveProfile) {
-                                HStack {
-                                    if isUpdating {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                            .padding(.trailing, 8)
-                                    }
-                                    Text(isUpdating ? "Saving..." : "Save Changes")
+                                Button(action: saveProfile) {
+                                    HStack {
+                                        if isUpdating {
+                                            ProgressView()
+                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                                .scaleEffect(0.8)
+                                        }
+                                        Text(isUpdating ? "Saving..." : "Save Changes")
+                                            .font(.headline)
                                             .fontWeight(.semibold)
                                     }
-                                        .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(username.isEmpty ? Color.gray : Color.blue)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        username.isEmpty ? Color(.systemGray4) : Color.blue
+                                    )
                                     .foregroundColor(.white)
-                                    .cornerRadius(12)
+                                    .cornerRadius(10)
                                 }
                                 .disabled(isUpdating || username.isEmpty)
-                                .padding(.bottom, 20)
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 32)
                             }
-                            .padding(.horizontal)
                         }
                     }
+                    .background(Color(.systemGroupedBackground))
                 }
             }
             .navigationTitle("Edit Profile")
@@ -312,16 +283,107 @@ struct ProfileEditView: View {
             } message: {
                 Text(successMessage)
             }
-        }
-        .onChange(of: selectedPhotoItem) { _, newItem in
-            Task {
-                await loadSelectedPhoto(newItem)
+            .actionSheet(isPresented: $showPhotoActionSheet) {
+                ActionSheet(
+                    title: Text("Change Profile Photo"),
+                    buttons: [
+                        .default(Text("Take Photo")) {
+                            showCamera = true
+                        },
+                        .default(Text("Choose from Library")) {
+                            showPhotoLibrary = true
+                        },
+                        .cancel()
+                    ]
+                )
+            }
+            .sheet(isPresented: $showCamera) {
+                ImagePicker(sourceType: .camera) { image in
+                    if let image = image {
+                        profileImage = Image(uiImage: image)
+                        profileImageData = image.jpegData(compressionQuality: 0.8)
+                    }
+                }
+            }
+            .sheet(isPresented: $showPhotoLibrary) {
+                ImagePicker(sourceType: .photoLibrary) { image in
+                    if let image = image {
+                        profileImage = Image(uiImage: image)
+                        profileImageData = image.jpegData(compressionQuality: 0.8)
+                    }
+                }
             }
         }
         .onAppear {
             loadCurrentProfile()
         }
     }
+    
+    // MARK: - Helper Views
+    
+    private func sectionHeader(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+    
+    private func formRow(title: String, text: Binding<String>, placeholder: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.subheadline)
+                .frame(width: 80, alignment: .leading)
+            
+            TextField(placeholder, text: text)
+                .font(.subheadline)
+                .textFieldStyle(PlainTextFieldStyle())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
+        .overlay(
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(Color(.separator))
+                .padding(.leading, 16),
+            alignment: .bottom
+        )
+    }
+    
+    private func privacyRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: isOn)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
+        .overlay(
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(Color(.separator))
+                .padding(.leading, 16),
+            alignment: .bottom
+        )
+    }
+    
+    // MARK: - Functions
     
     private func loadCurrentProfile() {
         guard let userID = authManager.currentUserID else {
@@ -370,26 +432,6 @@ struct ProfileEditView: View {
                     showError = true
                     isLoading = false
                 }
-            }
-        }
-    }
-    
-    private func loadSelectedPhoto(_ item: PhotosPickerItem?) async {
-        guard let item = item else { return }
-        
-        do {
-            if let data = try await item.loadTransferable(type: Data.self) {
-                await MainActor.run {
-                    self.profileImageData = data
-                    if let uiImage = UIImage(data: data) {
-                        self.profileImage = Image(uiImage: uiImage)
-                    }
-                }
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to load selected image: \(error.localizedDescription)"
-                self.showError = true
             }
         }
     }
@@ -462,6 +504,45 @@ struct ProfileEditView: View {
                     showError = true
                 }
             }
+        }
+    }
+}
+
+// MARK: - Image Picker
+
+struct ImagePicker: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
+    let onImagePicked: (UIImage?) -> Void
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = sourceType
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            let image = info[.originalImage] as? UIImage
+            parent.onImagePicked(image)
+            picker.dismiss(animated: true)
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.onImagePicked(nil)
+            picker.dismiss(animated: true)
         }
     }
 }
