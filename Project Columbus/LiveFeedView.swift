@@ -270,13 +270,9 @@ struct LiveFeedView: View {
                         showVideoFeed = true
                     }) {
                         Image(systemName: "play.rectangle.fill")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(12)
-                            .background(Circle().fill(Color.accentColor))
-                            .shadow(radius: 4)
+                            .font(.title2)
+                            .foregroundColor(.primary)
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .sheet(isPresented: $showMap) {
