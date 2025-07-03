@@ -125,34 +125,88 @@ struct LocationPrivacySettingsView: View {
     }
     
     private func loadCurrentSettings() {
-        // Load current settings from UserDefaults or server
-        shareLocationWithFriends = UserDefaults.standard.bool(forKey: "shareLocationWithFriends")
-        shareLocationWithFollowers = UserDefaults.standard.bool(forKey: "shareLocationWithFollowers")
-        shareLocationPublicly = UserDefaults.standard.bool(forKey: "shareLocationPublicly")
-        shareLocationHistory = UserDefaults.standard.bool(forKey: "shareLocationHistory")
-        selectedAccuracyLevel = UserDefaults.standard.string(forKey: "locationAccuracyLevel") ?? "approximate"
-        autoDeleteDays = UserDefaults.standard.integer(forKey: "autoDeleteDays") != 0 ? UserDefaults.standard.integer(forKey: "autoDeleteDays") : 30
-        allowLocationRequests = UserDefaults.standard.bool(forKey: "allowLocationRequests")
+        // Load current settings from Supabase first, fall back to UserDefaults
+        guard let userID = authManager.currentUserID else { return }
+        
+        Task {
+            if let settings = await SupabaseManager.shared.loadLocationPrivacySettings(for: userID) {
+                await MainActor.run {
+                    shareLocationWithFriends = settings.shareLocationWithFriends
+                    shareLocationWithFollowers = settings.shareLocationWithFollowers
+                    shareLocationPublicly = settings.shareLocationPublicly
+                    shareLocationHistory = settings.shareLocationHistory
+                    selectedAccuracyLevel = settings.locationAccuracyLevel
+                    autoDeleteDays = settings.autoDeleteHistoryDays
+                    allowLocationRequests = settings.allowLocationRequests
+                    
+                    print("✅ Loaded location privacy settings from database")
+                }
+            } else {
+                // Fall back to UserDefaults if no database settings found
+                await MainActor.run {
+                    shareLocationWithFriends = UserDefaults.standard.bool(forKey: "shareLocationWithFriends")
+                    shareLocationWithFollowers = UserDefaults.standard.bool(forKey: "shareLocationWithFollowers")
+                    shareLocationPublicly = UserDefaults.standard.bool(forKey: "shareLocationPublicly")
+                    shareLocationHistory = UserDefaults.standard.bool(forKey: "shareLocationHistory")
+                    selectedAccuracyLevel = UserDefaults.standard.string(forKey: "locationAccuracyLevel") ?? "approximate"
+                    autoDeleteDays = UserDefaults.standard.integer(forKey: "autoDeleteDays") != 0 ? UserDefaults.standard.integer(forKey: "autoDeleteDays") : 30
+                    allowLocationRequests = UserDefaults.standard.bool(forKey: "allowLocationRequests")
+                    
+                    print("📱 Loaded location privacy settings from UserDefaults (fallback)")
+                }
+            }
+        }
     }
     
     private func saveSettings() {
+        guard let userID = authManager.currentUserID else {
+            alertMessage = "Unable to save settings: user not authenticated"
+            showingAlert = true
+            return
+        }
+        
         isLoading = true
         
-        // Save to UserDefaults for now
-        UserDefaults.standard.set(shareLocationWithFriends, forKey: "shareLocationWithFriends")
-        UserDefaults.standard.set(shareLocationWithFollowers, forKey: "shareLocationWithFollowers")
-        UserDefaults.standard.set(shareLocationPublicly, forKey: "shareLocationPublicly")
-        UserDefaults.standard.set(shareLocationHistory, forKey: "shareLocationHistory")
-        UserDefaults.standard.set(selectedAccuracyLevel, forKey: "locationAccuracyLevel")
-        UserDefaults.standard.set(autoDeleteDays, forKey: "autoDeleteDays")
-        UserDefaults.standard.set(allowLocationRequests, forKey: "allowLocationRequests")
+        // Create settings object
+        let settings = LocationPrivacySettings(
+            userID: userID,
+            shareLocationWithFriends: shareLocationWithFriends,
+            shareLocationWithFollowers: shareLocationWithFollowers,
+            shareLocationPublicly: shareLocationPublicly,
+            shareLocationHistory: shareLocationHistory,
+            locationAccuracyLevel: selectedAccuracyLevel,
+            autoDeleteHistoryDays: autoDeleteDays,
+            allowLocationRequests: allowLocationRequests
+        )
         
-        // TODO: Save to Supabase when SupabaseManager is accessible
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isLoading = false
-            alertMessage = "Your location privacy settings have been updated."
-            showingAlert = true
+        Task {
+            do {
+                // Save to Supabase
+                try await SupabaseManager.shared.saveLocationPrivacySettings(settings)
+                
+                // Also save to UserDefaults as backup
+                UserDefaults.standard.set(shareLocationWithFriends, forKey: "shareLocationWithFriends")
+                UserDefaults.standard.set(shareLocationWithFollowers, forKey: "shareLocationWithFollowers")
+                UserDefaults.standard.set(shareLocationPublicly, forKey: "shareLocationPublicly")
+                UserDefaults.standard.set(shareLocationHistory, forKey: "shareLocationHistory")
+                UserDefaults.standard.set(selectedAccuracyLevel, forKey: "locationAccuracyLevel")
+                UserDefaults.standard.set(autoDeleteDays, forKey: "autoDeleteDays")
+                UserDefaults.standard.set(allowLocationRequests, forKey: "allowLocationRequests")
+                
+                await MainActor.run {
+                    isLoading = false
+                    alertMessage = "Your location privacy settings have been updated successfully."
+                    showingAlert = true
+                    print("✅ Location privacy settings saved to database and UserDefaults")
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    alertMessage = "Failed to save settings: \(error.localizedDescription)"
+                    showingAlert = true
+                    print("❌ Failed to save location privacy settings: \(error)")
+                }
+            }
         }
     }
     

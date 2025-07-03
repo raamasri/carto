@@ -2706,6 +2706,191 @@ class SupabaseManager: ObservableObject {
             throw error
         }
     }
+
+    // MARK: - Location Privacy Management
+    
+    /// Save location privacy settings to database
+    func saveLocationPrivacySettings(_ settings: LocationPrivacySettings) async throws {
+        guard let session = try? await client.auth.session else {
+            throw NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let insert = LocationPrivacySettingsInsert(
+            user_id: settings.userID,
+            share_location_with_friends: settings.shareLocationWithFriends,
+            share_location_with_followers: settings.shareLocationWithFollowers,
+            share_location_publicly: settings.shareLocationPublicly,
+            share_location_history: settings.shareLocationHistory,
+            location_accuracy_level: settings.locationAccuracyLevel,
+            auto_delete_history_days: settings.autoDeleteHistoryDays,
+            allow_location_requests: settings.allowLocationRequests
+        )
+        
+        // Use upsert to insert or update
+        try await client
+            .from("location_privacy_settings")
+            .upsert(insert)
+            .execute()
+        
+        print("✅ Location privacy settings saved to database")
+    }
+    
+    /// Load location privacy settings from database
+    func loadLocationPrivacySettings(for userID: String) async -> LocationPrivacySettings? {
+        do {
+            let settings: LocationPrivacySettings = try await client
+                .from("location_privacy_settings")
+                .select("*")
+                .eq("user_id", value: userID)
+                .single()
+                .execute()
+                .value
+            
+            return settings
+        } catch {
+            print("❌ Failed to load location privacy settings: \(error)")
+            // Return default settings if none found
+            return LocationPrivacySettings(userID: userID)
+        }
+    }
+    
+    /// Check if a user can see another user's location based on privacy settings
+    func canUserSeeLocation(viewerID: String, targetUserID: String) async -> Bool {
+        // User can always see their own location
+        if viewerID == targetUserID {
+            return true
+        }
+        
+        guard let privacySettings = await loadLocationPrivacySettings(for: targetUserID) else {
+            return false // Default to no access if settings can't be loaded
+        }
+        
+        // Check public sharing first (highest precedence)
+        if privacySettings.shareLocationPublicly {
+            return true
+        }
+        
+        // Check follower sharing
+        if privacySettings.shareLocationWithFollowers {
+            let isFollowing = await isUserFollowing(followerID: viewerID, followeeID: targetUserID)
+            if isFollowing {
+                return true
+            }
+        }
+        
+        // Check friend sharing (mutual following)
+        if privacySettings.shareLocationWithFriends {
+            let areMutualFriends = await areMutualFriends(user1: viewerID, user2: targetUserID)
+            if areMutualFriends {
+                return true
+            }
+        }
+        
+        return false // No access granted
+    }
+    
+    /// Check if users are mutual friends (follow each other)
+    private func areMutualFriends(user1: String, user2: String) async -> Bool {
+        let user1FollowsUser2 = await isUserFollowing(followerID: user1, followeeID: user2)
+        let user2FollowsUser1 = await isUserFollowing(followerID: user2, followeeID: user1)
+        return user1FollowsUser2 && user2FollowsUser1
+    }
+    
+    /// Apply location accuracy level to coordinates
+    func applyLocationAccuracy(
+        latitude: Double, 
+        longitude: Double, 
+        accuracyLevel: LocationAccuracyLevel
+    ) -> (latitude: Double?, longitude: Double?, locationName: String?) {
+        switch accuracyLevel {
+        case .exact:
+            return (latitude, longitude, nil)
+            
+        case .approximate:
+            // Add random offset within ~1km radius
+            let latOffset = Double.random(in: -0.009...0.009) // ~1km in degrees
+            let lonOffset = Double.random(in: -0.009...0.009)
+            return (latitude + latOffset, longitude + lonOffset, nil)
+            
+        case .cityOnly:
+            // Return only city name, no coordinates
+            return (nil, nil, getCityName(latitude: latitude, longitude: longitude))
+            
+        case .hidden:
+            return (nil, nil, nil)
+        }
+    }
+    
+    /// Get city name from coordinates (simplified - in practice would use reverse geocoding)
+    private func getCityName(latitude: Double, longitude: Double) -> String {
+        // This is a simplified implementation
+        // In practice, you'd use CLGeocoder for reverse geocoding
+        return "City" // Placeholder
+    }
+    
+    /// Save location history entry with privacy controls
+    func saveLocationHistory(
+        userID: String,
+        latitude: Double,
+        longitude: Double,
+        locationName: String?,
+        activityType: String = "unknown"
+    ) async throws {
+        // Check if user allows location history
+        guard let privacySettings = await loadLocationPrivacySettings(for: userID),
+              privacySettings.shareLocationHistory else {
+            print("📍 Location history disabled for user")
+            return
+        }
+        
+        let insert = LocationHistoryInsert(
+            user_id: userID,
+            latitude: latitude,
+            longitude: longitude,
+            accuracy: nil,
+            altitude: nil,
+            speed: nil,
+            heading: nil,
+            location_name: locationName,
+            city: getCityName(latitude: latitude, longitude: longitude),
+            country: "US", // Simplified
+            is_manual: false,
+            activity_type: activityType
+        )
+        
+        try await client
+            .from("location_history")
+            .insert(insert)
+            .execute()
+        
+        print("✅ Location history saved")
+    }
+    
+    /// Delete old location history based on auto-delete settings
+    func cleanupLocationHistory(for userID: String) async {
+        guard let privacySettings = await loadLocationPrivacySettings(for: userID) else {
+            return
+        }
+        
+        let cutoffDate = Calendar.current.date(
+            byAdding: .day,
+            value: -privacySettings.autoDeleteHistoryDays,
+            to: Date()
+        ) ?? Date()
+        
+        do {
+            try await client
+                .from("location_history")
+                .delete()
+                .eq("user_id", value: userID)
+                .lt("created_at", value: ISO8601DateFormatter().string(from: cutoffDate))
+                .execute()
+            
+            print("✅ Old location history cleaned up")
+        } catch {
+            print("❌ Failed to cleanup location history: \(error)")
+        }
+    }
 }
 
 // MARK: - Apple Sign In Crypto Helper Extension
