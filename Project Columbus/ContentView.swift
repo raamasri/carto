@@ -128,6 +128,14 @@ struct MainMapView: View {
     @FocusState private var isSearchFieldFocused: Bool
     @State private var showDirectMessaging = false
     
+    // Sidebar sheet state variables
+    @State private var showVideoFeed = false
+    @State private var showUserProfile = false
+    @State private var showSettings = false
+    @State private var showAccountMenu = false
+    @State private var showProfileEdit = false
+    @State private var showAccountSettings = false
+    
     // Enhanced Map Filter States
     @State private var showMapFilters = false
     @State private var selectedListFilter: UUID? = nil
@@ -1176,7 +1184,13 @@ struct MainMapView: View {
                     NavigationSidebar(
                         showSideMenu: $showSideMenu,
                         selectedTab: $selectedTab,
-                        authManager: authManager
+                        authManager: authManager,
+                        showVideoFeed: $showVideoFeed,
+                        showUserProfile: $showUserProfile,
+                        showSettings: $showSettings,
+                        showAccountMenu: $showAccountMenu,
+                        showProfileEdit: $showProfileEdit,
+                        showAccountSettings: $showAccountSettings
                     )
                     .transition(.move(edge: .leading))
                 }
@@ -1184,6 +1198,61 @@ struct MainMapView: View {
             }
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showSideMenu)
         )
+        // Sheet presentations for sidebar actions
+        .sheet(isPresented: $showVideoFeed) {
+            VideoFeedView()
+                .environmentObject(authManager)
+                .onAppear {
+                    print("📱 VideoFeedView sheet appeared")
+                }
+        }
+        .sheet(isPresented: $showUserProfile) {
+            if let user = authManager.currentUser {
+                UserProfileView(profileUser: user)
+                    .environmentObject(authManager)
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(authManager)
+                .onAppear {
+                    print("📱 SettingsView sheet appeared")
+                }
+        }
+        .sheet(isPresented: $showProfileEdit) {
+            ProfileEditView()
+                .environmentObject(authManager)
+        }
+        .sheet(isPresented: $showAccountSettings) {
+            SettingsView()
+                .environmentObject(authManager)
+        }
+        .actionSheet(isPresented: $showAccountMenu) {
+            ActionSheet(
+                title: Text("Account Options"),
+                buttons: [
+                    .default(Text("Edit Profile")) {
+                        showProfileEdit = true
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    },
+                    .default(Text("Account Settings")) {
+                        showAccountSettings = true
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    },
+                    .destructive(Text("Log Out")) {
+                        authManager.logOut()
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    },
+                    .cancel()
+                ]
+            )
+        }
     }
 
     func requestUserLocation() {
@@ -1564,9 +1633,12 @@ struct NavigationSidebar: View {
     @Binding var showSideMenu: Bool
     @Binding var selectedTab: Int
     let authManager: AuthManager
-    @State private var showVideoFeed = false
-    @State private var showUserProfile = false
-    @State private var showSettings = false
+    @Binding var showVideoFeed: Bool
+    @Binding var showUserProfile: Bool
+    @Binding var showSettings: Bool
+    @Binding var showAccountMenu: Bool
+    @Binding var showProfileEdit: Bool
+    @Binding var showAccountSettings: Bool
     
     var body: some View {
         HStack {
@@ -1615,6 +1687,7 @@ struct NavigationSidebar: View {
                         title: "Videos",
                         isSelected: false
                     ) {
+                        print("📱 Videos button pressed - setting showVideoFeed = true")
                         showVideoFeed = true
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
@@ -1639,6 +1712,7 @@ struct NavigationSidebar: View {
                         title: "Settings",
                         isSelected: false
                     ) {
+                        print("📱 Settings button pressed - setting showSettings = true")
                         showSettings = true
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
@@ -1654,33 +1728,43 @@ struct NavigationSidebar: View {
                     Divider()
                     
                     if let user = authManager.currentUser {
-                        HStack(spacing: 12) {
-                            AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Circle()
-                                    .fill(Color.gray.opacity(0.3))
-                                    .overlay(
-                                        Image(systemName: "person.fill")
-                                            .foregroundColor(.gray)
-                                    )
-                            }
-                            .frame(width: 40, height: 40)
-                            .clipShape(Circle())
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(user.full_name)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                Text("@\(user.username)")
+                        Button(action: {
+                            showAccountMenu = true
+                        }) {
+                            HStack(spacing: 12) {
+                                AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle()
+                                        .fill(Color.gray.opacity(0.3))
+                                        .overlay(
+                                            Image(systemName: "person.fill")
+                                                .foregroundColor(.gray)
+                                        )
+                                }
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(user.full_name)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
+                                    Text("@\(user.username)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.up")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                            
-                            Spacer()
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(.horizontal, 20)
@@ -1695,24 +1779,13 @@ struct NavigationSidebar: View {
         .background(
             Color.black.opacity(0.3)
                 .onTapGesture {
+                    print("📱 Background tapped - closing sidebar")
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         showSideMenu = false
                     }
                 }
+                .allowsHitTesting(true)
         )
-        .sheet(isPresented: $showVideoFeed) {
-            VideoFeedView()
-                .environmentObject(authManager)
-        }
-        .sheet(isPresented: $showUserProfile) {
-            if let user = authManager.currentUser {
-                UserProfileView(profileUser: user)
-            }
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .environmentObject(authManager)
-        }
     }
 }
 
@@ -1725,7 +1798,10 @@ struct SidebarMenuItem: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            print("📱 SidebarMenuItem '\(title)' tapped")
+            action()
+        }) {
             HStack(spacing: 16) {
                 Image(systemName: icon)
                     .font(.system(size: 20))
