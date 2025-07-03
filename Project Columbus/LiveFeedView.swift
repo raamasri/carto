@@ -22,7 +22,7 @@ struct LiveFeedView: View {
     @State private var lovedPins: Set<UUID> = []
     @State private var selectedTab = 3
     @State private var showDetail = false
-    @State private var showVideoFeed = false
+
     @State private var showSendToModal = false
     @State private var pinToSend: Pin? = nil
     @State private var pinToAdd: Pin? = nil
@@ -40,9 +40,12 @@ struct LiveFeedView: View {
                         .fontWeight(.bold)
                     Spacer()
                     
-                    Button(action: {
-                        showVideoFeed = true
-                    }) {
+                    NavigationLink(destination: VideoFeedView()
+                        .environmentObject(authManager)
+                        .onAppear {
+                            print("📱 VideoFeedView appeared from LiveFeedView")
+                        }
+                    ) {
                         Image(systemName: "play.rectangle.fill")
                             .font(.title2)
                             .foregroundColor(.primary)
@@ -314,9 +317,7 @@ struct LiveFeedView: View {
                     )
                 }
             }
-            .sheet(isPresented: $showVideoFeed) {
-                VideoFeedView()
-            }
+
             .sheet(isPresented: $showSendToModal) {
                 if let pin = pinToSend {
                     SendToSheet(pin: pin, followingUsers: followingUsers, isLoading: isLoadingFollowing) { user in

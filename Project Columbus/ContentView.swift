@@ -129,7 +129,6 @@ struct MainMapView: View {
 
     
     // Sidebar sheet state variables
-    @State private var showVideoFeed = false
     @State private var showUserProfile = false
 
     @State private var showAccountMenu = false
@@ -1185,7 +1184,6 @@ struct MainMapView: View {
                         showSideMenu: $showSideMenu,
                         selectedTab: $selectedTab,
                         authManager: authManager,
-                        showVideoFeed: $showVideoFeed,
                         showUserProfile: $showUserProfile,
                         showAccountMenu: $showAccountMenu,
                         showProfileEdit: $showProfileEdit,
@@ -1198,13 +1196,7 @@ struct MainMapView: View {
             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showSideMenu)
         )
         // Sheet presentations for sidebar actions
-        .sheet(isPresented: $showVideoFeed) {
-            VideoFeedView()
-                        .environmentObject(authManager)
-                .onAppear {
-                    print("📱 VideoFeedView sheet appeared")
-                }
-            }
+
         .sheet(isPresented: $showUserProfile) {
             if let user = authManager.currentUser {
                 UserProfileView(profileUser: user)
@@ -1627,7 +1619,6 @@ struct NavigationSidebar: View {
     @Binding var showSideMenu: Bool
     @Binding var selectedTab: Int
     let authManager: AuthManager
-    @Binding var showVideoFeed: Bool
     @Binding var showUserProfile: Bool
     @Binding var showAccountMenu: Bool
     @Binding var showProfileEdit: Bool
@@ -1675,17 +1666,25 @@ struct NavigationSidebar: View {
                     }
                     
                     // Videos
-                    SidebarMenuItem(
-                        icon: "play.rectangle.fill",
-                        title: "Videos",
-                        isSelected: false
+                    NavigationLink(destination: VideoFeedView()
+                        .environmentObject(authManager)
+                        .onAppear {
+                            print("📱 VideoFeedView appeared from sidebar")
+                        }
                     ) {
-                        print("📱 Videos button pressed - setting showVideoFeed = true")
-                        showVideoFeed = true
+                        SidebarMenuItemView(
+                            icon: "play.rectangle.fill",
+                            title: "Videos",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        print("📱 Videos navigation link tapped")
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
                         }
-                    }
+                    })
                     
                     // Live Feed
                     SidebarMenuItem(
