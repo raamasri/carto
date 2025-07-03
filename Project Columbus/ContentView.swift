@@ -1163,12 +1163,12 @@ struct MainMapView: View {
                 }) {
                     Image(systemName: "message.fill")
                         .font(.title2)
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.blue)
-                        .clipShape(Circle())
-                        .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
+                        .foregroundColor(.primary)
                 }
+                .frame(width: 50, height: 50)
+                .background(.ultraThinMaterial)
+                .clipShape(Circle())
+                .shadow(radius: 4)
                 .padding(.bottom, 80) // Position just above navbar
                 .padding(.trailing, 20)
                 .sheet(isPresented: $showDirectMessaging) {

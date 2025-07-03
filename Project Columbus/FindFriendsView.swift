@@ -397,13 +397,13 @@ struct FindFriendsView: View {
                                 }
                             }) {
                                 Image(systemName: "person.2.fill")
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(.white)
+                                    .font(.title2)
+                                    .foregroundColor(.primary)
                             }
-                            .frame(width: 56, height: 56)
-                            .background(Color.blue)
+                            .frame(width: 50, height: 50)
+                            .background(.ultraThinMaterial)
                             .clipShape(Circle())
-                            .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                            .shadow(radius: 4)
                             .padding(.leading, 20)
                             .padding(.bottom, 100) // Account for tab bar
                             
