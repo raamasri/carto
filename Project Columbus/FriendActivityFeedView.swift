@@ -71,15 +71,7 @@ struct FriendActivityFeedView: View {
             }
             .navigationTitle("Friend Activity")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Refresh") {
-                        Task {
-                            await loadActivities()
-                        }
-                    }
-                }
-            }
+
             .sheet(isPresented: $showPinDetail) {
                 if let pin = selectedPin {
                     LocationDetailView(
