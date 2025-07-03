@@ -1192,6 +1192,7 @@ struct MainMapView: View {
                         showAccountSettings: $showAccountSettings
                     )
                     .transition(.move(edge: .leading))
+                    .padding(.bottom, 83) // Account for tab bar height
                 }
                 Spacer()
             }

@@ -450,6 +450,7 @@ struct FindFriendsView: View {
                         )
                         .transition(.move(edge: .leading))
                         .zIndex(999) // Ensure it's always on top
+                        .padding(.bottom, 83) // Account for tab bar height
                     }
                     Spacer()
                 }
