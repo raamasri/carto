@@ -295,11 +295,56 @@ class AuthManager: ObservableObject {
                 )
                 print("✅ currentUser fetched:", appUser.username)
                 self.currentUser = appUser
+                
+                // Initialize encryption keys for the user
+                await initializeEncryptionKeys()
             } else {
                 print("⚠️ No user found with id:", id)
             }
         } catch {
             print("❌ Failed to fetch currentUser:", error)
+        }
+    }
+    
+    // MARK: - Encryption Key Management
+    
+    /// Initialize encryption keys for the current user
+    private func initializeEncryptionKeys() async {
+        guard let userID = currentUserID else { return }
+        
+        do {
+            // Check if user already has encryption keys
+            if let _ = try? EncryptionManager.shared.retrievePrivateKey(for: userID) {
+                print("✅ [Encryption] User already has encryption keys")
+                return
+            }
+            
+            // Generate new key pair
+            let keyPair = try EncryptionManager.shared.generateUserKeyPair()
+            
+            // Store private key locally
+            try EncryptionManager.shared.storePrivateKey(keyPair.privateKey, for: userID)
+            
+            // Store public key on server
+            let publicKeyString = EncryptionManager.shared.publicKeyToString(keyPair.publicKey)
+            try await SupabaseManager.shared.storeUserPublicKey(userID: userID, publicKey: publicKeyString)
+            
+            print("✅ [Encryption] Generated and stored encryption keys for user")
+        } catch {
+            print("❌ [Encryption] Failed to initialize encryption keys: \(error)")
+        }
+    }
+    
+    /// Get the current user's public key
+    func getCurrentUserPublicKey() -> String? {
+        guard let userID = currentUserID else { return nil }
+        
+        do {
+            let privateKey = try EncryptionManager.shared.retrievePrivateKey(for: userID)
+            return EncryptionManager.shared.publicKeyToString(privateKey.publicKey)
+        } catch {
+            print("❌ [Encryption] Failed to retrieve user's public key: \(error)")
+            return nil
         }
     }
 

@@ -2966,3 +2966,122 @@ extension SupabaseManager {
         return basicUser.toAppUser()
     }
 }
+
+// MARK: - Encryption Support
+extension SupabaseManager {
+    /// Store user's public key for end-to-end encryption
+    func storeUserPublicKey(userID: String, publicKey: String) async throws {
+        let insert = UserPublicKeyDB(
+            user_id: userID,
+            public_key: publicKey,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            updated_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        // Use upsert to handle key updates
+        try await client
+            .from("user_public_keys")
+            .upsert(insert)
+            .execute()
+        
+        print("✅ [Encryption] Public key stored for user: \(userID)")
+    }
+    
+    /// Retrieve user's public key for end-to-end encryption
+    func getUserPublicKey(userID: String) async throws -> String? {
+        let response: [UserPublicKeyDB] = try await client
+            .from("user_public_keys")
+            .select("public_key")
+            .eq("user_id", value: userID)
+            .limit(1)
+            .execute()
+            .value
+        
+        return response.first?.public_key
+    }
+    
+    /// Send encrypted message
+    func sendEncryptedMessage(
+        conversationId: String,
+        senderId: String,
+        recipientId: String,
+        content: String,
+        messageType: MessageType = .text
+    ) async throws -> String {
+        // Get recipient's public key
+        guard let recipientPublicKeyString = try await getUserPublicKey(userID: recipientId) else {
+            throw EncryptionError.invalidKey("Recipient public key not found")
+        }
+        
+        // Get sender's private key
+        guard let senderPrivateKey = try? EncryptionManager.shared.retrievePrivateKey(for: senderId) else {
+            throw EncryptionError.invalidKey("Sender private key not found")
+        }
+        
+        // Convert recipient's public key string to key object
+        let recipientPublicKey = try EncryptionManager.shared.stringToPublicKey(recipientPublicKeyString)
+        
+        // Encrypt the message
+        let encryptedMessage = try EncryptionManager.shared.encryptMessage(
+            content,
+            senderPrivateKey: senderPrivateKey,
+            recipientPublicKey: recipientPublicKey
+        )
+        
+        // Store encrypted message in database
+        let messageId = UUID().uuidString
+        let messageInsert = MessageInsert(
+            id: messageId,
+            conversation_id: conversationId,
+            sender_id: senderId,
+            content: "", // Empty content for encrypted messages
+            message_type: messageType.rawValue,
+            is_encrypted: true,
+            encrypted_content: encryptedMessage.ciphertext,
+            encryption_nonce: encryptedMessage.nonce,
+            encryption_tag: encryptedMessage.tag
+        )
+        
+        try await client
+            .from("messages")
+            .insert(messageInsert)
+            .execute()
+        
+        print("✅ [Encryption] Encrypted message sent")
+        return messageId
+    }
+    
+    /// Decrypt message for current user
+    func decryptMessage(_ message: Message, currentUserId: String) async throws -> String {
+        guard message.isEncrypted,
+              let encryptedContent = message.encryptedContent,
+              let nonce = message.encryptionNonce,
+              let tag = message.encryptionTag else {
+            // Return original content if not encrypted
+            return message.content
+        }
+        
+        // Get current user's private key
+        let currentUserPrivateKey = try EncryptionManager.shared.retrievePrivateKey(for: currentUserId)
+        
+        // Get sender's public key
+        guard let senderPublicKeyString = try await getUserPublicKey(userID: message.senderId) else {
+            throw EncryptionError.invalidKey("Sender public key not found")
+        }
+        
+        let senderPublicKey = try EncryptionManager.shared.stringToPublicKey(senderPublicKeyString)
+        
+        // Decrypt the message
+        let encryptedMessage = EncryptedMessage(
+            ciphertext: encryptedContent,
+            nonce: nonce,
+            tag: tag
+        )
+        
+        return try EncryptionManager.shared.decryptMessage(
+            encryptedMessage,
+            recipientPrivateKey: currentUserPrivateKey,
+            senderPublicKey: senderPublicKey
+        )
+    }
+}

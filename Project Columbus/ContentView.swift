@@ -1200,9 +1200,9 @@ struct MainMapView: View {
         .sheet(isPresented: $showUserProfile) {
             if let user = authManager.currentUser {
                 UserProfileView(profileUser: user)
-                    .environmentObject(authManager)
+                        .environmentObject(authManager)
+                }
             }
-        }
 
         .sheet(isPresented: $showProfileEdit) {
             ProfileEditView()
@@ -1805,7 +1805,6 @@ struct NavigationSidebar: View {
             }
             .frame(width: 280)
             .background(.ultraThinMaterial)
-            .shadow(color: Color.black.opacity(0.2), radius: 10, x: 5, y: 0)
             .onAppear {
                 print("🔄 [Sidebar] Refreshing current user data")
                 Task {

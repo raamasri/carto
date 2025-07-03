@@ -286,6 +286,25 @@ struct User: Identifiable {
     var collections: [PinList] = []
     var favoriteSpots: [Pin] = []
     var activityFeed: [Pin] = []
+    
+    // Encryption support
+    var publicKey: String? // Base64 encoded public key for E2E encryption
+}
+
+// MARK: - Encryption Models
+
+struct UserPublicKey: Codable {
+    let userId: String
+    let publicKey: String
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+struct UserPublicKeyDB: Codable {
+    let user_id: String
+    let public_key: String
+    let created_at: String
+    let updated_at: String
 }
 
 // MARK: - Conversion Extensions
@@ -500,6 +519,12 @@ struct Message: Identifiable, Codable {
     var locationData: MessageLocationData?
     var pinData: MessagePinData?
     
+    // Encryption support
+    var isEncrypted: Bool = false
+    var encryptedContent: String? // Base64 encoded encrypted content
+    var encryptionNonce: String? // Base64 encoded nonce
+    var encryptionTag: String? // Base64 encoded authentication tag
+    
     // Computed properties for UI
     var isFromCurrentUser: Bool {
         // This will be set based on the current user context
@@ -640,6 +665,12 @@ struct MessageDB: Codable {
     let edited_at: String?
     let is_deleted: Bool
     
+    // Encryption support
+    let is_encrypted: Bool?
+    let encrypted_content: String?
+    let encryption_nonce: String?
+    let encryption_tag: String?
+    
     func toMessage() -> Message {
         // Parse timestamp with support for fractional seconds
         func parseTimestamp(_ timestamp: String) -> Date? {
@@ -658,7 +689,7 @@ struct MessageDB: Codable {
         
         let createdDate = parseTimestamp(created_at) ?? Date()
         
-        return Message(
+        var message = Message(
             id: UUID(uuidString: id) ?? UUID(),
             conversationId: conversation_id,
             senderId: sender_id,
@@ -666,6 +697,14 @@ struct MessageDB: Codable {
             createdAt: createdDate,
             messageType: MessageType(rawValue: message_type) ?? .text
         )
+        
+        // Set encryption properties
+        message.isEncrypted = is_encrypted ?? false
+        message.encryptedContent = encrypted_content
+        message.encryptionNonce = encryption_nonce
+        message.encryptionTag = encryption_tag
+        
+        return message
     }
 }
 
@@ -707,10 +746,27 @@ struct MessageDetailDB: Codable {
 
 // Insert models
 struct MessageInsert: Codable {
+    let id: String
     let conversation_id: String
     let sender_id: String
     let content: String
     let message_type: String
+    let is_encrypted: Bool?
+    let encrypted_content: String?
+    let encryption_nonce: String?
+    let encryption_tag: String?
+    
+    init(id: String, conversation_id: String, sender_id: String, content: String, message_type: String, is_encrypted: Bool? = nil, encrypted_content: String? = nil, encryption_nonce: String? = nil, encryption_tag: String? = nil) {
+        self.id = id
+        self.conversation_id = conversation_id
+        self.sender_id = sender_id
+        self.content = content
+        self.message_type = message_type
+        self.is_encrypted = is_encrypted
+        self.encrypted_content = encrypted_content
+        self.encryption_nonce = encryption_nonce
+        self.encryption_tag = encryption_tag
+    }
 }
 
 // MARK: - Conversion Extensions for Messaging
