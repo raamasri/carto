@@ -131,7 +131,7 @@ struct MainMapView: View {
     // Sidebar sheet state variables
     @State private var showVideoFeed = false
     @State private var showUserProfile = false
-    @State private var showSettings = false
+
     @State private var showAccountMenu = false
     @State private var showProfileEdit = false
     @State private var showAccountSettings = false
@@ -1187,7 +1187,6 @@ struct MainMapView: View {
                         authManager: authManager,
                         showVideoFeed: $showVideoFeed,
                         showUserProfile: $showUserProfile,
-                        showSettings: $showSettings,
                         showAccountMenu: $showAccountMenu,
                         showProfileEdit: $showProfileEdit,
                         showAccountSettings: $showAccountSettings
@@ -1212,13 +1211,7 @@ struct MainMapView: View {
                     .environmentObject(authManager)
             }
         }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .environmentObject(authManager)
-                .onAppear {
-                    print("📱 SettingsView sheet appeared")
-                }
-        }
+
         .sheet(isPresented: $showProfileEdit) {
             ProfileEditView()
                 .environmentObject(authManager)
@@ -1636,7 +1629,6 @@ struct NavigationSidebar: View {
     let authManager: AuthManager
     @Binding var showVideoFeed: Bool
     @Binding var showUserProfile: Bool
-    @Binding var showSettings: Bool
     @Binding var showAccountMenu: Bool
     @Binding var showProfileEdit: Bool
     @Binding var showAccountSettings: Bool
@@ -1729,17 +1721,25 @@ struct NavigationSidebar: View {
                     }
                     
                     // Settings
-                    SidebarMenuItem(
-                        icon: "gearshape.fill",
-                        title: "Settings",
-                        isSelected: false
+                    NavigationLink(destination: SettingsView()
+                        .environmentObject(authManager)
+                        .onAppear {
+                            print("📱 SettingsView appeared")
+                        }
                     ) {
-                        print("📱 Settings button pressed - setting showSettings = true")
-                        showSettings = true
+                        SidebarMenuItemView(
+                            icon: "gearshape.fill",
+                            title: "Settings",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        print("📱 Settings navigation link tapped")
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
                         }
-                    }
+                    })
                 }
                 .padding(.horizontal, 20)
                 
@@ -1754,38 +1754,8 @@ struct NavigationSidebar: View {
                             showAccountMenu = true
                         }) {
                             HStack(spacing: 12) {
-                                // User avatar with proper loading and debug logging
-                                if let avatarURL = user.avatarURL, !avatarURL.isEmpty, let url = URL(string: avatarURL) {
-                                    AsyncImage(url: url) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                    } placeholder: {
-                                        Circle()
-                                            .fill(Color.gray.opacity(0.3))
-                                            .overlay(
-                                                Image(systemName: "person.fill")
-                                                    .foregroundColor(.gray)
-                                            )
-                                    }
-                                    .frame(width: 40, height: 40)
-                                    .clipShape(Circle())
-                                    .onAppear {
-                                        print("🖼️ [Sidebar] Loading avatar from URL: \(avatarURL)")
-                                    }
-                                } else {
-                                    // Fallback for no avatar
-                                    Circle()
-                                        .fill(Color.gray.opacity(0.3))
-                                        .overlay(
-                                            Image(systemName: "person.fill")
-                                                .foregroundColor(.gray)
-                                        )
-                                        .frame(width: 40, height: 40)
-                                        .onAppear {
-                                            print("🖼️ [Sidebar] No avatar URL available. avatarURL: '\(user.avatarURL ?? "nil")'")
-                                        }
-                                }
+                                // User avatar with cached loading
+                                SidebarUserAvatar(user: user)
                                 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(user.full_name)
@@ -1886,6 +1856,93 @@ struct SidebarMenuItemView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
         )
+    }
+}
+
+// MARK: - Sidebar User Avatar
+
+struct SidebarUserAvatar: View {
+    let user: AppUser
+    @State private var profileImage: Image? = nil
+    @State private var isLoading = false
+    
+    var body: some View {
+        Group {
+            if let image = profileImage {
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Group {
+                            if isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .gray))
+                            } else {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    )
+            }
+        }
+        .onAppear {
+            loadUserAvatar()
+        }
+        .onChange(of: user.avatarURL) { _ in
+            loadUserAvatar()
+        }
+    }
+    
+    private func loadUserAvatar() {
+        print("👤 [SidebarAvatar] Loading avatar for user: \(user.username)")
+        
+        // Check cache first
+        if let cached = ImageCache.shared.image(forKey: user.id) {
+            print("👤 [SidebarAvatar] Found cached avatar for \(user.username)")
+            profileImage = Image(uiImage: cached)
+            return
+        }
+        
+        // Check if user has avatar URL
+        guard let avatarURL = user.avatarURL, !avatarURL.isEmpty, let url = URL(string: avatarURL) else {
+            print("👤 [SidebarAvatar] No avatar URL for user: \(user.username)")
+            return
+        }
+        
+        // Download avatar
+        isLoading = true
+        print("👤 [SidebarAvatar] Downloading avatar from: \(avatarURL)")
+        
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                
+                await MainActor.run {
+                    if let uiImage = UIImage(data: data) {
+                        // Cache the image
+                        ImageCache.shared.insertImage(uiImage, forKey: user.id)
+                        profileImage = Image(uiImage: uiImage)
+                        print("👤 [SidebarAvatar] Successfully loaded and cached avatar for \(user.username)")
+                    } else {
+                        print("👤 [SidebarAvatar] Failed to create UIImage from data for \(user.username)")
+                    }
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    print("👤 [SidebarAvatar] Failed to download avatar for \(user.username): \(error)")
+                    isLoading = false
+                }
+            }
+        }
     }
 }
 
