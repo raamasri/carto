@@ -62,6 +62,44 @@ struct LocationDetailView: View {
             .bold()
     }
     
+    // MARK: - Computed Properties
+    
+    /// Creates a formatted address string from placemark components
+    private var formattedAddress: String {
+        let placemark = mapItem.placemark
+        var addressComponents: [String] = []
+        
+        // Add street number and name
+        if let subThoroughfare = placemark.subThoroughfare,
+           let thoroughfare = placemark.thoroughfare {
+            addressComponents.append("\(subThoroughfare) \(thoroughfare)")
+        } else if let thoroughfare = placemark.thoroughfare {
+            addressComponents.append(thoroughfare)
+        }
+        
+        // Add locality (city)
+        if let locality = placemark.locality {
+            addressComponents.append(locality)
+        }
+        
+        // Add administrative area (state/province)
+        if let administrativeArea = placemark.administrativeArea {
+            addressComponents.append(administrativeArea)
+        }
+        
+        // Add postal code
+        if let postalCode = placemark.postalCode {
+            addressComponents.append(postalCode)
+        }
+        
+        // Add country (only if we don't have more specific components)
+        if addressComponents.isEmpty, let country = placemark.country {
+            addressComponents.append(country)
+        }
+        
+        return addressComponents.joined(separator: ", ")
+    }
+    
     private var friendsSection: some View {
         Group {
             if isLoadingFriends {
@@ -153,7 +191,7 @@ struct LocationDetailView: View {
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Address section - made more prominent
-            if let address = mapItem.placemark.title {
+            if !formattedAddress.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Address")
                         .font(.headline)
@@ -164,7 +202,7 @@ struct LocationDetailView: View {
                             .foregroundColor(.red)
                             .font(.title3)
                         
-                        Text(address)
+                        Text(formattedAddress)
                             .font(.body)
                             .foregroundColor(.primary)
                             .fixedSize(horizontal: false, vertical: true)

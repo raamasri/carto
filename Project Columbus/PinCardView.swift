@@ -198,6 +198,7 @@ struct PinCardView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 2) {
+                    // Show city/address information
                     if !pin.city.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin.circle")
@@ -206,9 +207,11 @@ struct PinCardView: View {
                             Text(pin.city)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+                                .lineLimit(1)
                         }
                     }
                     
+                    // Show distance from user
                     if let distance = distanceFromUser {
                         HStack(spacing: 4) {
                             Image(systemName: "location")
