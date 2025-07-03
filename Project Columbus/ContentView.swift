@@ -1700,25 +1700,16 @@ struct NavigationSidebar: View {
                     }
                     
                     // Find Friends
-                    NavigationLink(destination: FindFriendsView()
-                        .environmentObject(authManager)
-                        .onAppear {
-                            print("📱 FindFriendsView appeared")
-                        }
+                    SidebarMenuItem(
+                        icon: "person.2.fill",
+                        title: "Find Friends",
+                        isSelected: selectedTab == 1
                     ) {
-                        SidebarMenuItemView(
-                            icon: "person.2.fill",
-                            title: "Find Friends",
-                            isSelected: false
-                        )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .simultaneousGesture(TapGesture().onEnded {
-                        print("📱 Find Friends navigation link tapped")
+                        selectedTab = 1
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
                         }
-                    })
+                    }
                     
                     // Messages
                     NavigationLink(destination: DirectMessagingView()
