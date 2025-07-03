@@ -222,9 +222,9 @@ struct PinCardView: View {
 
     // Enhanced header with rating, distance, and mini map
     private var enhancedHeader: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .center, spacing: 10) {
                     Text(pin.locationName)
                         .font(.headline)
                         .fontWeight(.semibold)
@@ -232,7 +232,7 @@ struct PinCardView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     
                     if let rating = pin.starRating {
-                        HStack(spacing: 2) {
+                        HStack(spacing: 3) {
                             Text(String(format: "%.1f", rating))
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
@@ -240,17 +240,17 @@ struct PinCardView: View {
                                 .font(.caption)
                                 .foregroundColor(.yellow)
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
                         .background(Color.yellow.opacity(0.1))
-                        .cornerRadius(6)
+                        .cornerRadius(8)
                     }
                 }
                 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     // Show city/address information
                     if !pin.city.isEmpty {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 6) {
                             Image(systemName: "mappin.circle")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -263,7 +263,7 @@ struct PinCardView: View {
                     
                     // Show distance from user
                     if let distance = distanceFromUser {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 6) {
                             Image(systemName: "location")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -275,7 +275,7 @@ struct PinCardView: View {
                 }
             }
             
-            Spacer(minLength: 8)
+            Spacer(minLength: 12)
             
             // Mini map
             miniMap
@@ -364,16 +364,16 @@ struct PinCardView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Enhanced header with rating, distance, MAP button
                 enhancedHeader
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
                 
                 // Friends avatars row (if any)
                 let friendPins = friendsWhoReviewed()
                 if !friendPins.isEmpty {
                     friendsAvatarsRow
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
                 }
                 
                 // Review text (expanded)
@@ -383,15 +383,15 @@ struct PinCardView: View {
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .lineLimit(nil)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 16)
                 }
                 
                 // Enhanced photo carousel
                 if let media = pin.mediaURLs, !media.isEmpty {
                     photoCarousel
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 16)
                 }
                 
                 // Trip tag and timestamp
@@ -402,8 +402,8 @@ struct PinCardView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
                 
                 // Action icons and author
                 HStack {
@@ -411,7 +411,7 @@ struct PinCardView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Spacer()
-                    HStack(spacing: 16) {
+                    HStack(spacing: 20) {
                         Image(systemName: "heart")
                             .font(.system(size: 16))
                         Image(systemName: "message")
@@ -423,8 +423,8 @@ struct PinCardView: View {
                     }
                     .foregroundColor(.gray)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
             .background(Color(.systemBackground))
             .cornerRadius(16)

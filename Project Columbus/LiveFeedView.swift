@@ -81,6 +81,8 @@ struct LiveFeedView: View {
                                             .environmentObject(locationManager)
                                     }
                                     .buttonStyle(.plain)
+                                    .listRowSeparator(.hidden)
+                                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                                 }
                                 .refreshable {
                                     await refreshPins()
@@ -107,6 +109,8 @@ struct LiveFeedView: View {
                                     .environmentObject(locationManager)
                             }
                             .buttonStyle(.plain)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button {
                                     pinToAdd = pin
@@ -181,6 +185,8 @@ struct LiveFeedView: View {
                                                     .environmentObject(locationManager)
                                             }
                                             .buttonStyle(.plain)
+                                            .listRowSeparator(.hidden)
+                                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                                 Button {
                                                     pinToAdd = pin
@@ -244,6 +250,8 @@ struct LiveFeedView: View {
                                     .environmentObject(locationManager)
                             }
                             .buttonStyle(.plain)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button {
                                     pinToAdd = pin
@@ -514,7 +522,7 @@ struct EnhancedPinCardView: View {
     @State private var userReaction: PinReactionType? = nil
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             // Original pin card content
             PinCardView(pin: pin)
                 .environmentObject(pinStore)
@@ -522,12 +530,12 @@ struct EnhancedPinCardView: View {
                 .environmentObject(locationManager)
             
             // Social engagement section
-            HStack(spacing: 20) {
+            HStack(spacing: 24) {
                 // Reactions summary
                 Button(action: {
                     showCommentsAndReactions = true
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         if reactions.isEmpty {
                             Image(systemName: "heart")
                                 .font(.subheadline)
@@ -538,7 +546,7 @@ struct EnhancedPinCardView: View {
                         } else {
                             // Show top reaction emojis
                             let topReactions = getTopReactions()
-                            HStack(spacing: 2) {
+                            HStack(spacing: 3) {
                                 ForEach(topReactions.prefix(3), id: \.self) { reactionType in
                                     Text(reactionType.emoji)
                                         .font(.caption)
@@ -556,7 +564,7 @@ struct EnhancedPinCardView: View {
                 Button(action: {
                     showCommentsAndReactions = true
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         Image(systemName: "bubble.left")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -581,8 +589,8 @@ struct EnhancedPinCardView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
         }
         .sheet(isPresented: $showCommentsAndReactions) {
             CommentsAndReactionsView(pin: pin)
