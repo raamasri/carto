@@ -11,7 +11,7 @@ import MapKit
 struct LocationHistoryView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var locationManager: AppLocationManager
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     
     @State private var locationHistory: [MockLocationEntry] = []
     @State private var isLoading: Bool = true
@@ -318,7 +318,7 @@ struct LocationHistoryRow: View {
 
 struct LocationHistoryMapView: View {
     let entry: MockLocationEntry
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     
     @State private var region: MKCoordinateRegion
     
@@ -332,8 +332,8 @@ struct LocationHistoryMapView: View {
     
     var body: some View {
         NavigationView {
-            Map(coordinateRegion: $region, annotationItems: [entry]) { entry in
-                MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: entry.latitude, longitude: entry.longitude)) {
+            Map(position: .constant(.region(region))) {
+                Annotation(entry.locationName, coordinate: CLLocationCoordinate2D(latitude: entry.latitude, longitude: entry.longitude)) {
                     VStack {
                         Image(systemName: "location.fill")
                             .foregroundColor(.red)
@@ -350,7 +350,7 @@ struct LocationHistoryMapView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
             }

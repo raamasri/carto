@@ -456,14 +456,14 @@ struct UserProfileView: View {
                             ZStack {
                                 // Main Map
                                 ZStack {
-                                    Map(coordinateRegion: $region, annotationItems: pinStore.isLoading ? [] : filteredPins) { pin in
-                                        MapAnnotation(
-                                            coordinate: CLLocationCoordinate2D(
+                                    Map(position: .constant(.region(region))) {
+                                        ForEach(pinStore.isLoading ? [] : filteredPins, id: \.id) { pin in
+                                            Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(
                                                 latitude: pin.latitude,
                                                 longitude: pin.longitude
-                                            )
-                                        ) {
-                                            EnhancedPinAnnotation(pin: pin)
+                                            )) {
+                                                EnhancedPinAnnotation(pin: pin)
+                                            }
                                         }
                                     }
                                     .frame(height: 400)
@@ -1263,21 +1263,18 @@ struct FullscreenMapView: View {
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Map(
-                coordinateRegion: $region,
-                annotationItems: pins
-            ) { pin in
-                MapAnnotation(
-                    coordinate: CLLocationCoordinate2D(
+            Map(position: .constant(.region(region))) {
+                ForEach(pins, id: \.id) { pin in
+                    Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(
                         latitude: pin.latitude,
                         longitude: pin.longitude
-                    )
-                ) {
-                    Image(systemName: "mappin.circle.fill")
-                        .resizable()
-                        .frame(width: 30, height: 30)
-                        .foregroundColor(.blue)
-                        .shadow(radius: 3)
+                    )) {
+                        Image(systemName: "mappin.circle.fill")
+                            .resizable()
+                            .frame(width: 30, height: 30)
+                            .foregroundColor(.blue)
+                            .shadow(radius: 3)
+                    }
                 }
             }
             .ignoresSafeArea()

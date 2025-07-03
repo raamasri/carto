@@ -10,7 +10,7 @@ import Combine
 import Supabase
 
 struct ChangePasswordView: View {
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authManager: AuthManager
     
     @State private var currentPassword = ""
@@ -263,7 +263,7 @@ struct ChangePasswordView: View {
             Text(errorMessage)
         }
         .alert("Success", isPresented: $showSuccess) {
-            Button("OK") { presentationMode.wrappedValue.dismiss() }
+                            Button("OK") { dismiss() }
         } message: {
             Text(successMessage)
         }

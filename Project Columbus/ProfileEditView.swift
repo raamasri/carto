@@ -9,7 +9,7 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileEditView: View {
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authManager: AuthManager
     
     @State private var username: String = ""
@@ -278,7 +278,7 @@ struct ProfileEditView: View {
             }
             .alert("Success", isPresented: $showSuccess) {
                 Button("OK") {
-                    presentationMode.wrappedValue.dismiss()
+                    dismiss()
                 }
             } message: {
                 Text(successMessage)

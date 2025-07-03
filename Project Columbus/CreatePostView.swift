@@ -23,7 +23,7 @@ struct NearbyPlace: Identifiable, Hashable {
 struct CreatePostView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var pinStore: PinStore
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     
     @State private var placeName: String = ""
     @State private var location: String = ""
@@ -491,7 +491,7 @@ struct CreatePostView: View {
         }
         .alert("Success", isPresented: $showSuccess) {
             Button("OK") {
-                presentationMode.wrappedValue.dismiss()
+                dismiss()
             }
         } message: {
             Text("Post created successfully!")
@@ -887,7 +887,6 @@ class SearchCompleterDelegateWrapper: NSObject, MKLocalSearchCompleterDelegate {
 
 struct VideoPickerView: UIViewControllerRepresentable {
     @Binding var selectedVideos: [URL]
-    @Environment(\.presentationMode) var presentationMode
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)

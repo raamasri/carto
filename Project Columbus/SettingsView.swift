@@ -10,7 +10,7 @@ import Combine
 import Foundation
 
 struct SettingsView: View {
-    @Environment(\.presentationMode) var dismiss
+    @Environment(\.dismiss) private var dismiss
     @AppStorage("themePreference") private var themePreference: String = "Auto"
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
     @AppStorage("biometricEnabled") private var biometricEnabled: Bool = UserDefaults.standard.bool(forKey: "biometricEnabled")

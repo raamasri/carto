@@ -10,7 +10,6 @@ import PhotosUI
 
 struct BuildProfileView: View {
     @EnvironmentObject var authManager: AuthManager
-    @Environment(\.presentationMode) var presentationMode
 
     // Enhanced validation using ValidationManager infrastructure
     @StateObject private var usernameValidator = FieldValidator(rules: [

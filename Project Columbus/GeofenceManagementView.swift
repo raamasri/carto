@@ -11,7 +11,7 @@ import MapKit
 struct GeofenceManagementView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var locationManager: AppLocationManager
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     
     @State private var geofences: [MockGeofence] = []
     @State private var showingCreateGeofence: Bool = false
@@ -61,7 +61,7 @@ struct GeofenceManagementView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
                 
@@ -209,7 +209,7 @@ struct GeofenceRow: View {
 }
 
 struct CreateGeofenceView: View {
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     let onSave: (MockGeofence) -> Void
     
     @State private var name: String = ""
@@ -283,7 +283,7 @@ struct CreateGeofenceView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
                 
@@ -321,12 +321,12 @@ struct CreateGeofenceView: View {
         )
         
         onSave(newGeofence)
-        presentationMode.wrappedValue.dismiss()
+        dismiss()
     }
 }
 
 struct GeofenceDetailView: View {
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     let geofence: MockGeofence
     let onUpdate: (MockGeofence) -> Void
     
@@ -389,7 +389,7 @@ struct GeofenceDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
                 
@@ -415,12 +415,12 @@ struct GeofenceDetailView: View {
         )
         
         onUpdate(updatedGeofence)
-        presentationMode.wrappedValue.dismiss()
+        dismiss()
     }
 }
 
 struct LocationPickerView: View {
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     let onLocationSelected: (CLLocationCoordinate2D) -> Void
     
     @State private var region = MKCoordinateRegion(
@@ -432,7 +432,9 @@ struct LocationPickerView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Map(coordinateRegion: $region, interactionModes: .all, showsUserLocation: true)
+                Map(position: .constant(.region(region))) {
+                    UserAnnotation()
+                }
                     .onTapGesture { location in
                         // Convert tap location to coordinate
                         // This is a simplified version - actual implementation would need proper coordinate conversion
@@ -452,7 +454,7 @@ struct LocationPickerView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
                 
@@ -463,7 +465,7 @@ struct LocationPickerView: View {
                         } else {
                             onLocationSelected(region.center)
                         }
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
             }

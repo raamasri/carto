@@ -11,7 +11,7 @@ struct UserInsert: Codable {
 
 struct SignUpView: View {
     @EnvironmentObject var authManager: AuthManager
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
 
     @FocusState private var usernameFocused: Bool
     @FocusState private var emailFocused: Bool
@@ -266,7 +266,7 @@ struct SignUpView: View {
                                     fadeOut = true
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                                    presentationMode.wrappedValue.dismiss()
+                                    dismiss()
                                 }
                             } catch {
                                 if (error as NSError).code == 409 {
@@ -330,7 +330,7 @@ struct SignUpView: View {
                                         fadeOut = true
                                     }
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                                        presentationMode.wrappedValue.dismiss()
+                                        dismiss()
                                     }
                                 } catch {
                                     print("❌ Supabase Apple Sign-In failed:", error)

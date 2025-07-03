@@ -67,11 +67,14 @@ struct CollectionMapView: View {
     }
     
     var body: some View {
-        Map(coordinateRegion: .constant(MKCoordinateRegion(
+        Map(position: .constant(.region(MKCoordinateRegion(
             center: pins.first.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) } ?? CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-        )), annotationItems: pins) { pin in
-            MapMarker(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude), tint: .red)
+        )))) {
+            ForEach(pins, id: \.id) { pin in
+                Marker("", coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
+                    .tint(.red)
+            }
         }
         .edgesIgnoringSafeArea(.all)
         .navigationTitle("Map View")
@@ -1926,7 +1929,7 @@ struct SidebarUserAvatar: View {
         .onAppear {
             loadUserAvatar()
         }
-        .onChange(of: user.avatarURL) { _ in
+        .onChange(of: user.avatarURL) { oldValue, newValue in
             loadUserAvatar()
         }
     }

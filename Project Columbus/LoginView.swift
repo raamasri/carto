@@ -4,7 +4,7 @@ import LocalAuthentication
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     @FocusState private var usernameFocused: Bool
     @FocusState private var passwordFocused: Bool
 
@@ -153,7 +153,7 @@ struct LoginView: View {
                                     }
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                         withAnimation(.easeInOut(duration: 0.5)) {
-                                            presentationMode.wrappedValue.dismiss()
+                                            dismiss()
                                         }
                                     }
                                 } catch {
@@ -184,7 +184,7 @@ struct LoginView: View {
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         withAnimation(.easeInOut(duration: 0.5)) {
-                            presentationMode.wrappedValue.dismiss()
+                            dismiss()
                         }
                     }
                 }, errorHandler: { error in
@@ -257,7 +257,7 @@ struct LoginView: View {
                 // Allow fade‑out to finish before dismissing
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     withAnimation(.easeInOut(duration: 0.5)) {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
             } else {

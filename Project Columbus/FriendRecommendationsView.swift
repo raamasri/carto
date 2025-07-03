@@ -238,7 +238,11 @@ struct RecommendationCard: View {
                 Button(action: {
                     // Add to Want to Go list
                     Task {
-                        await SupabaseManager.shared.addPinToList(pin: recommendation.recommendedPlace, listName: "Want to Go")
+                        // Find the "Want to Go" list ID first
+                        let lists = await SupabaseManager.shared.getUserLists()
+                        if let wantToGoList = lists.first(where: { $0.name == "Want to Go" }) {
+                            await SupabaseManager.shared.addPinToListById(pin: recommendation.recommendedPlace, listId: wantToGoList.id.uuidString)
+                        }
                     }
                 }) {
                     HStack(spacing: 6) {

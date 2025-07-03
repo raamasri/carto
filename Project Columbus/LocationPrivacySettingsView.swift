@@ -10,7 +10,7 @@ import SwiftUI
 struct LocationPrivacySettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var locationManager: AppLocationManager
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     
     @State private var shareLocationWithFriends: Bool = true
     @State private var shareLocationWithFollowers: Bool = false
@@ -102,7 +102,7 @@ struct LocationPrivacySettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
                 
