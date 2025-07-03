@@ -60,6 +60,24 @@ struct UserProfileView: View {
     @State private var selectedStarFilter: StarFilter = .all
     @State private var mapSearchText = ""
     
+    // Computed review count - count pins that have review text
+    private var reviewCount: Int {
+        let allPins = pinStore.lists.flatMap { $0.pins }
+        let uniquePins = Array(Set(allPins.map { $0.id })).compactMap { id in
+            allPins.first { $0.id == id }
+        }
+        return uniquePins.filter { pin in
+            pin.reviewText?.isEmpty == false
+        }.count
+    }
+    
+    // Computed total pin count - count all unique pins
+    private var totalPinCount: Int {
+        let allPins = pinStore.lists.flatMap { $0.pins }
+        let uniquePinIds = Set(allPins.map { $0.id })
+        return uniquePinIds.count
+    }
+    
     // Computed filtered pins for enhanced map
     private var filteredPins: [Pin] {
         // Only show pins that are actually in user's lists (not orphaned pins)
@@ -221,7 +239,7 @@ struct UserProfileView: View {
                                 .onTapGesture { showChangePicturePrompt = true }
                         }
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text(displayedUser.full_name.isEmpty ? "@\(displayedUser.username)" : displayedUser.full_name)
                                 .font(.headline)
 
@@ -229,22 +247,61 @@ struct UserProfileView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.gray)
                                 .lineLimit(2)
-
-                            HStack(spacing: 8) {
+                            
+                            // Instagram-style stats row
+                            HStack(spacing: 0) {
+                                // Pins
+                                VStack(spacing: 2) {
+                                    Text("\(totalPinCount)")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                    Text("Pins")
+                                        .font(.caption)
+                                        .foregroundColor(.primary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                
+                                // Reviews
+                                VStack(spacing: 2) {
+                                    Text("\(reviewCount)")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                    Text("Reviews")
+                                        .font(.caption)
+                                        .foregroundColor(.primary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                
+                                // Followers
                                 NavigationLink(destination: UserListView(userID: profileUser.id, listType: .followers)) {
-                                    Text("\(displayedUser.follower_count) \(displayedUser.follower_count == 1 ? "follower" : "followers")")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
+                                    VStack(spacing: 2) {
+                                        Text("\(displayedUser.follower_count)")
+                                            .font(.headline)
+                                            .fontWeight(.semibold)
+                                        Text("Followers")
+                                            .font(.caption)
+                                            .foregroundColor(.primary)
+                                    }
+                                    .frame(maxWidth: .infinity)
                                 }
-                                Text("•")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
+                                .buttonStyle(PlainButtonStyle())
+                                
+                                // Following
                                 NavigationLink(destination: UserListView(userID: profileUser.id, listType: .following)) {
-                                    Text("\(displayedUser.following_count) following")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
+                                    VStack(spacing: 2) {
+                                        Text("\(displayedUser.following_count)")
+                                            .font(.headline)
+                                            .fontWeight(.semibold)
+                                        Text("Following")
+                                            .font(.caption)
+                                            .foregroundColor(.primary)
+                                    }
+                                    .frame(maxWidth: .infinity)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
+                            .padding(.vertical, 8)
+                            
                             if displayedUser.isCurrentUser == false && profileUser.isFollowedByCurrentUser {
                                 Text("Follows you")
                                     .font(.caption2)
