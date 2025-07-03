@@ -421,7 +421,7 @@ struct LocationDetailView: View {
                             .font(.title2)
                         Spacer()
                     }
-                    .padding()
+                    .frame(height: 50)
                     .background(Color.orange)
                     .foregroundColor(.white)
                     .cornerRadius(10)
@@ -439,7 +439,7 @@ struct LocationDetailView: View {
                             .font(.title2)
                         Spacer()
                     }
-                    .padding()
+                    .frame(height: 50)
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(10)
