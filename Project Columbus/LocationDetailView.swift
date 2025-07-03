@@ -401,6 +401,9 @@ struct LocationAddToListSheet: View {
     var onSelect: (String) -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var pinStore: PinStore
+    @State private var showCreateList = false
+    @State private var newListName = ""
+    @State private var searchText = ""
 
     // Helper to check if a list contains this pin (by coordinates or name)
     private func listContainsPin(_ list: PinList) -> Bool {
@@ -412,39 +415,269 @@ struct LocationAddToListSheet: View {
             return isLocationMatch || isNameMatch
         }
     }
+    
+    private var filteredLists: [PinList] {
+        if searchText.isEmpty {
+            return pinStore.lists
+        } else {
+            return pinStore.lists.filter { list in
+                list.name.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+    }
 
     var body: some View {
-        VStack(spacing: 24) {
-            Text("Add to List")
-                .font(.title2)
-                .bold()
-                .padding(.top)
-            
-            // Use actual lists from PinStore
-            ForEach(pinStore.lists, id: \.id) { list in
-                Button(action: {
-                    onSelect(list.name)
-                    dismiss()
-                }) {
-                    HStack {
-                        Text(list.name)
-                            .font(.headline)
-                        Spacer()
-                        if listContainsPin(list) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(8)
+        NavigationView {
+            ZStack {
+                // Background with same material as navbar
+                Color.clear
+                    .background(.ultraThinMaterial)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Location info header
+                    locationHeader
+                    
+                    // Search bar
+                    searchBar
+                    
+                    // Lists section
+                    listsSection
+                    
+                    // Create new list section
+                    createListSection
+                    
+                    Spacer()
                 }
             }
-            
-            Button("Cancel", role: .cancel) { dismiss() }
-                .padding(.top, 8)
+            .navigationTitle("Save Location")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(.primary)
+                }
+            }
         }
-        .padding()
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+    
+    private var locationHeader: some View {
+        VStack(spacing: 12) {
+            // Location icon and name
+            HStack(spacing: 12) {
+                Image(systemName: "mappin.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pin.locationName)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .lineLimit(2)
+                    
+                    if !pin.city.isEmpty && pin.city != "Unknown City" {
+                        Text(pin.city)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(Material.regularMaterial)
+            .cornerRadius(12)
+            .padding(.horizontal)
+        }
+        .padding(.top, 8)
+    }
+    
+    private var searchBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+                .font(.system(size: 16))
+            
+            TextField("Search lists...", text: $searchText)
+                .textFieldStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+                 .background(Material.regularMaterial)
+        .cornerRadius(10)
+        .padding(.horizontal)
+        .padding(.top, 16)
+    }
+    
+    private var listsSection: some View {
+        VStack(spacing: 0) {
+            if !filteredLists.isEmpty {
+                // Section header
+                HStack {
+                    Text("Your Lists")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
+                    
+                    Text("\(filteredLists.count)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.secondary.opacity(0.2))
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal)
+                .padding(.top, 24)
+                .padding(.bottom, 12)
+                
+                // Lists
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(filteredLists, id: \.id) { list in
+                            listRow(for: list)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            } else if !searchText.isEmpty {
+                // No search results
+                VStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 40))
+                        .foregroundColor(.secondary)
+                    
+                    Text("No lists found")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Try a different search term")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 40)
+            }
+        }
+    }
+    
+    private func listRow(for list: PinList) -> some View {
+        Button(action: {
+            onSelect(list.name)
+            dismiss()
+        }) {
+            HStack(spacing: 16) {
+                // List icon
+                Image(systemName: listContainsPin(list) ? "checkmark.circle.fill" : "list.bullet.circle")
+                    .font(.title2)
+                    .foregroundColor(listContainsPin(list) ? .green : .blue)
+                
+                // List details
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(list.name)
+                        .font(.headline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    Text("\(list.pins.count) places")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                // Status indicator
+                if listContainsPin(list) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "checkmark")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: 20, height: 20)
+                    .background(.green)
+                    .cornerRadius(10)
+                } else {
+                    Image(systemName: "plus")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.blue)
+                        .frame(width: 20, height: 20)
+                        .background(.blue.opacity(0.1))
+                        .cornerRadius(10)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(listContainsPin(list) ? .green.opacity(0.05) : .clear)
+            .background(.regularMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(listContainsPin(list) ? .green.opacity(0.3) : .clear, lineWidth: 1)
+            )
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var createListSection: some View {
+        VStack(spacing: 12) {
+            Divider()
+                .padding(.horizontal)
+                .padding(.top, 16)
+            
+            Button(action: {
+                showCreateList = true
+            }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                    
+                    Text("Create New List")
+                        .font(.headline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(.blue.opacity(0.05))
+                .cornerRadius(12)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal)
+            .padding(.bottom, 16)
+        }
+        .alert("Create New List", isPresented: $showCreateList) {
+            TextField("List name", text: $newListName)
+            Button("Cancel", role: .cancel) {
+                newListName = ""
+            }
+            Button("Create") {
+                if !newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let trimmedName = newListName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    pinStore.createCustomList(name: trimmedName)
+                    onSelect(trimmedName)
+                    newListName = ""
+                    dismiss()
+                }
+            }
+            .disabled(newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("Enter a name for your new list")
+        }
     }
 }
