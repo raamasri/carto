@@ -69,6 +69,26 @@ struct LocationDetailView: View {
         let placemark = mapItem.placemark
         var addressComponents: [String] = []
         
+        // Debug logging to see what's available
+        print("🗺️ LocationDetailView - Placemark Debug Info:")
+        print("  - name: \(placemark.name ?? "nil")")
+        print("  - title: \(placemark.title ?? "nil")")
+        print("  - subThoroughfare: \(placemark.subThoroughfare ?? "nil")")
+        print("  - thoroughfare: \(placemark.thoroughfare ?? "nil")")
+        print("  - locality: \(placemark.locality ?? "nil")")
+        print("  - subLocality: \(placemark.subLocality ?? "nil")")
+        print("  - administrativeArea: \(placemark.administrativeArea ?? "nil")")
+        print("  - subAdministrativeArea: \(placemark.subAdministrativeArea ?? "nil")")
+        print("  - postalCode: \(placemark.postalCode ?? "nil")")
+        print("  - country: \(placemark.country ?? "nil")")
+        print("  - isoCountryCode: \(placemark.isoCountryCode ?? "nil")")
+        
+        // Try using the title first (which often contains the full address)
+        if let title = placemark.title, !title.isEmpty, title != placemark.name {
+            print("  - Using title as address: \(title)")
+            return title
+        }
+        
         // Add street number and name
         if let subThoroughfare = placemark.subThoroughfare,
            let thoroughfare = placemark.thoroughfare {
@@ -96,6 +116,8 @@ struct LocationDetailView: View {
         if addressComponents.isEmpty, let country = placemark.country {
             addressComponents.append(country)
         }
+        
+        print("  - Final addressComponents: \(addressComponents)")
         
         // Return formatted address or fallback message
         if addressComponents.isEmpty {
