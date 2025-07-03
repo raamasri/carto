@@ -135,7 +135,6 @@ struct MainMapView: View {
     @State private var showAccountMenu = false
     @State private var showProfileEdit = false
     @State private var showAccountSettings = false
-    @State private var showMessaging = false
     
     // Enhanced Map Filter States
     @State private var showMapFilters = false
@@ -1191,8 +1190,7 @@ struct MainMapView: View {
                         showSettings: $showSettings,
                         showAccountMenu: $showAccountMenu,
                         showProfileEdit: $showProfileEdit,
-                        showAccountSettings: $showAccountSettings,
-                        showMessaging: $showMessaging
+                        showAccountSettings: $showAccountSettings
                     )
                     .transition(.move(edge: .leading))
                 }
@@ -1229,10 +1227,7 @@ struct MainMapView: View {
             SettingsView()
                 .environmentObject(authManager)
         }
-        .sheet(isPresented: $showMessaging) {
-            DirectMessagingView()
-                .environmentObject(authManager)
-        }
+
         .actionSheet(isPresented: $showAccountMenu) {
             ActionSheet(
                 title: Text("Account Options"),
@@ -1645,7 +1640,6 @@ struct NavigationSidebar: View {
     @Binding var showAccountMenu: Bool
     @Binding var showProfileEdit: Bool
     @Binding var showAccountSettings: Bool
-    @Binding var showMessaging: Bool
     
     var body: some View {
         HStack {
@@ -1702,17 +1696,25 @@ struct NavigationSidebar: View {
                     }
                     
                     // Messages
-                    SidebarMenuItem(
-                        icon: "message.fill",
-                        title: "Messages",
-                        isSelected: false
+                    NavigationLink(destination: DirectMessagingView()
+                        .environmentObject(authManager)
+                        .onAppear {
+                            print("📱 DirectMessagingView appeared")
+                        }
                     ) {
-                        print("📱 Messages button pressed - setting showMessaging = true")
-                        showMessaging = true
+                        SidebarMenuItemView(
+                            icon: "message.fill",
+                            title: "Messages",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        print("📱 Messages navigation link tapped")
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
                         }
-                    }
+                    })
                     
                     // My Profile
                     SidebarMenuItem(
@@ -1822,32 +1824,44 @@ struct SidebarMenuItem: View {
             print("📱 SidebarMenuItem '\(title)' tapped")
             action()
         }) {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? .blue : .primary)
-                    .frame(width: 24)
-                
-                Text(title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(isSelected ? .blue : .primary)
-                
-                Spacer()
-                
-                if isSelected {
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 8, height: 8)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-            )
+            SidebarMenuItemView(icon: icon, title: title, isSelected: isSelected)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Sidebar Menu Item View (Visual Component)
+
+struct SidebarMenuItemView: View {
+    let icon: String
+    let title: String
+    let isSelected: Bool
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(isSelected ? .blue : .primary)
+                .frame(width: 24)
+            
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(isSelected ? .blue : .primary)
+            
+            Spacer()
+            
+            if isSelected {
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 8, height: 8)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        )
     }
 }
 
