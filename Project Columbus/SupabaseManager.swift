@@ -675,7 +675,7 @@ class SupabaseManager: ObservableObject {
     
     /// Toggle follow status for a user by their string ID, returning true if now following.
     func toggleFollowForUser(with userID: String) async -> Bool {
-        guard let session = try? await client.auth.session else { return false }
+        guard (try? await client.auth.session) != nil else { return false }
 
         guard let targetUUID = UUID(uuidString: userID) else { return false }
 
@@ -2118,9 +2118,9 @@ class SupabaseManager: ObservableObject {
         let path = "videos/\(fileName)"
         
         do {
-            let response = try await client.storage
+            _ = try await client.storage
                 .from("videos")
-                .upload(path: path, file: videoData)
+                .upload(path, data: videoData)
             
             print("✅ Video uploaded successfully: \(path)")
             
@@ -2711,7 +2711,7 @@ class SupabaseManager: ObservableObject {
     
     /// Save location privacy settings to database
     func saveLocationPrivacySettings(_ settings: LocationPrivacySettings) async throws {
-        guard let session = try? await client.auth.session else {
+        guard (try? await client.auth.session) != nil else {
             throw NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
         }
         
@@ -2751,6 +2751,25 @@ class SupabaseManager: ObservableObject {
             print("❌ Failed to load location privacy settings: \(error)")
             // Return default settings if none found
             return LocationPrivacySettings(userID: userID)
+        }
+    }
+    
+    /// Check if a user is following another user
+    private func isUserFollowing(followerID: String, followeeID: String) async -> Bool {
+        do {
+            let follows: [FollowDB] = try await client
+                .from("follows")
+                .select("*")
+                .eq("follower_id", value: followerID)
+                .eq("following_id", value: followeeID)
+                .limit(1)
+                .execute()
+                .value
+            
+            return !follows.isEmpty
+        } catch {
+            print("❌ Failed to check follow status: \(error)")
+            return false
         }
     }
     
