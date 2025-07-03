@@ -300,13 +300,6 @@ struct ProfileEditView: View {
             }
             .navigationTitle("Edit Profile")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-            }
             .alert("Error", isPresented: $showError) {
                 Button("OK") { }
             } message: {
