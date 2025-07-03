@@ -135,6 +135,7 @@ struct MainMapView: View {
     @State private var showAccountMenu = false
     @State private var showProfileEdit = false
     @State private var showAccountSettings = false
+    @State private var showMessaging = false
     
     // Enhanced Map Filter States
     @State private var showMapFilters = false
@@ -1190,7 +1191,8 @@ struct MainMapView: View {
                         showSettings: $showSettings,
                         showAccountMenu: $showAccountMenu,
                         showProfileEdit: $showProfileEdit,
-                        showAccountSettings: $showAccountSettings
+                        showAccountSettings: $showAccountSettings,
+                        showMessaging: $showMessaging
                     )
                     .transition(.move(edge: .leading))
                 }
@@ -1225,6 +1227,10 @@ struct MainMapView: View {
         }
         .sheet(isPresented: $showAccountSettings) {
             SettingsView()
+                .environmentObject(authManager)
+        }
+        .sheet(isPresented: $showMessaging) {
+            DirectMessagingView()
                 .environmentObject(authManager)
         }
         .actionSheet(isPresented: $showAccountMenu) {
@@ -1639,6 +1645,7 @@ struct NavigationSidebar: View {
     @Binding var showAccountMenu: Bool
     @Binding var showProfileEdit: Bool
     @Binding var showAccountSettings: Bool
+    @Binding var showMessaging: Bool
     
     var body: some View {
         HStack {
@@ -1689,6 +1696,19 @@ struct NavigationSidebar: View {
                     ) {
                         print("📱 Videos button pressed - setting showVideoFeed = true")
                         showVideoFeed = true
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }
+                    
+                    // Messages
+                    SidebarMenuItem(
+                        icon: "message.fill",
+                        title: "Messages",
+                        isSelected: false
+                    ) {
+                        print("📱 Messages button pressed - setting showMessaging = true")
+                        showMessaging = true
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
                         }
