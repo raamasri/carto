@@ -13,7 +13,6 @@ struct LocationDetailView: View {
     let onAddPin: (Pin) -> Void
 
     @State private var showListDialog = false
-    private let defaultLists = ["Favorites", "Coffee Shops", "Restaurants", "Bars", "Shopping"]
     @State private var region: MKCoordinateRegion
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
@@ -353,33 +352,31 @@ struct LocationDetailView: View {
                 .cornerRadius(10)
             }
         }
-        .confirmationDialog("Choose a list", isPresented: $showListDialog, titleVisibility: .visible) {
-            ForEach(defaultLists, id: \.self) { list in
-                Button(list) {
-                    let newPin = Pin(
-                        locationName: mapItem.name ?? "Unknown Place",
-                        city: mapItem.placemark.locality ?? "Unknown City",
-                        date: formattedDate(),
-                        latitude: mapItem.placemark.coordinate.latitude,
-                        longitude: mapItem.placemark.coordinate.longitude,
-                        reaction: .wantToGo,
-                        reviewText: nil,
-                        mediaURLs: [],
-                        mentionedFriends: [],
-                        starRating: nil,
-                        distance: nil,
-                        authorHandle: "@you",
-                        createdAt: Date(),
-                        tripName: nil
-                    )
-                    pinStore.addPin(newPin, to: list)
-                }
+        .sheet(isPresented: $showListDialog) {
+            LocationAddToListSheet(pin: tempPin) { list in
+                pinStore.addPin(tempPin, to: list)
             }
-            Button("Cancel", role: .cancel) {}
         }
     }
-
-// Removed unused collectionPickerSheet, collectionList, and addPin(to:) as they are no longer needed.
+    
+    private var tempPin: Pin {
+        Pin(
+            locationName: mapItem.name ?? "Unknown Place",
+            city: mapItem.placemark.locality ?? "Unknown City",
+            date: formattedDate(),
+            latitude: mapItem.placemark.coordinate.latitude,
+            longitude: mapItem.placemark.coordinate.longitude,
+            reaction: .wantToGo,
+            reviewText: nil,
+            mediaURLs: [],
+            mentionedFriends: [],
+            starRating: nil,
+            distance: nil,
+            authorHandle: "@you",
+            createdAt: Date(),
+            tripName: nil
+        )
+    }
 }
 
 struct LookAroundPreview: UIViewControllerRepresentable {
@@ -397,4 +394,57 @@ struct LookAroundPreview: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: MKLookAroundViewController, context: Context) {}
+}
+
+struct LocationAddToListSheet: View {
+    let pin: Pin
+    var onSelect: (String) -> Void
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var pinStore: PinStore
+
+    // Helper to check if a list contains this pin (by coordinates or name)
+    private func listContainsPin(_ list: PinList) -> Bool {
+        list.pins.contains { existingPin in
+            let latitudeDiff = abs(existingPin.latitude - pin.latitude)
+            let longitudeDiff = abs(existingPin.longitude - pin.longitude)
+            let isLocationMatch = latitudeDiff < 0.0001 && longitudeDiff < 0.0001
+            let isNameMatch = existingPin.locationName.lowercased() == pin.locationName.lowercased()
+            return isLocationMatch || isNameMatch
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Add to List")
+                .font(.title2)
+                .bold()
+                .padding(.top)
+            
+            // Use actual lists from PinStore
+            ForEach(pinStore.lists, id: \.id) { list in
+                Button(action: {
+                    onSelect(list.name)
+                    dismiss()
+                }) {
+                    HStack {
+                        Text(list.name)
+                            .font(.headline)
+                        Spacer()
+                        if listContainsPin(list) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                }
+            }
+            
+            Button("Cancel", role: .cancel) { dismiss() }
+                .padding(.top, 8)
+        }
+        .padding()
+    }
 }
