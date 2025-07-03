@@ -939,6 +939,168 @@ class SupabaseManager: ObservableObject {
         }
     }
     
+    /// Create a like notification
+    func createLikeNotification(to userID: String, from fromUserID: String, pinID: String, pinName: String) async -> Bool {
+        do {
+            struct LikeNotificationData: Codable {
+                let user_id: String
+                let type: String
+                let title: String
+                let message: String
+                let from_user_id: String
+                let related_pin_id: String
+                let action_data: String
+                let priority: String
+            }
+            
+            let actionData = ["action": "view_pin", "pinID": pinID]
+            let actionDataString = try JSONSerialization.data(withJSONObject: actionData)
+            let actionDataJSON = String(data: actionDataString, encoding: .utf8) ?? "{}"
+            
+            let notificationData = LikeNotificationData(
+                user_id: userID,
+                type: "like",
+                title: "Pin Liked",
+                message: "Someone liked your pin at \(pinName)",
+                from_user_id: fromUserID,
+                related_pin_id: pinID,
+                action_data: actionDataJSON,
+                priority: "normal"
+            )
+            
+            try await client
+                .from("notifications")
+                .insert(notificationData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to create like notification: \(error)")
+            return false
+        }
+    }
+    
+    /// Create a comment notification
+    func createCommentNotification(to userID: String, from fromUserID: String, pinID: String, pinName: String, comment: String) async -> Bool {
+        do {
+            struct CommentNotificationData: Codable {
+                let user_id: String
+                let type: String
+                let title: String
+                let message: String
+                let from_user_id: String
+                let related_pin_id: String
+                let action_data: String
+                let priority: String
+            }
+            
+            let actionData = ["action": "view_pin", "pinID": pinID]
+            let actionDataString = try JSONSerialization.data(withJSONObject: actionData)
+            let actionDataJSON = String(data: actionDataString, encoding: .utf8) ?? "{}"
+            
+            let notificationData = CommentNotificationData(
+                user_id: userID,
+                type: "comment",
+                title: "New Comment",
+                message: "Someone commented on your pin at \(pinName): \(comment)",
+                from_user_id: fromUserID,
+                related_pin_id: pinID,
+                action_data: actionDataJSON,
+                priority: "normal"
+            )
+            
+            try await client
+                .from("notifications")
+                .insert(notificationData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to create comment notification: \(error)")
+            return false
+        }
+    }
+    
+    /// Create a message notification
+    func createMessageNotification(to userID: String, from fromUserID: String, conversationID: String, messagePreview: String) async -> Bool {
+        do {
+            struct MessageNotificationData: Codable {
+                let user_id: String
+                let type: String
+                let title: String
+                let message: String
+                let from_user_id: String
+                let action_data: String
+                let priority: String
+            }
+            
+            let actionData = ["action": "open_chat", "conversationID": conversationID]
+            let actionDataString = try JSONSerialization.data(withJSONObject: actionData)
+            let actionDataJSON = String(data: actionDataString, encoding: .utf8) ?? "{}"
+            
+            let notificationData = MessageNotificationData(
+                user_id: userID,
+                type: "message",
+                title: "New Message",
+                message: messagePreview,
+                from_user_id: fromUserID,
+                action_data: actionDataJSON,
+                priority: "high"
+            )
+            
+            try await client
+                .from("notifications")
+                .insert(notificationData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to create message notification: \(error)")
+            return false
+        }
+    }
+    
+    /// Create a list invitation notification
+    func createListInviteNotification(to userID: String, from fromUserID: String, listID: String, listName: String) async -> Bool {
+        do {
+            struct ListInviteNotificationData: Codable {
+                let user_id: String
+                let type: String
+                let title: String
+                let message: String
+                let from_user_id: String
+                let related_list_id: String
+                let action_data: String
+                let priority: String
+            }
+            
+            let actionData = ["action": "view_list", "listID": listID]
+            let actionDataString = try JSONSerialization.data(withJSONObject: actionData)
+            let actionDataJSON = String(data: actionDataString, encoding: .utf8) ?? "{}"
+            
+            let notificationData = ListInviteNotificationData(
+                user_id: userID,
+                type: "list_invite",
+                title: "List Invitation",
+                message: "You've been invited to collaborate on \(listName)",
+                from_user_id: fromUserID,
+                related_list_id: listID,
+                action_data: actionDataJSON,
+                priority: "normal"
+            )
+            
+            try await client
+                .from("notifications")
+                .insert(notificationData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to create list invite notification: \(error)")
+            return false
+        }
+    }
+    
     /// Get unread notification count
     func getUnreadNotificationCount() async -> Int {
         guard let session = try? await client.auth.session else { return 0 }

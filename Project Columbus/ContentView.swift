@@ -761,12 +761,26 @@ struct MainMapView: View {
                     if showMapFilters {
                         VStack {
                             Spacer()
-                            VStack(spacing: 12) {
-                                // Handle bar for visual feedback
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 40, height: 6)
-                                    .padding(.top, 8)
+                            VStack(spacing: 0) {
+                                // Header with close button
+                                HStack {
+                                    Spacer()
+                                    Button(action: {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            showMapFilters = false
+                                        }
+                                    }) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                            .padding(8)
+                                            .background(Color.gray.opacity(0.1))
+                                            .clipShape(Circle())
+                                    }
+                                }
+                                .padding(.top, 12)
+                                .padding(.trailing, 16)
+                                .padding(.bottom, 8)
                                 
                                 MainMapFilterPanel(
                                     selectedList: $selectedListFilter,
@@ -776,10 +790,11 @@ struct MainMapView: View {
                                     availableLists: pinStore.lists
                                 )
                                 .id("filter-panel-\(pinStore.lists.count)") // Force refresh when lists change
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 20)
                             }
-                            .padding()
                             .background(.ultraThinMaterial)
-                            .cornerRadius(16, corners: [.topLeft, .topRight])
+                            .cornerRadius(16)
                             .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: -4)
                             .padding(.horizontal, 0)
                             .padding(.bottom, 160) // Increased spacing to float above control buttons
@@ -1313,18 +1328,24 @@ struct MainMapFilterPanel: View {
     var body: some View {
         VStack(spacing: 16) {
             // Search Bar
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.gray)
+                    .font(.system(size: 16))
                 TextField("Search locations, cities, trips...", text: $searchText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
                 if !searchText.isEmpty {
                     Button("Clear") {
                         searchText = ""
                     }
                     .foregroundColor(.blue)
+                    .font(.system(size: 14))
                 }
             }
+            .padding(.horizontal, 4)
             
             // Filter Categories
             VStack(spacing: 12) {
@@ -1690,9 +1711,9 @@ struct NavigationSidebar: View {
                     SidebarMenuItem(
                         icon: "dot.radiowaves.left.and.right",
                         title: "Live Feed",
-                        isSelected: selectedTab == 1
+                        isSelected: selectedTab == 3
                     ) {
-                        selectedTab = 1
+                        selectedTab = 3
                         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                             showSideMenu = false
                         }

@@ -558,10 +558,20 @@ class NotificationManager: NSObject, ObservableObject {
         }
     }
     
-    func saveSettings() {
+    func saveSettings() async {
         do {
             let data = try JSONEncoder().encode(settings)
             UserDefaults.standard.set(data, forKey: settingsKey)
+            
+            // Update badge count based on new settings
+            updateBadgeCount()
+            
+            // If push notifications were disabled, clear all pending notifications
+            if !settings.pushNotificationsEnabled {
+                userNotificationCenter.removeAllPendingNotificationRequests()
+                userNotificationCenter.removeAllDeliveredNotifications()
+            }
+            
             print("⚙️ NotificationManager: Settings saved")
         } catch {
             print("❌ NotificationManager: Failed to save settings: \(error)")

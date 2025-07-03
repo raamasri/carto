@@ -305,8 +305,12 @@ struct FindFriendsView: View {
                         } else if showRecommendations && !isEditing && searchText.isEmpty {
                             // Flexible recommendations sheet
                             VStack(spacing: 0) {
-                                // Handle bar for dismissing
+                                // Header with title and close button
                                 HStack {
+                                    Text("Find Friends")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.primary)
                                     Spacer()
                                     Button(action: {
                                         withAnimation(.easeInOut(duration: 0.3)) {
@@ -319,7 +323,8 @@ struct FindFriendsView: View {
                                     }
                                 }
                                 .padding(.horizontal)
-                                .padding(.top, 12)
+                                .padding(.top, 16)
+                                .padding(.bottom, 8)
                                 
                                 ScrollView {
                                     VStack(spacing: 20) {

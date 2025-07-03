@@ -261,26 +261,32 @@ struct UserProfileView: View {
                             // Instagram-style stats row
                             HStack(spacing: 0) {
                                 // Pins
-                                VStack(spacing: 2) {
-                                    Text("\(totalPinCount)")
-                                        .font(.headline)
-                                        .fontWeight(.semibold)
-                                    Text("Pins")
-                                        .font(.caption)
-                                        .foregroundColor(.primary)
+                                NavigationLink(destination: UserPinListView(userId: profileUser.id, userName: profileUser.full_name)) {
+                                    VStack(spacing: 2) {
+                                        Text("\(totalPinCount)")
+                                            .font(.headline)
+                                            .fontWeight(.semibold)
+                                        Text("Pins")
+                                            .font(.caption)
+                                            .foregroundColor(.primary)
+                                    }
+                                    .frame(maxWidth: .infinity)
                                 }
-                                .frame(maxWidth: .infinity)
+                                .buttonStyle(PlainButtonStyle())
                                 
                                 // Reviews
-                                VStack(spacing: 2) {
-                                    Text("\(reviewCount)")
-                                        .font(.headline)
-                                        .fontWeight(.semibold)
-                                    Text("Reviews")
-                                        .font(.caption)
-                                        .foregroundColor(.primary)
+                                NavigationLink(destination: UserPinListView(userId: profileUser.id, userName: profileUser.full_name)) {
+                                    VStack(spacing: 2) {
+                                        Text("\(reviewCount)")
+                                            .font(.headline)
+                                            .fontWeight(.semibold)
+                                        Text("Reviews")
+                                            .font(.caption)
+                                            .foregroundColor(.primary)
+                                    }
+                                    .frame(maxWidth: .infinity)
                                 }
-                                .frame(maxWidth: .infinity)
+                                .buttonStyle(PlainButtonStyle())
                                 
                                 // Followers
                                 NavigationLink(destination: UserListView(userID: profileUser.id, listType: .followers)) {
@@ -492,25 +498,39 @@ struct UserProfileView: View {
                                 if showMapFilters {
                                     VStack {
                                         Spacer()
-                                        VStack(spacing: 12) {
-                                            // Handle bar for visual feedback
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .fill(Color.gray.opacity(0.3))
-                                                .frame(width: 40, height: 6)
-                                                .padding(.top, 8)
+                                        VStack(spacing: 0) {
+                                            // Header with close button
+                                            HStack {
+                                                Spacer()
+                                                Button(action: {
+                                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                                        showMapFilters = false
+                                                    }
+                                                }) {
+                                                    Image(systemName: "xmark")
+                                                        .font(.system(size: 16, weight: .medium))
+                                                        .foregroundColor(.secondary)
+                                                        .padding(8)
+                                                        .background(Color.gray.opacity(0.1))
+                                                        .clipShape(Circle())
+                                                }
+                                            }
+                                            .padding(.top, 12)
+                                            .padding(.trailing, 16)
+                                            .padding(.bottom, 8)
                                             
                                             MapFilterPanel(
-                                                
                                                 selectedList: $selectedListFilter,
                                                 availableLists: pinStore.lists,
                                                 selectedTimeFilter: $selectedTimeFilter,
                                                 selectedStarFilter: $selectedStarFilter,
                                                 searchText: $mapSearchText
                                             )
+                                            .padding(.horizontal, 16)
+                                            .padding(.bottom, 20)
                                         }
-                                        .padding()
                                         .background(Color(.systemBackground))
-                                        .cornerRadius(16, corners: [.topLeft, .topRight])
+                                        .cornerRadius(16)
                                         .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: -5)
                                         .padding(.horizontal, 0)
                                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1608,20 +1628,25 @@ struct MapFilterPanel: View {
     var body: some View {
         VStack(spacing: 16) {
             // Search Bar
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.gray)
+                    .font(.system(size: 16))
                 TextField("Search locations, cities, trips...", text: $searchText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
                 
                 if !searchText.isEmpty {
                     Button("Clear") {
                         searchText = ""
                     }
-                    .font(.caption)
+                    .font(.system(size: 14))
                     .foregroundColor(.blue)
                 }
             }
+            .padding(.horizontal, 4)
             
             // Filter Categories
             VStack(spacing: 12) {

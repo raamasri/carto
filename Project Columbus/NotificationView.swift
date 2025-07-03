@@ -37,6 +37,7 @@ struct NotificationView: View {
     @State private var showSettings = false
     @State private var showConfirmation = false
     @State private var confirmationMessage = ""
+    @State private var isLoading = false
     
     enum NotificationTab: String, CaseIterable {
         case all = "All"
@@ -126,11 +127,14 @@ struct NotificationView: View {
                 Divider()
                 
                 // Notifications List
-                if filteredNotifications.isEmpty {
+                if isLoading {
+                    ProgressView("Loading notifications...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredNotifications.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: selectedTab.icon)
                             .font(.system(size: 48))
-                                    .foregroundColor(.gray)
+                            .foregroundColor(.gray)
                         
                         Text(emptyStateMessage)
                             .font(.headline)
@@ -149,8 +153,8 @@ struct NotificationView: View {
                             NotificationRowView(
                                 notification: notification,
                                 onTap: { handleNotificationTap(notification) },
-                                onMarkRead: { notificationManager.markAsRead(notification.id) },
-                                onDelete: { notificationManager.deleteNotification(notification.id) }
+                                onMarkRead: { markNotificationAsRead(notification) },
+                                onDelete: { deleteNotification(notification) }
                             )
                         }
                         .onDelete(perform: deleteNotifications)
@@ -167,7 +171,7 @@ struct NotificationView: View {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     if !filteredNotifications.isEmpty {
                         Button("Mark All Read") {
-                            notificationManager.markAllAsRead()
+                            markAllNotificationsAsRead()
                         }
                         .font(.caption)
                     }
@@ -184,13 +188,14 @@ struct NotificationView: View {
         }
         .onAppear {
             Task {
-                await refreshNotifications()
+                await loadNotifications()
                 await requestNotificationPermission()
             }
         }
         .sheet(isPresented: $showSettings) {
             NotificationSettingsView()
                 .environmentObject(notificationManager)
+                .environmentObject(authManager)
         }
         .alert("Notification", isPresented: $showConfirmation) {
             Button("OK") { }
@@ -226,7 +231,7 @@ struct NotificationView: View {
     private func handleNotificationTap(_ notification: AppNotification) {
         // Mark as read
         if !notification.isRead {
-            notificationManager.markAsRead(notification.id)
+            markNotificationAsRead(notification)
         }
         
         // Handle navigation based on notification type
@@ -276,14 +281,65 @@ struct NotificationView: View {
     private func deleteNotifications(at offsets: IndexSet) {
         for index in offsets {
             let notification = filteredNotifications[index]
-            notificationManager.deleteNotification(notification.id)
+            deleteNotification(notification)
+        }
+    }
+    
+    private func deleteNotification(_ notification: AppNotification) {
+        Task {
+            // Delete from database
+            await deleteNotificationFromDatabase(notification.id.uuidString)
+            
+            // Remove from local state
+            await MainActor.run {
+                notificationManager.deleteNotification(notification.id)
+            }
+        }
+    }
+    
+    private func markNotificationAsRead(_ notification: AppNotification) {
+        Task {
+            // Update in database
+            let success = await SupabaseManager.shared.markNotificationAsRead(notificationID: notification.id.uuidString)
+            
+            if success {
+                await MainActor.run {
+                    notificationManager.markAsRead(notification.id)
+                }
+            }
+        }
+    }
+    
+    private func markAllNotificationsAsRead() {
+        Task {
+            let unreadNotifications = filteredNotifications.filter { !$0.isRead }
+            
+            for notification in unreadNotifications {
+                await SupabaseManager.shared.markNotificationAsRead(notificationID: notification.id.uuidString)
+            }
+            
+            await MainActor.run {
+                notificationManager.markAllAsRead()
+            }
+        }
+    }
+    
+    private func loadNotifications() async {
+        guard let currentUserID = authManager.currentUserID else { return }
+        
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        await fetchNotificationsFromDatabase(userID: currentUserID)
+        
+        await MainActor.run {
+            isLoading = false
         }
     }
     
     private func refreshNotifications() async {
-        // Fetch new notifications from server
-        await fetchFollowRequests()
-        await fetchOtherNotifications()
+        await loadNotifications()
     }
     
     private func requestNotificationPermission() async {
@@ -296,143 +352,98 @@ struct NotificationView: View {
         }
     }
     
-    // MARK: - Legacy Support (for existing follow request functionality)
+    // MARK: - Database Operations
     
-    private func fetchFollowRequests() async {
-        guard let currentUserID = authManager.currentUserID else { return }
-        
-        // For now, we'll use sample data since the notifications table may not exist yet
-        // In production, this would fetch from the database
-        print("📱 NotificationView: Fetching follow requests for user \(currentUserID)")
-        
-        // TODO: Implement actual database query when notifications table is ready
-        let rawData: [[String: Any]] = []
-        
-        for row in rawData {
-            guard let _ = row["id"] as? String,
-                  let fromUserID = row["from_user_id"] as? String,
-                  let users = row["users"] as? [String: Any],
-                  let username = users["username"] as? String,
-                  let _ = users["full_name"] as? String else {
-                continue
+    private func fetchNotificationsFromDatabase(userID: String) async {
+        do {
+            // Clear existing notifications
+            await MainActor.run {
+                notificationManager.clearAllNotifications()
             }
             
-            let notification = AppNotification(
-                type: .follow,
-                title: "New Follower",
-                message: "\(username) wants to follow you",
-                priority: .normal,
-                actionData: ["action": "view_profile", "userID": fromUserID],
-                senderID: fromUserID
-            )
+            // Fetch from database
+            struct NotificationDB: Codable {
+                let id: String
+                let user_id: String
+                let type: String
+                let title: String
+                let message: String
+                let created_at: String
+                let is_read: Bool
+                let priority: String?
+                let from_user_id: String?
+                let related_pin_id: String?
+                let related_list_id: String?
+                let action_data: String?
+            }
             
-            notificationManager.addNotification(notification)
-        }
-    }
-    
-    private func fetchOtherNotifications() async {
-        // Fetch other types of notifications from Supabase
-        guard let currentUserID = authManager.currentUserID else { return }
-        
-        // For now, we'll use sample data since the notifications table may not exist yet
-        // In production, this would fetch from the database
-        print("📱 NotificationView: Fetching notifications for user \(currentUserID)")
-        
-        // TODO: Implement actual database query when notifications table is ready
-        let rawData: [[String: Any]] = []
-        
-        for row in rawData {
-                guard let notificationId = row["id"] as? String,
-                      let type = row["type"] as? String,
-                      let title = row["title"] as? String,
-                      let message = row["message"] as? String,
-                      let createdAt = row["created_at"] as? String,
-                      let isRead = row["is_read"] as? Bool else {
-                    continue
-                }
-                
+            let notifications: [NotificationDB] = try await SupabaseManager.shared.client
+                .from("notifications")
+                .select()
+                .eq("user_id", value: userID)
+                .order("created_at", ascending: false)
+                .limit(100)
+                .execute()
+                .value
+            
+            print("📱 NotificationView: Loaded \(notifications.count) notifications from database")
+            
+            for dbNotification in notifications {
                 // Parse the created_at timestamp
                 let formatter = ISO8601DateFormatter()
-                let timestamp = formatter.date(from: createdAt) ?? Date()
+                let timestamp = formatter.date(from: dbNotification.created_at) ?? Date()
                 
                 // Parse optional fields
-                let priority = row["priority"] as? String ?? "normal"
-                let senderID = row["from_user_id"] as? String
-                let relatedPinID = row["related_pin_id"] as? String
-                let relatedListID = row["related_list_id"] as? String
+                let priority = NotificationPriority(rawValue: dbNotification.priority ?? "normal") ?? .normal
                 
                 // Parse action data if present
                 var actionData: [String: String]? = nil
-                if let actionDataString = row["action_data"] as? String,
+                if let actionDataString = dbNotification.action_data,
                    let data = actionDataString.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
                     actionData = json
                 }
                 
                 // Convert string type to NotificationType
-                let notificationType = NotificationType(rawValue: type) ?? .system
-                let notificationPriority = NotificationPriority(rawValue: priority) ?? .normal
+                let notificationType = NotificationType(rawValue: dbNotification.type) ?? .system
                 
                 let notification = AppNotification(
-                    id: UUID(uuidString: notificationId) ?? UUID(),
+                    id: UUID(uuidString: dbNotification.id) ?? UUID(),
                     type: notificationType,
-                    title: title,
-                    message: message,
+                    title: dbNotification.title,
+                    message: dbNotification.message,
                     timestamp: timestamp,
-                    priority: notificationPriority,
-                    isRead: isRead,
+                    priority: priority,
+                    isRead: dbNotification.is_read,
                     actionData: actionData,
-                    senderID: senderID,
-                    relatedPinID: relatedPinID,
-                    relatedListID: relatedListID
+                    senderID: dbNotification.from_user_id,
+                    relatedPinID: dbNotification.related_pin_id,
+                    relatedListID: dbNotification.related_list_id
                 )
                 
-                notificationManager.addNotification(notification)
+                await MainActor.run {
+                    notificationManager.addNotification(notification)
+                }
             }
             
-            print("📱 NotificationView: Loaded \(rawData.count) notifications from database")
-            
-            // Fallback to sample notifications in development
-            #if DEBUG
-            if notificationManager.notifications.isEmpty {
-                addSampleNotifications()
-            }
-            #endif
-    }
-    
-    #if DEBUG
-    private func addSampleNotifications() {
-        let sampleNotifications = [
-            AppNotification(
-                type: .like,
-                title: "Pin Liked",
-                message: "John liked your pin at Central Park",
-                priority: .normal,
-                actionData: ["action": "view_pin", "pinID": "sample_pin_1"],
-                senderID: "sample_user_1"
-            ),
-            AppNotification(
-                type: .message,
-                title: "New Message",
-                message: "Sarah: Hey, check out this cool place!",
-                priority: .high,
-                actionData: ["action": "open_chat", "conversationID": "sample_conv_1"],
-                senderID: "sample_user_2"
-            ),
-            AppNotification(
-                type: .pinNearby,
-                title: "Pin Nearby",
-                message: "You're near Coffee Shop (0.2 miles away)",
-                priority: .normal,
-                actionData: ["action": "view_pin", "pinID": "sample_pin_2"]
-            )
-        ]
-        
-        for notification in sampleNotifications {
-            notificationManager.addNotification(notification)
+        } catch {
+            print("❌ Failed to fetch notifications: \(error)")
         }
     }
-    #endif
+    
+    private func deleteNotificationFromDatabase(_ notificationID: String) async {
+        do {
+            try await SupabaseManager.shared.client
+                .from("notifications")
+                .delete()
+                .eq("id", value: notificationID)
+                .execute()
+            
+            print("✅ Deleted notification from database: \(notificationID)")
+        } catch {
+            print("❌ Failed to delete notification: \(error)")
+        }
+    }
 }
 
 // MARK: - Notification Row View
@@ -519,16 +530,36 @@ struct NotificationRowView: View {
 
 struct NotificationSettingsView: View {
     @EnvironmentObject var notificationManager: NotificationManager
+    @EnvironmentObject var authManager: AuthManager
     @Environment(\.dismiss) private var dismiss
+    @State private var showingSystemSettings = false
     
     var body: some View {
         NavigationView {
             Form {
                 Section("Push Notifications") {
-                    Toggle("Enable Push Notifications", isOn: $notificationManager.settings.pushNotificationsEnabled)
-                    Toggle("Sound", isOn: $notificationManager.settings.soundEnabled)
-                    Toggle("Badge", isOn: $notificationManager.settings.badgeEnabled)
-                    Toggle("Show Previews", isOn: $notificationManager.settings.previewEnabled)
+                    HStack {
+                        Toggle("Enable Push Notifications", isOn: $notificationManager.settings.pushNotificationsEnabled)
+                    }
+                    .onChange(of: notificationManager.settings.pushNotificationsEnabled) { enabled in
+                        if enabled {
+                            Task {
+                                let granted = await notificationManager.requestPermission()
+                                if !granted {
+                                    await MainActor.run {
+                                        notificationManager.settings.pushNotificationsEnabled = false
+                                        showingSystemSettings = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    if notificationManager.settings.pushNotificationsEnabled {
+                        Toggle("Sound", isOn: $notificationManager.settings.soundEnabled)
+                        Toggle("Badge", isOn: $notificationManager.settings.badgeEnabled)
+                        Toggle("Show Previews", isOn: $notificationManager.settings.previewEnabled)
+                    }
                 }
                 
                 Section("Notification Types") {
@@ -554,7 +585,9 @@ struct NotificationSettingsView: View {
                 
                 Section("Actions") {
                     Button("Clear All Notifications") {
-                        notificationManager.clearAllNotifications()
+                        Task {
+                            await clearAllNotifications()
+                        }
                     }
                     .foregroundColor(.red)
                 }
@@ -564,10 +597,44 @@ struct NotificationSettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        notificationManager.saveSettings()
+                        Task {
+                            await notificationManager.saveSettings()
+                        }
                         dismiss()
                     }
                 }
+            }
+        }
+        .alert("Enable Notifications", isPresented: $showingSystemSettings) {
+            Button("Settings") {
+                if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(settingsUrl)
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("To receive notifications, please enable them in your device Settings.")
+        }
+    }
+    
+    private func clearAllNotifications() async {
+        // Clear from local storage
+        await MainActor.run {
+            notificationManager.clearAllNotifications()
+        }
+        
+        // Clear from database if user is logged in
+        if let currentUserID = authManager.currentUserID {
+            do {
+                try await SupabaseManager.shared.client
+                    .from("notifications")
+                    .delete()
+                    .eq("user_id", value: currentUserID)
+                    .execute()
+                
+                print("✅ Cleared all notifications from database")
+            } catch {
+                print("❌ Failed to clear notifications from database: \(error)")
             }
         }
     }
