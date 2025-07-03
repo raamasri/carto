@@ -1009,20 +1009,6 @@ struct MainMapView: View {
                         }
                         .padding(.bottom, 60)
                         Spacer()
-                        // Recenter Button
-                        Button(action: {
-                            centerMapOnFilteredPins()
-                        }) {
-                            Image(systemName: "viewfinder")
-                                .font(.title2)
-                                .foregroundColor(.gray)
-                                .padding(16)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .shadow(radius: 4)
-                        }
-                        .padding(.bottom, 60)
-                        Spacer()
                         // Location Button
                         Button(action: {
                             requestUserLocation()
