@@ -97,7 +97,12 @@ struct LocationDetailView: View {
             addressComponents.append(country)
         }
         
-        return addressComponents.joined(separator: ", ")
+        // Return formatted address or fallback message
+        if addressComponents.isEmpty {
+            return "Address not available"
+        } else {
+            return addressComponents.joined(separator: ", ")
+        }
     }
     
     private var friendsSection: some View {
@@ -190,28 +195,26 @@ struct LocationDetailView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Address section - made more prominent
-            if !formattedAddress.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Address")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+            // Address section - always shown
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Address")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundColor(.red)
+                        .font(.title3)
                     
-                    HStack(spacing: 8) {
-                        Image(systemName: "mappin.circle.fill")
-                            .foregroundColor(.red)
-                            .font(.title3)
-                        
-                        Text(formattedAddress)
-                            .font(.body)
-                            .foregroundColor(.primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Text(formattedAddress)
+                        .font(.body)
+                        .foregroundColor(formattedAddress == "Address not available" ? .secondary : .primary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding()
-                .background(.regularMaterial)
-                .cornerRadius(12)
             }
+            .padding()
+            .background(.regularMaterial)
+            .cornerRadius(12)
             
             // Other information
             VStack(alignment: .leading, spacing: 8) {
