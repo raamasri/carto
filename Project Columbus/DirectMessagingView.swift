@@ -42,12 +42,6 @@ struct DirectMessagingView: View {
             .navigationTitle("Messages")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
-                        dismiss()
-                    }
-                }
-                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showNewMessageView = true }) {
                         Image(systemName: "square.and.pencil")
