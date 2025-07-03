@@ -1204,7 +1204,7 @@ struct MainMapView: View {
                 .onAppear {
                     print("📱 VideoFeedView sheet appeared")
                 }
-        }
+            }
         .sheet(isPresented: $showUserProfile) {
             if let user = authManager.currentUser {
                 UserProfileView(profileUser: user)

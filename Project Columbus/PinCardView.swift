@@ -58,6 +58,28 @@ struct PinCardView: View {
         return pin.authorHandle.contains(currentUsername)
     }
 
+    // Helper: Get lists containing this pin
+    private func getListsContainingPin() -> [PinList] {
+        return pinStore.lists.filter { list in
+            list.pins.contains { existingPin in
+                let latitudeDiff = abs(existingPin.latitude - pin.latitude)
+                let longitudeDiff = abs(existingPin.longitude - pin.longitude)
+                let isLocationMatch = latitudeDiff < 0.0001 && longitudeDiff < 0.0001
+                let isNameMatch = existingPin.locationName.lowercased() == pin.locationName.lowercased()
+                return isLocationMatch || isNameMatch
+            }
+        }
+    }
+
+    // Helper: Get list indicator text
+    private func getListIndicatorText(_ lists: [PinList]) -> String {
+        if lists.count == 1 {
+            return "In \(lists.first!.name)"
+        } else {
+            return "In \(lists.count) lists"
+        }
+    }
+
     // Helper: Styled review text with mentions
     private func styledReview(_ text: String) -> Text {
         let words = text.split(separator: " ")
@@ -164,6 +186,32 @@ struct PinCardView: View {
                     .background(Color.blue.opacity(0.15))
                     .foregroundColor(.blue)
                     .cornerRadius(8)
+            }
+        }
+    }
+
+    // Helper: List indicator
+    private var listIndicator: some View {
+        Group {
+            let listsContainingPin = getListsContainingPin()
+            if !listsContainingPin.isEmpty {
+                Button(action: {
+                    showAddToList = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption)
+                        Text(getListIndicatorText(listsContainingPin))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.green)
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -382,24 +430,33 @@ struct PinCardView: View {
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(hasReviewOrMedia ? 0.1 : 0.04), radius: hasReviewOrMedia ? 8 : 4, x: 0, y: hasReviewOrMedia ? 4 : 2)
 
-            // Add to List button (only for non-current user pins)
-            if !isCurrentUserAuthor {
-                Button(action: {
-                    print("Add to List tapped for \(pin.locationName)")
-                    showAddToList = true
-                }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 36, height: 36)
-                        Image(systemName: "plus")
-                            .foregroundColor(.white)
-                            .font(.system(size: 16, weight: .semibold))
+            // List indicator in bottom left corner
+            VStack {
+                Spacer()
+                HStack {
+                    listIndicator
+                    Spacer()
+                    
+                    // Add to List button (only for non-current user pins)
+                    if !isCurrentUserAuthor {
+                        Button(action: {
+                            print("Add to List tapped for \(pin.locationName)")
+                            showAddToList = true
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue)
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "plus")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        }
+                        .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(12)
-                .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
-                .buttonStyle(.plain)
             }
         }
         .sheet(isPresented: $showAddToList) {
