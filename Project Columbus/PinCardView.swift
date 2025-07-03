@@ -174,12 +174,14 @@ struct PinCardView: View {
 
     // Enhanced header with rating, distance, and mini map
     private var enhancedHeader: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center, spacing: 8) {
                     Text(pin.locationName)
                         .font(.headline)
+                        .fontWeight(.semibold)
                         .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     
                     if let rating = pin.starRating {
                         HStack(spacing: 2) {
@@ -197,7 +199,7 @@ struct PinCardView: View {
                     }
                 }
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     // Show city/address information
                     if !pin.city.isEmpty {
                         HStack(spacing: 4) {
@@ -225,7 +227,7 @@ struct PinCardView: View {
                 }
             }
             
-            Spacer()
+            Spacer(minLength: 8)
             
             // Mini map
             miniMap
@@ -243,84 +245,88 @@ struct PinCardView: View {
             MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
                 Image(systemName: "mappin.circle.fill")
                     .resizable()
-                    .frame(width: 22, height: 22)
+                    .frame(width: 20, height: 20)
                     .foregroundColor(.red)
-                    .shadow(radius: 2)
+                    .shadow(radius: 1)
             }
         }
-        .frame(width: 60, height: 60)
-        .cornerRadius(10)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.blue, lineWidth: 2))
+        .frame(width: 56, height: 56)
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.blue.opacity(0.3), lineWidth: 1))
         .onTapGesture { showLocationDetail = true }
     }
 
     // Enhanced photo carousel with add photo functionality
     private var photoCarousel: some View {
-        Group {
-            if let media = pin.mediaURLs, !media.isEmpty {
-                ZStack(alignment: .bottomTrailing) {
-                    TabView(selection: $selectedPhotoIndex) {
-                        ForEach(Array(media.enumerated()), id: \.offset) { index, urlString in
-                            if urlString.hasSuffix(".mp4"), let url = URL(string: urlString) {
-                                VideoPlayer(player: AVPlayer(url: url))
-                                    .aspectRatio(16/9, contentMode: .fit)
+        ZStack(alignment: .bottomTrailing) {
+            TabView(selection: $selectedPhotoIndex) {
+                ForEach(Array((pin.mediaURLs ?? []).enumerated()), id: \.offset) { index, urlString in
+                    if urlString.hasSuffix(".mp4"), let url = URL(string: urlString) {
+                        VideoPlayer(player: AVPlayer(url: url))
+                            .aspectRatio(16/9, contentMode: .fit)
+                            .clipped()
+                            .tag(index)
+                    } else if let url = URL(string: urlString) {
+                        AsyncImage(url: url) { phase in
+                            if let image = phase.image {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
                                     .clipped()
-                                    .tag(index)
-                            } else if let url = URL(string: urlString) {
-                                AsyncImage(url: url) { phase in
-                                    if let image = phase.image {
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .clipped()
-                                    } else {
-                                        Color.gray
-                                    }
-                                }
-                                .tag(index)
                             } else {
-                                Color.gray.tag(index)
+                                Color.gray.opacity(0.2)
                             }
                         }
-                    }
-                    .frame(height: 220)
-                    .tabViewStyle(.page(indexDisplayMode: .always))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    
-                    // Photo + button (only for current user's pins)
-                    if isCurrentUserAuthor {
-                        Button(action: {
-                            showAddPhotoSheet = true
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "photo")
-                                    .font(.caption)
-                                Text("+")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(8)
+                        .tag(index)
+                    } else {
+                        Color.gray.opacity(0.2).tag(index)
                     }
                 }
+            }
+            .frame(height: 200)
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            // Photo + button (only for current user's pins)
+            if isCurrentUserAuthor {
+                Button(action: {
+                    showAddPhotoSheet = true
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "photo")
+                            .font(.caption)
+                        Text("+")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .padding(10)
             }
         }
     }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Enhanced header with rating, distance, MAP button
                 enhancedHeader
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
                 
                 // Friends avatars row (if any)
-                friendsAvatarsRow
+                let friendPins = friendsWhoReviewed()
+                if !friendPins.isEmpty {
+                    friendsAvatarsRow
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
                 
                 // Review text (expanded)
                 if let review = pin.reviewText, !review.isEmpty {
@@ -328,12 +334,17 @@ struct PinCardView: View {
                         .font(.body)
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .lineLimit(nil) // Allow full expansion
-                        .padding(.vertical, 4)
+                        .lineLimit(nil)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
                 }
                 
                 // Enhanced photo carousel
-                photoCarousel
+                if let media = pin.mediaURLs, !media.isEmpty {
+                    photoCarousel
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                }
                 
                 // Trip tag and timestamp
                 HStack(spacing: 8) {
@@ -343,6 +354,8 @@ struct PinCardView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
                 
                 // Action icons and author
                 HStack {
@@ -350,19 +363,24 @@ struct PinCardView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Spacer()
-                    HStack(spacing: 18) {
+                    HStack(spacing: 16) {
                         Image(systemName: "heart")
+                            .font(.system(size: 16))
                         Image(systemName: "message")
+                            .font(.system(size: 16))
                         Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 16))
                         Image(systemName: "bookmark")
+                            .font(.system(size: 16))
                     }
                     .foregroundColor(.gray)
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding()
             .background(Color(.systemBackground))
-            .cornerRadius(14)
-            .shadow(color: Color.black.opacity(hasReviewOrMedia ? 0.12 : 0.05), radius: hasReviewOrMedia ? 5 : 2, x: 0, y: 2)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(hasReviewOrMedia ? 0.1 : 0.04), radius: hasReviewOrMedia ? 8 : 4, x: 0, y: hasReviewOrMedia ? 4 : 2)
 
             // Add to List button (only for non-current user pins)
             if !isCurrentUserAuthor {
@@ -373,14 +391,14 @@ struct PinCardView: View {
                     ZStack {
                         Circle()
                             .fill(Color.blue)
-                            .frame(width: 32, height: 32)
+                            .frame(width: 36, height: 36)
                         Image(systemName: "plus")
                             .foregroundColor(.white)
-                            .font(.system(size: 18, weight: .bold))
+                            .font(.system(size: 16, weight: .semibold))
                     }
                 }
-                .padding(10)
-                .shadow(radius: 2)
+                .padding(12)
+                .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
                 .buttonStyle(.plain)
             }
         }
