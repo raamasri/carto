@@ -528,43 +528,155 @@ struct CreatePostView: View {
         
         isLoadingNearbyPlaces = true
         showNearbyPlaces = true
+        nearbyPlaces = [] // Clear previous results
         
-        // Search for nearby places
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = "restaurants shops attractions"
-        request.region = MKCoordinateRegion(
-            center: currentLocation,
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-        )
+        // Perform multiple searches to get comprehensive results
+        let searchQueries = [
+            "restaurant",
+            "coffee",
+            "shop",
+            "store",
+            "gas station",
+            "hotel",
+            "bank",
+            "pharmacy",
+            "gym",
+            "park"
+        ]
         
-        let search = MKLocalSearch(request: request)
-        search.start { response, error in
-            DispatchQueue.main.async {
-                isLoadingNearbyPlaces = false
+        let searchGroup = DispatchGroup()
+        var allPlaces: [NearbyPlace] = []
+        let userLocation = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
+        
+        // Perform searches for each category
+        for query in searchQueries {
+            searchGroup.enter()
+            
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = query
+            request.region = MKCoordinateRegion(
+                center: currentLocation,
+                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02) // Increased search radius
+            )
+            
+            let search = MKLocalSearch(request: request)
+            search.start { response, error in
+                defer { searchGroup.leave() }
                 
                 if let response = response {
-                    let userLocation = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
-                    
                     let places = response.mapItems.compactMap { mapItem -> NearbyPlace? in
+                        // Skip items without names or with generic names
+                        guard let name = mapItem.name,
+                              !name.isEmpty,
+                              name != "Unknown Place",
+                              name != "Monument" else { return nil }
+                        
                         let itemLocation = CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)
                         let distance = userLocation.distance(from: itemLocation)
                         
                         // Filter out places that are too far (more than 2km)
                         guard distance <= 2000 else { return nil }
                         
+                        // Get category from point of interest or infer from search query
+                        let category = mapItem.pointOfInterestCategory?.rawValue ?? query.capitalized
+                        
                         return NearbyPlace(
-                            name: mapItem.name ?? "Unknown Place",
-                            category: mapItem.pointOfInterestCategory?.rawValue ?? "Place",
+                            name: name,
+                            category: category,
                             distance: distance,
                             mapItem: mapItem
                         )
                     }
                     
-                    // Sort by distance (nearest first)
-                    nearbyPlaces = places.sorted { $0.distance < $1.distance }
-                    
+                    allPlaces.append(contentsOf: places)
                 } else if let error = error {
-                    print("Search failed: \(error.localizedDescription)")
+                    print("Search failed for '\(query)': \(error.localizedDescription)")
+                }
+            }
+        }
+        
+        // When all searches complete
+        searchGroup.notify(queue: .main) {
+            // Remove duplicates based on name and location
+            var uniquePlaces: [NearbyPlace] = []
+            for place in allPlaces {
+                let isDuplicate = uniquePlaces.contains { existingPlace in
+                    existingPlace.name == place.name ||
+                    (abs(existingPlace.mapItem.placemark.coordinate.latitude - place.mapItem.placemark.coordinate.latitude) < 0.0001 &&
+                     abs(existingPlace.mapItem.placemark.coordinate.longitude - place.mapItem.placemark.coordinate.longitude) < 0.0001)
+                }
+                if !isDuplicate {
+                    uniquePlaces.append(place)
+                }
+            }
+            
+            // If we don't have many results, do a broader search
+            if uniquePlaces.count < 5 {
+                print("📍 Only found \(uniquePlaces.count) places, performing broader search...")
+                
+                let broadRequest = MKLocalSearch.Request()
+                broadRequest.naturalLanguageQuery = "" // Empty query to get all POIs
+                broadRequest.region = MKCoordinateRegion(
+                    center: currentLocation,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05) // Even larger radius
+                )
+                
+                let broadSearch = MKLocalSearch(request: broadRequest)
+                broadSearch.start { response, error in
+                    DispatchQueue.main.async {
+                        if let response = response {
+                            let additionalPlaces = response.mapItems.compactMap { mapItem -> NearbyPlace? in
+                                guard let name = mapItem.name,
+                                      !name.isEmpty,
+                                      name != "Unknown Place",
+                                      name != "Monument",
+                                      name.count > 1 else { return nil }
+                                
+                                let itemLocation = CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)
+                                let distance = userLocation.distance(from: itemLocation)
+                                
+                                guard distance <= 3000 else { return nil } // 3km for broader search
+                                
+                                // Check if this place is already in our list
+                                let isDuplicate = uniquePlaces.contains { existingPlace in
+                                    existingPlace.name == name ||
+                                    (abs(existingPlace.mapItem.placemark.coordinate.latitude - mapItem.placemark.coordinate.latitude) < 0.0001 &&
+                                     abs(existingPlace.mapItem.placemark.coordinate.longitude - mapItem.placemark.coordinate.longitude) < 0.0001)
+                                }
+                                
+                                if isDuplicate { return nil }
+                                
+                                let category = mapItem.pointOfInterestCategory?.rawValue ?? "Place"
+                                
+                                return NearbyPlace(
+                                    name: name,
+                                    category: category,
+                                    distance: distance,
+                                    mapItem: mapItem
+                                )
+                            }
+                            
+                            uniquePlaces.append(contentsOf: additionalPlaces)
+                        }
+                        
+                        // Final processing
+                        self.nearbyPlaces = Array(uniquePlaces.sorted { $0.distance < $1.distance }.prefix(20))
+                        self.isLoadingNearbyPlaces = false
+                        
+                        print("📍 Final result: \(self.nearbyPlaces.count) nearby places")
+                        for place in self.nearbyPlaces.prefix(5) {
+                            print("  - \(place.name) (\(place.category)) - \(place.distanceString)")
+                        }
+                    }
+                }
+            } else {
+                // Sort by distance (nearest first) and limit to top 20
+                self.nearbyPlaces = Array(uniquePlaces.sorted { $0.distance < $1.distance }.prefix(20))
+                self.isLoadingNearbyPlaces = false
+                
+                print("📍 Found \(self.nearbyPlaces.count) nearby places")
+                for place in self.nearbyPlaces.prefix(5) {
+                    print("  - \(place.name) (\(place.category)) - \(place.distanceString)")
                 }
             }
         }
