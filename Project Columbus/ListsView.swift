@@ -35,6 +35,7 @@ struct ListsView: View {
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
     @State private var showCreateList = false
+    var showToolbarPlusButton: Bool = true
     @State private var newListName = ""
     @State private var searchText = ""
     
@@ -116,9 +117,11 @@ struct ListsView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showCreateList = true }) {
-                        Image(systemName: "plus")
+                if showToolbarPlusButton {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: { showCreateList = true }) {
+                            Image(systemName: "plus")
+                        }
                     }
                 }
             }

@@ -60,6 +60,8 @@ struct UserProfileView: View {
     @State private var selectedStarFilter: StarFilter = .all
     @State private var mapSearchText = ""
     
+    @State private var showCreateList = false
+    
     // Computed review count - count pins that have review text
     private var reviewCount: Int {
         let allPins = pinStore.lists.flatMap { $0.pins }
@@ -154,10 +156,19 @@ struct UserProfileView: View {
                 .font(.title)
                 .fontWeight(.bold)
             Spacer()
-            
-            // Settings and notifications buttons for current user
             if profileUser.isCurrentUser {
                 HStack(spacing: 16) {
+                    if selectedSection == "My Lists" {
+                        Button(action: { showCreateList = true }) {
+                            Image(systemName: "plus")
+                                .font(.title2)
+                                .foregroundColor(.primary)
+                                .frame(width: 36, height: 36)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .shadow(radius: 4)
+                        }
+                    }
                     NavigationLink(destination:
                         NotificationView()
                             .environmentObject(authManager)
@@ -167,7 +178,6 @@ struct UserProfileView: View {
                             .font(.title2)
                             .foregroundColor(.primary)
                     }
-                    
                     NavigationLink(destination:
                         SettingsView()
                             .environmentObject(authManager)
@@ -568,7 +578,7 @@ struct UserProfileView: View {
                         } else if selectedSection == "My Lists" {
                             if profileUser.isCurrentUser ?? false {
                                 // For current user, use the main ListsView
-                                ListsView()
+                                ListsView(showToolbarPlusButton: false)
                                     .environmentObject(pinStore)
                                     .padding(.top, 8)
                                     .onAppear {
@@ -898,6 +908,14 @@ struct UserProfileView: View {
         }
         .sheet(isPresented: $showShareSheet) {
             ActivityViewController(activityItems: shareItems)
+        }
+        .sheet(isPresented: $showCreateList) {
+            CreateListSheet(
+                isPresented: $showCreateList,
+                newListName: .constant("")
+            ) { name in
+                pinStore.createCustomList(name: name)
+            }
         }
         .alert("Block/Report Status", isPresented: $showBlockReportAlert) {
             Button("OK") { }
