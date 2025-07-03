@@ -415,6 +415,7 @@ struct FindFriendsView: View {
             .sheet(isPresented: $showProfile) {
                 if let user = selectedUser {
                     UserProfileView(profileUser: user)
+                        .environmentObject(authManager)
                         .environmentObject(pinStore)
                 }
             }

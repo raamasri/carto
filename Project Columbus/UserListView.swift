@@ -23,7 +23,10 @@ struct UserListView: View {
     
     var body: some View {
         List(users, id: \.id) { user in
-            NavigationLink(destination: UserProfileView(profileUser: user).environmentObject(pinStore)) {
+            NavigationLink(destination: UserProfileView(profileUser: user)
+                .environmentObject(authManager)
+                .environmentObject(pinStore)
+            ) {
                 HStack {
                     if let avatar = user.avatarURL, !avatar.isEmpty {
                         if let cached = ImageCache.shared.image(forKey: user.id) {

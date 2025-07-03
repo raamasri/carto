@@ -7,6 +7,7 @@ import PhotosUI
 struct VideoFeedView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var pinStore: PinStore
     @State private var videos: [VideoContent] = []
     @State private var selectedFilter: VideoFeedFilter = .forYou
     @State private var isLoading = false
@@ -59,6 +60,7 @@ struct VideoFeedView: View {
             if let user = selectedUser {
                 UserProfileView(profileUser: user)
                     .environmentObject(authManager)
+                    .environmentObject(pinStore)
             }
         }
         .sheet(isPresented: $showShareSheet) {
@@ -351,7 +353,7 @@ struct VideoPlayerView: View {
     @State private var showControls = false
     
     var body: some View {
-        ZStack {
+                ZStack {
             // Video player
             if let player = player {
                 VideoPlayer(player: player)
@@ -380,11 +382,11 @@ struct VideoPlayerView: View {
                                 .tint(.white)
                         )
                 }
-                .ignoresSafeArea()
+                        .ignoresSafeArea()
             }
-            
+                    
             // Video overlay content
-            VStack {
+                    VStack {
                 Spacer()
                 
                 HStack(alignment: .bottom) {
@@ -425,7 +427,7 @@ struct VideoPlayerView: View {
                         if !video.caption.isEmpty {
                             Text(video.caption)
                                 .font(.subheadline)
-                                .foregroundColor(.white)
+                                    .foregroundColor(.white)
                                 .lineLimit(3)
                         }
                         

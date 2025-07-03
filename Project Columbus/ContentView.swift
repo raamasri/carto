@@ -1540,8 +1540,8 @@ class SearchCompleterDelegate: NSObject, MKLocalSearchCompleterDelegate {
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var authManager = AuthManager()
-    @StateObject private var pinStore = PinStore()
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var pinStore: PinStore
     @AppStorage("themePreference") private var themePreference: String = "Auto"
     @State private var navigateToFeed = false
     @State private var showBiometricPrompt = false
