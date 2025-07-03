@@ -98,6 +98,19 @@ struct SelfUser: Codable {
     var latitude: Double?
     var longitude: Double?
     var avatarURL: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case username
+        case full_name
+        case email
+        case bio
+        case follower_count
+        case following_count
+        case latitude
+        case longitude
+        case avatarURL = "avatar_url"
+    }
 }
 
 // Basic user structure for database responses without computed fields
