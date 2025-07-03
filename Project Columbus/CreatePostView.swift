@@ -4,6 +4,22 @@ import MapKit
 import PhotosUI
 import AVKit
 
+struct NearbyPlace: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let category: String
+    let distance: Double // in meters
+    let mapItem: MKMapItem
+    
+    var distanceString: String {
+        if distance < 1000 {
+            return String(format: "%.0f m", distance)
+        } else {
+            return String(format: "%.1f km", distance / 1000)
+        }
+    }
+}
+
 struct CreatePostView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var pinStore: PinStore
@@ -40,6 +56,9 @@ struct CreatePostView: View {
     @State private var isPrivatePost: Bool = false
     @State private var selectedListName: String = ""
     @State private var newListName: String = ""
+    @State private var showNearbyPlaces: Bool = false
+    @State private var nearbyPlaces: [NearbyPlace] = []
+    @State private var isLoadingNearbyPlaces: Bool = false
     
     @FocusState private var isPlaceFieldFocused: Bool
     @FocusState private var isPostContentFocused: Bool
@@ -439,6 +458,21 @@ struct CreatePostView: View {
         .sheet(isPresented: $showingVideoPicker) {
             VideoPickerView(selectedVideos: $selectedVideos)
         }
+        .sheet(isPresented: $showNearbyPlaces) {
+            NearbyPlacesView(
+                nearbyPlaces: nearbyPlaces,
+                isLoading: isLoadingNearbyPlaces,
+                onPlaceSelected: { place in
+                    placeName = place.name
+                    selectedMapItem = place.mapItem
+                    mapRegion = MKCoordinateRegion(
+                        center: place.mapItem.placemark.coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    )
+                    showNearbyPlaces = false
+                }
+            )
+        }
         .alert("Error", isPresented: $showError) {
             Button("OK") { }
         } message: {
@@ -487,29 +521,52 @@ struct CreatePostView: View {
     }
     
     private func useCurrentLocation() {
-        if let currentLocation = locationManager.location {
-            let geocoder = CLGeocoder()
-            let userCLLocation = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
-            geocoder.reverseGeocodeLocation(userCLLocation) { placemarks, error in
-                if let placemark = placemarks?.first {
-                    DispatchQueue.main.async {
-                        placeName = placemark.name ?? placemark.locality ?? "Current Location"
-                        // Create a map item from current location
-                        let mapItem = MKMapItem(placemark: MKPlacemark(placemark: placemark))
-                        selectedMapItem = mapItem
-                        mapRegion = MKCoordinateRegion(
-                            center: currentLocation,
-                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        guard let currentLocation = locationManager.location else {
+            print("Location is not available.")
+            return
+        }
+        
+        isLoadingNearbyPlaces = true
+        showNearbyPlaces = true
+        
+        // Search for nearby places
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = "restaurants shops attractions"
+        request.region = MKCoordinateRegion(
+            center: currentLocation,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
+        
+        let search = MKLocalSearch(request: request)
+        search.start { response, error in
+            DispatchQueue.main.async {
+                isLoadingNearbyPlaces = false
+                
+                if let response = response {
+                    let userLocation = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
+                    
+                    let places = response.mapItems.compactMap { mapItem -> NearbyPlace? in
+                        let itemLocation = CLLocation(latitude: mapItem.placemark.coordinate.latitude, longitude: mapItem.placemark.coordinate.longitude)
+                        let distance = userLocation.distance(from: itemLocation)
+                        
+                        // Filter out places that are too far (more than 2km)
+                        guard distance <= 2000 else { return nil }
+                        
+                        return NearbyPlace(
+                            name: mapItem.name ?? "Unknown Place",
+                            category: mapItem.pointOfInterestCategory?.rawValue ?? "Place",
+                            distance: distance,
+                            mapItem: mapItem
                         )
                     }
+                    
+                    // Sort by distance (nearest first)
+                    nearbyPlaces = places.sorted { $0.distance < $1.distance }
+                    
                 } else if let error = error {
-                    print("Reverse geocoding failed: \(error.localizedDescription)")
-                } else {
-                    print("No placemarks found.")
+                    print("Search failed: \(error.localizedDescription)")
                 }
             }
-        } else {
-            print("Location is not available.")
         }
     }
     
@@ -662,6 +719,9 @@ struct CreatePostView: View {
         recommendationComment = ""
         selectedListName = ""
         newListName = ""
+        showNearbyPlaces = false
+        nearbyPlaces = []
+        isLoadingNearbyPlaces = false
         // Reset focus
         isPlaceFieldFocused = false
         isPostContentFocused = false
@@ -742,6 +802,156 @@ struct VideoPickerView: UIViewControllerRepresentable {
             dispatchGroup.notify(queue: .main) {
                 picker.dismiss(animated: true)
             }
+        }
+    }
+}
+
+// MARK: - Nearby Places View
+
+struct NearbyPlacesView: View {
+    let nearbyPlaces: [NearbyPlace]
+    let isLoading: Bool
+    let onPlaceSelected: (NearbyPlace) -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack {
+                if isLoading {
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Finding nearby places...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if nearbyPlaces.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "location.slash")
+                            .font(.system(size: 50))
+                            .foregroundColor(.gray)
+                        Text("No Places Found")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        Text("We couldn't find any places near your current location.")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(nearbyPlaces) { place in
+                        Button(action: {
+                            onPlaceSelected(place)
+                        }) {
+                            HStack(spacing: 12) {
+                                // Category icon
+                                Image(systemName: categoryIcon(for: place.category))
+                                    .font(.title2)
+                                    .foregroundColor(.blue)
+                                    .frame(width: 30, height: 30)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(place.name)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    
+                                    Text(categoryDisplayName(for: place.category))
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text(place.distanceString)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Nearby Places")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func categoryIcon(for category: String) -> String {
+        switch category.lowercased() {
+        case let cat where cat.contains("restaurant") || cat.contains("food"):
+            return "fork.knife"
+        case let cat where cat.contains("gas") || cat.contains("fuel"):
+            return "fuelpump"
+        case let cat where cat.contains("shop") || cat.contains("store"):
+            return "bag"
+        case let cat where cat.contains("hotel") || cat.contains("lodging"):
+            return "bed.double"
+        case let cat where cat.contains("hospital") || cat.contains("medical"):
+            return "cross.case"
+        case let cat where cat.contains("school") || cat.contains("education"):
+            return "graduationcap"
+        case let cat where cat.contains("park") || cat.contains("recreation"):
+            return "tree"
+        case let cat where cat.contains("bank") || cat.contains("atm"):
+            return "banknote"
+        case let cat where cat.contains("gym") || cat.contains("fitness"):
+            return "dumbbell"
+        case let cat where cat.contains("museum") || cat.contains("art"):
+            return "building.columns"
+        case let cat where cat.contains("transport") || cat.contains("transit"):
+            return "bus"
+        default:
+            return "mappin"
+        }
+    }
+    
+    private func categoryDisplayName(for category: String) -> String {
+        switch category.lowercased() {
+        case let cat where cat.contains("restaurant"):
+            return "Restaurant"
+        case let cat where cat.contains("gas"):
+            return "Gas Station"
+        case let cat where cat.contains("shop") || cat.contains("store"):
+            return "Shop"
+        case let cat where cat.contains("hotel"):
+            return "Hotel"
+        case let cat where cat.contains("hospital"):
+            return "Hospital"
+        case let cat where cat.contains("school"):
+            return "School"
+        case let cat where cat.contains("park"):
+            return "Park"
+        case let cat where cat.contains("bank"):
+            return "Bank"
+        case let cat where cat.contains("gym"):
+            return "Gym"
+        case let cat where cat.contains("museum"):
+            return "Museum"
+        case let cat where cat.contains("transport"):
+            return "Transport"
+        default:
+            return "Place"
         }
     }
 }
