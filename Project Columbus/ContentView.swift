@@ -1200,7 +1200,7 @@ struct MainMapView: View {
         // Sheet presentations for sidebar actions
         .sheet(isPresented: $showVideoFeed) {
             VideoFeedView()
-                .environmentObject(authManager)
+                        .environmentObject(authManager)
                 .onAppear {
                     print("📱 VideoFeedView sheet appeared")
                 }

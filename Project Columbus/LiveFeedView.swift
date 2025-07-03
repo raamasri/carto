@@ -8,7 +8,7 @@ struct AlertMessage: Identifiable {
 }
 
 struct LiveFeedView: View {
-    let tabs = ["History", "Friends", "Following", "For You", "Activity", "Recommendations"]
+    let tabs = ["History", "Friends", "Following", "For You", "Activity"]
     @State private var followingUsers: [AppUser] = []
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
@@ -226,11 +226,7 @@ struct LiveFeedView: View {
                         FriendActivityFeedView()
                             .environmentObject(authManager)
                             .environmentObject(pinStore)
-                    case 5:
-                        // Recommendations Tab - Friend Recommendations
-                        FriendRecommendationsView()
-                            .environmentObject(authManager)
-                            .environmentObject(pinStore)
+
                     default:
                         // For You Tab - Smart algorithm
                         List(getRecommendedPins().reversed()) { pin in
