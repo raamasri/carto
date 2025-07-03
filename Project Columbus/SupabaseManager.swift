@@ -2078,6 +2078,634 @@ class SupabaseManager: ObservableObject {
         
         return basicUser.toAppUser(currentUserID: session.user.id.uuidString)
     }
+
+    // MARK: - Image Storage Extension
+    
+    /// Upload an image to Supabase Storage
+    func uploadImage(_ imageData: Data, to bucket: String, path: String) async throws -> String {
+        try await client.storage
+            .from(bucket)
+            .upload(path, data: imageData, options: FileOptions(contentType: "image/jpeg"))
+        
+        // Get the public URL for the uploaded image
+        return try client.storage
+            .from(bucket)
+            .getPublicURL(path: path)
+            .absoluteString
+    }
+    
+    /// Upload profile image
+    func uploadProfileImage(_ imageData: Data, for userID: String) async throws -> String {
+        let fileName = "\(userID)_\(Date().timeIntervalSince1970).jpg"
+        let path = "profile-images/\(fileName)"
+        
+        return try await uploadImage(imageData, to: "profile-images", path: path)
+    }
+    
+    /// Upload pin media image
+    func uploadPinImage(_ imageData: Data, for pinID: String) async throws -> String {
+        let fileName = "\(pinID)_\(Date().timeIntervalSince1970).jpg"
+        let path = "pin-images/\(fileName)"
+        
+        return try await uploadImage(imageData, to: "pin-images", path: path)
+    }
+    
+    // MARK: - Video Content Management
+    
+    /// Upload video file to storage
+    func uploadVideo(_ videoData: Data, for videoID: String) async throws -> String {
+        let fileName = "\(videoID)_\(Date().timeIntervalSince1970).mp4"
+        let path = "videos/\(fileName)"
+        
+        do {
+            let response = try await client.storage
+                .from("videos")
+                .upload(path: path, file: videoData)
+            
+            print("✅ Video uploaded successfully: \(path)")
+            
+            // Get public URL
+            let publicURL = try client.storage
+                .from("videos")
+                .getPublicURL(path: path)
+            
+            return publicURL.absoluteString
+        } catch {
+            print("❌ Failed to upload video: \(error)")
+            throw error
+        }
+    }
+    
+    /// Upload video thumbnail
+    func uploadVideoThumbnail(_ imageData: Data, for videoID: String) async throws -> String {
+        let fileName = "\(videoID)_thumbnail_\(Date().timeIntervalSince1970).jpg"
+        let path = "video-thumbnails/\(fileName)"
+        
+        return try await uploadImage(imageData, to: "video-thumbnails", path: path)
+    }
+    
+    /// Create a new video post
+    func createVideoContent(_ video: VideoContent) async throws -> VideoContent {
+        do {
+            let videoContentDB = video.toVideoContentDB()
+            
+            let insertedVideo: [VideoContentDB] = try await client
+                .from("video_content")
+                .insert(videoContentDB)
+                .select()
+                .execute()
+                .value
+            
+            guard let insertedVideoData = insertedVideo.first else {
+                throw NSError(domain: "VideoUpload", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to create video content"])
+            }
+            
+            print("✅ Video content created successfully: \(insertedVideoData.id)")
+            return insertedVideoData.toVideoContent()
+        } catch {
+            print("❌ Failed to create video content: \(error)")
+            throw error
+        }
+    }
+    
+    /// Get video feed based on filter
+    func getVideoFeed(filter: VideoFeedFilter, userID: String, limit: Int = 20, offset: Int = 0) async throws -> [VideoContent] {
+        do {
+                    // Build query based on feed type
+        let videos: [VideoContentDB] = try await {
+            switch filter {
+            case .following:
+                // Get videos from users the current user follows
+                let followingUsers = await getFollowingUsers(for: userID)
+                let followingUserIds = followingUsers.map { $0.id }
+                if !followingUserIds.isEmpty {
+                    // Use the first following user for now - limitation of simple queries
+                    return try await client
+                        .from("video_content")
+                        .select("*")
+                        .eq("author_id", value: followingUserIds.first!)
+                        .order("created_at", ascending: false)
+                        .range(from: offset, to: offset + limit - 1)
+                        .execute()
+                        .value
+                } else {
+                    // If not following anyone, return empty array
+                    return []
+                }
+            case .trending:
+                // Get trending videos (high engagement in last 24 hours)
+                return try await client
+                    .from("video_content")
+                    .select("*")
+                    .order("likes_count", ascending: false)
+                    .order("views_count", ascending: false)
+                    .order("created_at", ascending: false)
+                    .range(from: offset, to: offset + limit - 1)
+                    .execute()
+                    .value
+            case .nearby:
+                // Get videos with location data (would need user's current location)
+                // For now, we'll just return all videos - in production you'd filter by location
+                return try await client
+                    .from("video_content")
+                    .select("*")
+                    .order("created_at", ascending: false)
+                    .range(from: offset, to: offset + limit - 1)
+                    .execute()
+                    .value
+            case .saved:
+                // Get user's saved/bookmarked videos
+                let savedVideoIds = await getSavedVideoIds(for: userID)
+                if !savedVideoIds.isEmpty {
+                    // Use the first saved video ID for now - limitation of simple queries
+                    return try await client
+                        .from("video_content")
+                        .select("*")
+                        .eq("id", value: savedVideoIds.first!)
+                        .order("created_at", ascending: false)
+                        .range(from: offset, to: offset + limit - 1)
+                        .execute()
+                        .value
+                } else {
+                    return []
+                }
+            case .forYou:
+                // Default feed - mix of popular and recent content
+                return try await client
+                    .from("video_content")
+                    .select("*")
+                    .order("created_at", ascending: false)
+                    .range(from: offset, to: offset + limit - 1)
+                    .execute()
+                    .value
+            }
+                }()
+            
+            // Convert to VideoContent and check if liked by current user
+            var videoContents: [VideoContent] = []
+            for videoDB in videos {
+                let isLiked = await isVideoLikedByUser(videoId: videoDB.id, userId: userID)
+                let isBookmarked = await isVideoBookmarkedByUser(videoId: videoDB.id, userId: userID)
+                let videoContent = videoDB.toVideoContent(isLikedByCurrentUser: isLiked, isBookmarkedByCurrentUser: isBookmarked)
+                videoContents.append(videoContent)
+            }
+            
+            print("✅ Retrieved \(videoContents.count) videos for \(filter.rawValue) feed")
+            return videoContents
+        } catch {
+            print("❌ Failed to get video feed: \(error)")
+            throw error
+        }
+    }
+    
+    /// Get specific video by ID
+    func getVideo(id: String, userID: String) async throws -> VideoContent? {
+        do {
+            let videos: [VideoContentDB] = try await client
+                .from("video_content")
+                .select("*")
+                .eq("id", value: id)
+                .execute()
+                .value
+            
+            guard let videoDB = videos.first else { return nil }
+            
+            let isLiked = await isVideoLikedByUser(videoId: id, userId: userID)
+            let isBookmarked = await isVideoBookmarkedByUser(videoId: id, userId: userID)
+            
+            return videoDB.toVideoContent(isLikedByCurrentUser: isLiked, isBookmarkedByCurrentUser: isBookmarked)
+        } catch {
+            print("❌ Failed to get video: \(error)")
+            throw error
+        }
+    }
+    
+    /// Like/unlike a video
+    func toggleVideoLike(videoId: String, userId: String, username: String, userAvatarURL: String?) async -> Bool {
+        do {
+            // Check if already liked
+            let existingLikes: [VideoLikeDB] = try await client
+                .from("video_likes")
+                .select("*")
+                .eq("video_id", value: videoId)
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            if let existingLike = existingLikes.first {
+                // Unlike the video
+                _ = try await client
+                    .from("video_likes")
+                    .delete()
+                    .eq("id", value: existingLike.id)
+                    .execute()
+                
+                // Decrement likes count
+                _ = try await client
+                    .from("video_content")
+                    .update(["likes_count": "likes_count - 1"])
+                    .eq("id", value: videoId)
+                    .execute()
+                
+                print("✅ Video unliked: \(videoId)")
+                return false
+            } else {
+                // Like the video
+                let videoLike = VideoLikeDB(
+                    id: UUID().uuidString,
+                    video_id: videoId,
+                    user_id: userId,
+                    username: username,
+                    user_avatar_url: userAvatarURL,
+                    created_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                _ = try await client
+                    .from("video_likes")
+                    .insert(videoLike)
+                    .execute()
+                
+                // Increment likes count
+                _ = try await client
+                    .from("video_content")
+                    .update(["likes_count": "likes_count + 1"])
+                    .eq("id", value: videoId)
+                    .execute()
+                
+                print("✅ Video liked: \(videoId)")
+                return true
+            }
+        } catch {
+            print("❌ Failed to toggle video like: \(error)")
+            return false
+        }
+    }
+    
+    /// Check if video is liked by user
+    func isVideoLikedByUser(videoId: String, userId: String) async -> Bool {
+        do {
+            let likes: [VideoLikeDB] = try await client
+                .from("video_likes")
+                .select("id")
+                .eq("video_id", value: videoId)
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            return !likes.isEmpty
+        } catch {
+            print("❌ Failed to check video like status: \(error)")
+            return false
+        }
+    }
+    
+    /// Bookmark/unbookmark a video
+    func toggleVideoBookmark(videoId: String, userId: String) async -> Bool {
+        do {
+            // Check if already bookmarked
+            let existingBookmarks: [VideoBookmarkDB] = try await client
+                .from("video_bookmarks")
+                .select("*")
+                .eq("video_id", value: videoId)
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            if let existingBookmark = existingBookmarks.first {
+                // Remove bookmark
+                _ = try await client
+                    .from("video_bookmarks")
+                    .delete()
+                    .eq("id", value: existingBookmark.id)
+                    .execute()
+                
+                print("✅ Video unbookmarked: \(videoId)")
+                return false
+            } else {
+                // Add bookmark
+                let bookmark = VideoBookmarkDB(
+                    id: UUID().uuidString,
+                    video_id: videoId,
+                    user_id: userId,
+                    created_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                _ = try await client
+                    .from("video_bookmarks")
+                    .insert(bookmark)
+                    .execute()
+                
+                print("✅ Video bookmarked: \(videoId)")
+                return true
+            }
+        } catch {
+            print("❌ Failed to toggle video bookmark: \(error)")
+            return false
+        }
+    }
+    
+    /// Check if video is bookmarked by user
+    func isVideoBookmarkedByUser(videoId: String, userId: String) async -> Bool {
+        do {
+            let bookmarks: [VideoBookmarkDB] = try await client
+                .from("video_bookmarks")
+                .select("id")
+                .eq("video_id", value: videoId)
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            return !bookmarks.isEmpty
+        } catch {
+            print("❌ Failed to check video bookmark status: \(error)")
+            return false
+        }
+    }
+    
+    /// Get saved video IDs for user
+    private func getSavedVideoIds(for userId: String) async -> [String] {
+        do {
+            let bookmarks: [VideoBookmarkDB] = try await client
+                .from("video_bookmarks")
+                .select("video_id")
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            return bookmarks.map { $0.video_id }
+        } catch {
+            print("❌ Failed to get saved video IDs: \(error)")
+            return []
+        }
+    }
+    
+    /// Record video view
+    func recordVideoView(videoId: String, userId: String, watchDuration: TimeInterval) async {
+        do {
+            // Record the view
+            let view = VideoViewDB(
+                id: UUID().uuidString,
+                video_id: videoId,
+                user_id: userId,
+                watch_duration: watchDuration,
+                created_at: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            _ = try await client
+                .from("video_views")
+                .insert(view)
+                .execute()
+            
+            // Increment views count
+            _ = try await client
+                .from("video_content")
+                .update(["views_count": "views_count + 1"])
+                .eq("id", value: videoId)
+                .execute()
+            
+            print("✅ Video view recorded: \(videoId)")
+        } catch {
+            print("❌ Failed to record video view: \(error)")
+        }
+    }
+    
+    /// Add comment to video
+    func addVideoComment(videoId: String, authorId: String, authorUsername: String, authorAvatarURL: String?, content: String, parentCommentId: String? = nil) async throws -> VideoComment {
+        do {
+            let commentDB = VideoCommentDB(
+                id: UUID().uuidString,
+                video_id: videoId,
+                author_id: authorId,
+                author_username: authorUsername,
+                author_avatar_url: authorAvatarURL,
+                content: content,
+                created_at: ISO8601DateFormatter().string(from: Date()),
+                updated_at: nil,
+                parent_comment_id: parentCommentId,
+                likes_count: 0,
+                replies_count: 0
+            )
+            
+            let insertedComments: [VideoCommentDB] = try await client
+                .from("video_comments")
+                .insert(commentDB)
+                .select()
+                .execute()
+                .value
+            
+            guard let insertedComment = insertedComments.first else {
+                throw NSError(domain: "CommentError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to add comment"])
+            }
+            
+            // Increment comments count on video
+            _ = try await client
+                .from("video_content")
+                .update(["comments_count": "comments_count + 1"])
+                .eq("id", value: videoId)
+                .execute()
+            
+            // If this is a reply, increment replies count on parent comment
+            if let parentId = parentCommentId {
+                _ = try await client
+                    .from("video_comments")
+                    .update(["replies_count": "replies_count + 1"])
+                    .eq("id", value: parentId)
+                    .execute()
+            }
+            
+            print("✅ Comment added to video: \(videoId)")
+            return insertedComment.toVideoComment()
+        } catch {
+            print("❌ Failed to add video comment: \(error)")
+            throw error
+        }
+    }
+    
+    /// Get comments for video
+    func getVideoComments(videoId: String, userId: String, limit: Int = 50, offset: Int = 0) async throws -> [VideoComment] {
+        do {
+            let commentsDB: [VideoCommentDB] = try await client
+                .from("video_comments")
+                .select("*")
+                .eq("video_id", value: videoId)
+                .is("parent_comment_id", value: nil) // Only top-level comments
+                .order("created_at", ascending: true)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+                .value
+            
+            // Convert to VideoComment and check if liked by current user
+            var comments: [VideoComment] = []
+            for commentDB in commentsDB {
+                let isLiked = await isCommentLikedByUser(commentId: commentDB.id, userId: userId)
+                let comment = commentDB.toVideoComment(isLikedByCurrentUser: isLiked)
+                comments.append(comment)
+            }
+            
+            print("✅ Retrieved \(comments.count) comments for video: \(videoId)")
+            return comments
+        } catch {
+            print("❌ Failed to get video comments: \(error)")
+            throw error
+        }
+    }
+    
+    /// Get replies for a comment
+    func getCommentReplies(commentId: String, userId: String, limit: Int = 20) async throws -> [VideoComment] {
+        do {
+            let repliesDB: [VideoCommentDB] = try await client
+                .from("video_comments")
+                .select("*")
+                .eq("parent_comment_id", value: commentId)
+                .order("created_at", ascending: true)
+                .limit(limit)
+                .execute()
+                .value
+            
+            // Convert to VideoComment and check if liked by current user
+            var replies: [VideoComment] = []
+            for replyDB in repliesDB {
+                let isLiked = await isCommentLikedByUser(commentId: replyDB.id, userId: userId)
+                let reply = replyDB.toVideoComment(isLikedByCurrentUser: isLiked)
+                replies.append(reply)
+            }
+            
+            print("✅ Retrieved \(replies.count) replies for comment: \(commentId)")
+            return replies
+        } catch {
+            print("❌ Failed to get comment replies: \(error)")
+            throw error
+        }
+    }
+    
+    /// Like/unlike a comment
+    func toggleCommentLike(commentId: String, userId: String) async -> Bool {
+        do {
+            // Check if already liked
+            let existingLikes: [VideoCommentLikeDB] = try await client
+                .from("video_comment_likes")
+                .select("*")
+                .eq("comment_id", value: commentId)
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            if !existingLikes.isEmpty {
+                // Unlike the comment
+                _ = try await client
+                    .from("video_comment_likes")
+                    .delete()
+                    .eq("comment_id", value: commentId)
+                    .eq("user_id", value: userId)
+                    .execute()
+                
+                // Decrement likes count
+                _ = try await client
+                    .from("video_comments")
+                    .update(["likes_count": "likes_count - 1"])
+                    .eq("id", value: commentId)
+                    .execute()
+                
+                print("✅ Comment unliked: \(commentId)")
+                return false
+            } else {
+                // Like the comment
+                let like = VideoCommentLikeDB(
+                    id: UUID().uuidString,
+                    comment_id: commentId,
+                    user_id: userId,
+                    created_at: ISO8601DateFormatter().string(from: Date())
+                )
+                
+                _ = try await client
+                    .from("video_comment_likes")
+                    .insert(like)
+                    .execute()
+                
+                // Increment likes count
+                _ = try await client
+                    .from("video_comments")
+                    .update(["likes_count": "likes_count + 1"])
+                    .eq("id", value: commentId)
+                    .execute()
+                
+                print("✅ Comment liked: \(commentId)")
+                return true
+            }
+        } catch {
+            print("❌ Failed to toggle comment like: \(error)")
+            return false
+        }
+    }
+    
+
+    
+    /// Share video (increment share count)
+    func shareVideo(videoId: String) async {
+        do {
+            _ = try await client
+                .from("video_content")
+                .update(["shares_count": "shares_count + 1"])
+                .eq("id", value: videoId)
+                .execute()
+            
+            print("✅ Video share count incremented: \(videoId)")
+        } catch {
+            print("❌ Failed to increment video share count: \(error)")
+        }
+    }
+    
+    /// Delete video (only by owner)
+    func deleteVideo(videoId: String, userId: String) async -> Bool {
+        do {
+            // Verify ownership
+            let videos: [VideoContentDB] = try await client
+                .from("video_content")
+                .select("author_id")
+                .eq("id", value: videoId)
+                .execute()
+                .value
+            
+            guard let video = videos.first, video.author_id == userId else {
+                print("❌ User not authorized to delete video: \(videoId)")
+                return false
+            }
+            
+            // Delete video content
+            _ = try await client
+                .from("video_content")
+                .delete()
+                .eq("id", value: videoId)
+                .execute()
+            
+            print("✅ Video deleted: \(videoId)")
+            return true
+        } catch {
+            print("❌ Failed to delete video: \(error)")
+            return false
+        }
+    }
+    
+    /// Get user's videos
+    func getUserVideos(userId: String, limit: Int = 20, offset: Int = 0) async throws -> [VideoContent] {
+        do {
+            let videos: [VideoContentDB] = try await client
+                .from("video_content")
+                .select("*")
+                .eq("author_id", value: userId)
+                .order("created_at", ascending: false)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+                .value
+            
+            let videoContents = videos.map { $0.toVideoContent() }
+            print("✅ Retrieved \(videoContents.count) videos for user: \(userId)")
+            return videoContents
+        } catch {
+            print("❌ Failed to get user videos: \(error)")
+            throw error
+        }
+    }
 }
 
 // MARK: - Apple Sign In Crypto Helper Extension
@@ -2118,466 +2746,6 @@ extension SupabaseManager {
         return hashed.compactMap { String(format: "%02x", $0) }.joined()
     }
 }
-
-// MARK: - Image Storage Extension
-
-extension SupabaseManager {
-    
-    /// Upload an image to Supabase Storage
-    func uploadImage(_ imageData: Data, to bucket: String, path: String) async throws -> String {
-        try await client.storage
-            .from(bucket)
-            .upload(path, data: imageData, options: FileOptions(contentType: "image/jpeg"))
-        
-        // Get the public URL for the uploaded image
-        return try client.storage
-            .from(bucket)
-            .getPublicURL(path: path)
-            .absoluteString
-    }
-    
-    /// Upload profile image
-    func uploadProfileImage(_ imageData: Data, for userID: String) async throws -> String {
-        let fileName = "\(userID)_\(Date().timeIntervalSince1970).jpg"
-        let path = "profile-images/\(fileName)"
-        
-        return try await uploadImage(imageData, to: "profile-images", path: path)
-    }
-    
-    /// Upload pin media image
-    func uploadPinImage(_ imageData: Data, for pinID: String) async throws -> String {
-        let fileName = "\(pinID)_\(Date().timeIntervalSince1970).jpg"
-        let path = "pin-images/\(fileName)"
-        
-        return try await uploadImage(imageData, to: "pin-images", path: path)
-    }
-    
-}
-
-// MARK: - Location Features Extension (Temporarily Disabled)
-
-/*
-extension SupabaseManager {
-    
-    // MARK: - Location History (Placeholder Implementation)
-    
-    /// Save location to history
-    func saveLocationToHistory(
-        userID: String,
-        latitude: Double,
-        longitude: Double,
-        accuracy: Double? = nil,
-        altitude: Double? = nil,
-        speed: Double? = nil,
-        heading: Double? = nil,
-        locationName: String? = nil,
-        city: String? = nil,
-        country: String? = nil,
-        isManual: Bool = false,
-        activityType: String? = nil
-    ) async -> Bool {
-        do {
-            let locationInsert = LocationHistoryInsert(
-                user_id: userID,
-                latitude: latitude,
-                longitude: longitude,
-                accuracy: accuracy,
-                altitude: altitude,
-                speed: speed,
-                heading: heading,
-                location_name: locationName,
-                city: city,
-                country: country,
-                is_manual: isManual,
-                activity_type: activityType ?? "unknown"
-            )
-            
-            let _: [LocationHistoryEntry] = try await client
-                .from("location_history")
-                .insert(locationInsert)
-                .select()
-                .execute()
-                .value
-            
-            print("✅ Location saved to history: \(locationName ?? "Unknown") at (\(latitude), \(longitude))")
-            return true
-        } catch {
-            print("❌ Failed to save location to history: \(error)")
-            return false
-        }
-    }
-    
-    /// Get user's location history
-    func getLocationHistory(
-        userID: String,
-        limit: Int = 100,
-        startDate: Date? = nil,
-        endDate: Date? = nil
-    ) async throws -> [LocationHistoryEntry] {
-        do {
-            var query = client
-                .from("location_history")
-                .select("*")
-                .eq("user_id", value: userID)
-                .order("created_at", ascending: false)
-                .limit(limit)
-            
-            // Add date filters if provided
-            if let startDate = startDate {
-                let startString = ISO8601DateFormatter().string(from: startDate)
-                query = query.gte("created_at", value: startString)
-            }
-            
-            if let endDate = endDate {
-                let endString = ISO8601DateFormatter().string(from: endDate)
-                query = query.lte("created_at", value: endString)
-            }
-            
-            let locationHistory: [LocationHistoryEntry] = try await query
-                .execute()
-                .value
-            
-            print("✅ Retrieved \(locationHistory.count) location history entries for user: \(userID)")
-            return locationHistory
-        } catch {
-            print("❌ Failed to retrieve location history: \(error)")
-            throw error
-        }
-    }
-    
-    /// Delete location history older than specified days
-    func cleanupLocationHistory(userID: String, olderThanDays: Int) async -> Bool {
-        do {
-            let cutoffDate = Calendar.current.date(byAdding: .day, value: -olderThanDays, to: Date()) ?? Date()
-            let cutoffString = ISO8601DateFormatter().string(from: cutoffDate)
-            
-            _ = try await client
-                .from("location_history")
-                .delete()
-                .eq("user_id", value: userID)
-                .lt("created_at", value: cutoffString)
-                .execute()
-            
-            print("✅ Location history cleaned up (older than \(olderThanDays) days)")
-            return true
-        } catch {
-            print("❌ Failed to cleanup location history: \(error)")
-            return false
-        }
-    }
-    
-    /// Delete all location history for user
-    func deleteAllLocationHistory(userID: String) async -> Bool {
-        do {
-            _ = try await client
-                .from("location_history")
-                .delete()
-                .eq("user_id", value: userID)
-                .execute()
-            
-            print("✅ All location history deleted")
-            return true
-        } catch {
-            print("❌ Failed to delete location history: \(error)")
-            return false
-        }
-    }
-    
-    // MARK: - Geofencing
-    
-    /// Create a geofence
-    func createGeofence(
-        userID: String,
-        name: String,
-        description: String? = nil,
-        latitude: Double,
-        longitude: Double,
-        radius: Double,
-        notificationType: String = "both"
-    ) async -> Bool {
-        do {
-            let geofenceData = GeofenceInsert(
-                user_id: userID,
-                name: name,
-                description: description,
-                latitude: latitude,
-                longitude: longitude,
-                radius: radius,
-                notification_type: notificationType
-            )
-            
-            _ = try await client
-                .from("geofences")
-                .insert(geofenceData)
-                .execute()
-            
-            print("✅ Geofence created: \(name)")
-            return true
-        } catch {
-            print("❌ Failed to create geofence: \(error)")
-            return false
-        }
-    }
-    
-    /// Get user's geofences
-    func getUserGeofences(userID: String) async throws -> [Geofence] {
-        let response = try await client
-            .from("geofences")
-            .select()
-            .eq("user_id", value: userID)
-            .eq("is_active", value: true)
-            .order("created_at", ascending: false)
-            .execute()
-        
-        return try JSONDecoder().decode([Geofence].self, from: response.data)
-    }
-    
-    /// Update geofence
-    func updateGeofence(
-        geofenceID: String,
-        name: String? = nil,
-        description: String? = nil,
-        latitude: Double? = nil,
-        longitude: Double? = nil,
-        radius: Double? = nil,
-        isActive: Bool? = nil,
-        notificationType: String? = nil
-    ) async -> Bool {
-        do {
-            var updateData: [String: Any] = [:]
-            
-            if let name = name { updateData["name"] = name }
-            if let description = description { updateData["description"] = description }
-            if let latitude = latitude { updateData["latitude"] = latitude }
-            if let longitude = longitude { updateData["longitude"] = longitude }
-            if let radius = radius { updateData["radius"] = radius }
-            if let isActive = isActive { updateData["is_active"] = isActive }
-            if let notificationType = notificationType { updateData["notification_type"] = notificationType }
-            
-            _ = try await client
-                .from("geofences")
-                .update(updateData)
-                .eq("id", value: geofenceID)
-                .execute()
-            
-            print("✅ Geofence updated")
-            return true
-        } catch {
-            print("❌ Failed to update geofence: \(error)")
-            return false
-        }
-    }
-    
-    /// Delete geofence
-    func deleteGeofence(geofenceID: String) async -> Bool {
-        do {
-            _ = try await client
-                .from("geofences")
-                .delete()
-                .eq("id", value: geofenceID)
-                .execute()
-            
-            print("✅ Geofence deleted")
-            return true
-        } catch {
-            print("❌ Failed to delete geofence: \(error)")
-            return false
-        }
-    }
-    
-    /// Record geofence event (enter/exit)
-    func recordGeofenceEvent(
-        userID: String,
-        geofenceID: String,
-        eventType: String,
-        latitude: Double,
-        longitude: Double
-    ) async -> Bool {
-        do {
-            let eventData: [String: Any] = [
-                "user_id": userID,
-                "geofence_id": geofenceID,
-                "event_type": eventType,
-                "latitude": latitude,
-                "longitude": longitude
-            ]
-            
-            _ = try await client
-                .from("geofence_events")
-                .insert(eventData)
-                .execute()
-            
-            print("✅ Geofence event recorded: \(eventType)")
-            return true
-        } catch {
-            print("❌ Failed to record geofence event: \(error)")
-            return false
-        }
-    }
-    
-    /// Get geofence events
-    func getGeofenceEvents(userID: String, limit: Int = 50) async throws -> [GeofenceEvent] {
-        let response = try await client
-            .from("geofence_events")
-            .select("""
-                *,
-                geofences (
-                    name,
-                    description
-                )
-            """)
-            .eq("user_id", value: userID)
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute()
-        
-        return try JSONDecoder().decode([GeofenceEvent].self, from: response.data)
-    }
-
-    // MARK: - Location Privacy Settings
-    
-    /// Get user's location privacy settings
-    func getLocationPrivacySettings(userID: String) async throws -> LocationPrivacySettings {
-        let response = try await client
-            .from("location_privacy_settings")
-            .select()
-            .eq("user_id", value: userID)
-            .execute()
-        
-        let settings = try JSONDecoder().decode([LocationPrivacySettings].self, from: response.data)
-        
-        if let existing = settings.first {
-            return existing
-        } else {
-            // Create default settings if none exist
-            let defaultSettings = LocationPrivacySettings(
-                userID: userID,
-                shareLocationWithFriends: true,
-                shareLocationWithFollowers: false,
-                shareLocationPublicly: false,
-                shareLocationHistory: false,
-                locationAccuracyLevel: "approximate",
-                autoDeleteHistoryDays: 30,
-                allowLocationRequests: true
-            )
-            
-            _ = await createLocationPrivacySettings(settings: defaultSettings)
-            return defaultSettings
-        }
-    }
-    
-    /// Create location privacy settings
-    func createLocationPrivacySettings(settings: LocationPrivacySettings) async -> Bool {
-        do {
-            let settingsData: [String: Any] = [
-                "user_id": settings.userID,
-                "share_location_with_friends": settings.shareLocationWithFriends,
-                "share_location_with_followers": settings.shareLocationWithFollowers,
-                "share_location_publicly": settings.shareLocationPublicly,
-                "share_location_history": settings.shareLocationHistory,
-                "location_accuracy_level": settings.locationAccuracyLevel,
-                "auto_delete_history_days": settings.autoDeleteHistoryDays,
-                "allow_location_requests": settings.allowLocationRequests
-            ]
-            
-            _ = try await client
-                .from("location_privacy_settings")
-                .insert(settingsData)
-                .execute()
-            
-            print("✅ Location privacy settings created")
-            return true
-        } catch {
-            print("❌ Failed to create location privacy settings: \(error)")
-            return false
-        }
-    }
-    
-    /// Update location privacy settings
-    func updateLocationPrivacySettings(
-        userID: String,
-        shareLocationWithFriends: Bool? = nil,
-        shareLocationWithFollowers: Bool? = nil,
-        shareLocationPublicly: Bool? = nil,
-        shareLocationHistory: Bool? = nil,
-        locationAccuracyLevel: String? = nil,
-        autoDeleteHistoryDays: Int? = nil,
-        allowLocationRequests: Bool? = nil
-    ) async -> Bool {
-        do {
-            var updateData: [String: Any] = [:]
-            
-            if let shareLocationWithFriends = shareLocationWithFriends {
-                updateData["share_location_with_friends"] = shareLocationWithFriends
-            }
-            if let shareLocationWithFollowers = shareLocationWithFollowers {
-                updateData["share_location_with_followers"] = shareLocationWithFollowers
-            }
-            if let shareLocationPublicly = shareLocationPublicly {
-                updateData["share_location_publicly"] = shareLocationPublicly
-            }
-            if let shareLocationHistory = shareLocationHistory {
-                updateData["share_location_history"] = shareLocationHistory
-            }
-            if let locationAccuracyLevel = locationAccuracyLevel {
-                updateData["location_accuracy_level"] = locationAccuracyLevel
-            }
-            if let autoDeleteHistoryDays = autoDeleteHistoryDays {
-                updateData["auto_delete_history_days"] = autoDeleteHistoryDays
-            }
-            if let allowLocationRequests = allowLocationRequests {
-                updateData["allow_location_requests"] = allowLocationRequests
-            }
-            
-            _ = try await client
-                .from("location_privacy_settings")
-                .update(updateData)
-                .eq("user_id", value: userID)
-                .execute()
-            
-            print("✅ Location privacy settings updated")
-            return true
-        } catch {
-            print("❌ Failed to update location privacy settings: \(error)")
-            return false
-        }
-    }
-    
-    /// Check if user allows location sharing with another user
-    func canShareLocationWith(userID: String, targetUserID: String) async -> Bool {
-        do {
-            // Get privacy settings
-            let settings = try await getLocationPrivacySettings(userID: userID)
-            
-            // Check if public sharing is enabled
-            if settings.shareLocationPublicly {
-                return true
-            }
-            
-            // Check if they're friends and friend sharing is enabled
-            if settings.shareLocationWithFriends {
-                let isFollowing = try await checkIfFollowing(followerID: targetUserID, followingID: userID)
-                let isFollowedBy = try await checkIfFollowing(followerID: userID, followingID: targetUserID)
-                
-                if isFollowing && isFollowedBy {
-                    return true // Mutual follow = friends
-                }
-            }
-            
-            // Check if follower sharing is enabled
-            if settings.shareLocationWithFollowers {
-                let isFollowedBy = try await checkIfFollowing(followerID: targetUserID, followingID: userID)
-                return isFollowedBy
-            }
-            
-            return false
-        } catch {
-            print("❌ Failed to check location sharing permissions: \(error)")
-            return false
-        }
-    }
-}
-*/
 
 // MARK: - Deep Linking Support
 extension SupabaseManager {

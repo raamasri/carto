@@ -1502,3 +1502,343 @@ extension Pin {
         return []
     }
 }
+
+// MARK: - Video Content Models
+
+struct VideoContent: Identifiable, Codable {
+    let id: UUID
+    let videoURL: String
+    let thumbnailURL: String?
+    let duration: TimeInterval
+    let authorId: String
+    let authorUsername: String
+    let authorAvatarURL: String?
+    let caption: String
+    let hashtags: [String]
+    let mentionedUsers: [String]
+    let locationName: String?
+    let city: String?
+    let latitude: Double?
+    let longitude: Double?
+    let createdAt: Date
+    let updatedAt: Date
+    var viewsCount: Int
+    var likesCount: Int
+    var commentsCount: Int
+    var sharesCount: Int
+    var isLikedByCurrentUser: Bool
+    var isBookmarkedByCurrentUser: Bool
+    var musicInfo: VideoMusicInfo?
+    
+    init(id: UUID = UUID(), videoURL: String, thumbnailURL: String? = nil, duration: TimeInterval, authorId: String, authorUsername: String, authorAvatarURL: String? = nil, caption: String, hashtags: [String] = [], mentionedUsers: [String] = [], locationName: String? = nil, city: String? = nil, latitude: Double? = nil, longitude: Double? = nil, createdAt: Date = Date(), updatedAt: Date = Date(), viewsCount: Int = 0, likesCount: Int = 0, commentsCount: Int = 0, sharesCount: Int = 0, isLikedByCurrentUser: Bool = false, isBookmarkedByCurrentUser: Bool = false, musicInfo: VideoMusicInfo? = nil) {
+        self.id = id
+        self.videoURL = videoURL
+        self.thumbnailURL = thumbnailURL
+        self.duration = duration
+        self.authorId = authorId
+        self.authorUsername = authorUsername
+        self.authorAvatarURL = authorAvatarURL
+        self.caption = caption
+        self.hashtags = hashtags
+        self.mentionedUsers = mentionedUsers
+        self.locationName = locationName
+        self.city = city
+        self.latitude = latitude
+        self.longitude = longitude
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.viewsCount = viewsCount
+        self.likesCount = likesCount
+        self.commentsCount = commentsCount
+        self.sharesCount = sharesCount
+        self.isLikedByCurrentUser = isLikedByCurrentUser
+        self.isBookmarkedByCurrentUser = isBookmarkedByCurrentUser
+        self.musicInfo = musicInfo
+    }
+    
+    var hasLocation: Bool {
+        return latitude != nil && longitude != nil
+    }
+    
+    var displayLocation: String? {
+        guard let locationName = locationName else { return nil }
+        if let city = city {
+            return "\(locationName), \(city)"
+        }
+        return locationName
+    }
+    
+    var formattedDuration: String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+    
+    var timeAgo: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: createdAt, relativeTo: Date())
+    }
+}
+
+struct VideoMusicInfo: Codable {
+    let title: String
+    let artist: String
+    let albumArt: String?
+    let spotifyURL: String?
+    let appleMusicURL: String?
+}
+
+struct VideoComment: Identifiable, Codable {
+    let id: UUID
+    let videoId: UUID
+    let authorId: String
+    let authorUsername: String
+    let authorAvatarURL: String?
+    let content: String
+    let createdAt: Date
+    let updatedAt: Date?
+    let parentCommentId: UUID? // For reply threads
+    var likesCount: Int
+    var isLikedByCurrentUser: Bool
+    var repliesCount: Int
+    
+    init(id: UUID = UUID(), videoId: UUID, authorId: String, authorUsername: String, authorAvatarURL: String? = nil, content: String, createdAt: Date = Date(), updatedAt: Date? = nil, parentCommentId: UUID? = nil, likesCount: Int = 0, isLikedByCurrentUser: Bool = false, repliesCount: Int = 0) {
+        self.id = id
+        self.videoId = videoId
+        self.authorId = authorId
+        self.authorUsername = authorUsername
+        self.authorAvatarURL = authorAvatarURL
+        self.content = content
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.parentCommentId = parentCommentId
+        self.likesCount = likesCount
+        self.isLikedByCurrentUser = isLikedByCurrentUser
+        self.repliesCount = repliesCount
+    }
+    
+    var timeAgo: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: createdAt, relativeTo: Date())
+    }
+}
+
+struct VideoLike: Identifiable, Codable {
+    let id: UUID
+    let videoId: UUID
+    let userId: String
+    let username: String
+    let userAvatarURL: String?
+    let createdAt: Date
+    
+    init(id: UUID = UUID(), videoId: UUID, userId: String, username: String, userAvatarURL: String? = nil, createdAt: Date = Date()) {
+        self.id = id
+        self.videoId = videoId
+        self.userId = userId
+        self.username = username
+        self.userAvatarURL = userAvatarURL
+        self.createdAt = createdAt
+    }
+}
+
+enum VideoFeedFilter: String, CaseIterable {
+    case forYou = "For You"
+    case following = "Following"
+    case trending = "Trending"
+    case nearby = "Nearby"
+    case saved = "Saved"
+    
+    var icon: String {
+        switch self {
+        case .forYou: return "sparkles"
+        case .following: return "person.2.fill"
+        case .trending: return "flame.fill"
+        case .nearby: return "location.fill"
+        case .saved: return "bookmark.fill"
+        }
+    }
+}
+
+// MARK: - Video Database Models
+
+struct VideoContentDB: Codable {
+    let id: String
+    let video_url: String
+    let thumbnail_url: String?
+    let duration: Double
+    let author_id: String
+    let author_username: String
+    let author_avatar_url: String?
+    let caption: String
+    let hashtags: [String]?
+    let mentioned_users: [String]?
+    let location_name: String?
+    let city: String?
+    let latitude: Double?
+    let longitude: Double?
+    let created_at: String
+    let updated_at: String
+    let views_count: Int
+    let likes_count: Int
+    let comments_count: Int
+    let shares_count: Int
+    let music_title: String?
+    let music_artist: String?
+    let music_album_art: String?
+    let music_spotify_url: String?
+    let music_apple_music_url: String?
+}
+
+struct VideoCommentDB: Codable {
+    let id: String
+    let video_id: String
+    let author_id: String
+    let author_username: String
+    let author_avatar_url: String?
+    let content: String
+    let created_at: String
+    let updated_at: String?
+    let parent_comment_id: String?
+    let likes_count: Int
+    let replies_count: Int
+}
+
+struct VideoLikeDB: Codable {
+    let id: String
+    let video_id: String
+    let user_id: String
+    let username: String
+    let user_avatar_url: String?
+    let created_at: String
+}
+
+struct VideoBookmarkDB: Codable {
+    let id: String
+    let video_id: String
+    let user_id: String
+    let created_at: String
+}
+
+struct VideoViewDB: Codable {
+    let id: String
+    let video_id: String
+    let user_id: String
+    let watch_duration: TimeInterval
+    let created_at: String
+}
+
+struct VideoCommentLikeDB: Codable {
+    let id: String
+    let comment_id: String
+    let user_id: String
+    let created_at: String
+}
+
+// MARK: - Video Extensions
+
+extension VideoContentDB {
+    func toVideoContent(isLikedByCurrentUser: Bool = false, isBookmarkedByCurrentUser: Bool = false) -> VideoContent {
+        let musicInfo: VideoMusicInfo? = {
+            guard let title = music_title, let artist = music_artist else { return nil }
+            return VideoMusicInfo(
+                title: title,
+                artist: artist,
+                albumArt: music_album_art,
+                spotifyURL: music_spotify_url,
+                appleMusicURL: music_apple_music_url
+            )
+        }()
+        
+        return VideoContent(
+            id: UUID(uuidString: id) ?? UUID(),
+            videoURL: video_url,
+            thumbnailURL: thumbnail_url,
+            duration: duration,
+            authorId: author_id,
+            authorUsername: author_username,
+            authorAvatarURL: author_avatar_url,
+            caption: caption,
+            hashtags: hashtags ?? [],
+            mentionedUsers: mentioned_users ?? [],
+            locationName: location_name,
+            city: city,
+            latitude: latitude,
+            longitude: longitude,
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            updatedAt: ISO8601DateFormatter().date(from: updated_at) ?? Date(),
+            viewsCount: views_count,
+            likesCount: likes_count,
+            commentsCount: comments_count,
+            sharesCount: shares_count,
+            isLikedByCurrentUser: isLikedByCurrentUser,
+            isBookmarkedByCurrentUser: isBookmarkedByCurrentUser,
+            musicInfo: musicInfo
+        )
+    }
+}
+
+extension VideoContent {
+    func toVideoContentDB() -> VideoContentDB {
+        return VideoContentDB(
+            id: id.uuidString,
+            video_url: videoURL,
+            thumbnail_url: thumbnailURL,
+            duration: duration,
+            author_id: authorId,
+            author_username: authorUsername,
+            author_avatar_url: authorAvatarURL,
+            caption: caption,
+            hashtags: hashtags.isEmpty ? nil : hashtags,
+            mentioned_users: mentionedUsers.isEmpty ? nil : mentionedUsers,
+            location_name: locationName,
+            city: city,
+            latitude: latitude,
+            longitude: longitude,
+            created_at: ISO8601DateFormatter().string(from: createdAt),
+            updated_at: ISO8601DateFormatter().string(from: updatedAt),
+            views_count: viewsCount,
+            likes_count: likesCount,
+            comments_count: commentsCount,
+            shares_count: sharesCount,
+            music_title: musicInfo?.title,
+            music_artist: musicInfo?.artist,
+            music_album_art: musicInfo?.albumArt,
+            music_spotify_url: musicInfo?.spotifyURL,
+            music_apple_music_url: musicInfo?.appleMusicURL
+        )
+    }
+}
+
+extension VideoCommentDB {
+    func toVideoComment(isLikedByCurrentUser: Bool = false) -> VideoComment {
+        return VideoComment(
+            id: UUID(uuidString: id) ?? UUID(),
+            videoId: UUID(uuidString: video_id) ?? UUID(),
+            authorId: author_id,
+            authorUsername: author_username,
+            authorAvatarURL: author_avatar_url,
+            content: content,
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            updatedAt: updated_at != nil ? ISO8601DateFormatter().date(from: updated_at!) : nil,
+            parentCommentId: parent_comment_id != nil ? UUID(uuidString: parent_comment_id!) : nil,
+            likesCount: likes_count,
+            isLikedByCurrentUser: isLikedByCurrentUser,
+            repliesCount: replies_count
+        )
+    }
+}
+
+extension VideoLikeDB {
+    func toVideoLike() -> VideoLike {
+        return VideoLike(
+            id: UUID(uuidString: id) ?? UUID(),
+            videoId: UUID(uuidString: video_id) ?? UUID(),
+            userId: user_id,
+            username: username,
+            userAvatarURL: user_avatar_url,
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
+        )
+    }
+}
