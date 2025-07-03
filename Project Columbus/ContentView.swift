@@ -893,6 +893,18 @@ struct MainMapView: View {
                     }
                     
                     HStack {
+                        // Hamburger menu button
+                        Button(action: {
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                showSideMenu.toggle()
+                            }
+                        }) {
+                            Image(systemName: "line.horizontal.3")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 16))
+                        }
+                        .padding(.trailing, 8)
+                        
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.gray)
                     TextField("Places, Memories, Ideas, #tags", text: $searchText)
@@ -1157,6 +1169,21 @@ struct MainMapView: View {
                 }
             }
         }
+        .overlay(
+            // Sidebar overlay
+            HStack {
+                if showSideMenu {
+                    NavigationSidebar(
+                        showSideMenu: $showSideMenu,
+                        selectedTab: $selectedTab,
+                        authManager: authManager
+                    )
+                    .transition(.move(edge: .leading))
+                }
+                Spacer()
+            }
+            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showSideMenu)
+        )
     }
 
     func requestUserLocation() {
@@ -1530,6 +1557,203 @@ struct RoundedCorner: Shape {
             return .standard
         }
     }
+
+// MARK: - Navigation Sidebar
+
+struct NavigationSidebar: View {
+    @Binding var showSideMenu: Bool
+    @Binding var selectedTab: Int
+    let authManager: AuthManager
+    @State private var showVideoFeed = false
+    @State private var showUserProfile = false
+    @State private var showSettings = false
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Navigation")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Spacer()
+                        Button(action: {
+                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                showSideMenu = false
+                            }
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.title2)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    
+                    Divider()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 10)
+                
+                // Navigation Items
+                VStack(spacing: 8) {
+                    // Home
+                    SidebarMenuItem(
+                        icon: "house.fill",
+                        title: "Home",
+                        isSelected: selectedTab == 0
+                    ) {
+                        selectedTab = 0
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }
+                    
+                    // Videos
+                    SidebarMenuItem(
+                        icon: "play.rectangle.fill",
+                        title: "Videos",
+                        isSelected: false
+                    ) {
+                        showVideoFeed = true
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }
+                    
+                    // My Profile
+                    SidebarMenuItem(
+                        icon: "person.circle.fill",
+                        title: "My Profile",
+                        isSelected: selectedTab == 4
+                    ) {
+                        selectedTab = 4
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }
+                    
+                    // Settings
+                    SidebarMenuItem(
+                        icon: "gearshape.fill",
+                        title: "Settings",
+                        isSelected: false
+                    ) {
+                        showSettings = true
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Footer with user info
+                VStack(alignment: .leading, spacing: 8) {
+                    Divider()
+                    
+                    if let user = authManager.currentUser {
+                        HStack(spacing: 12) {
+                            AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .overlay(
+                                        Image(systemName: "person.fill")
+                                            .foregroundColor(.gray)
+                                    )
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(user.full_name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Text("@\(user.username)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+            .frame(width: 280)
+            .background(.ultraThinMaterial)
+            .shadow(color: Color.black.opacity(0.2), radius: 10, x: 5, y: 0)
+            
+            Spacer()
+        }
+        .background(
+            Color.black.opacity(0.3)
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        showSideMenu = false
+                    }
+                }
+        )
+        .sheet(isPresented: $showVideoFeed) {
+            VideoFeedView()
+                .environmentObject(authManager)
+        }
+        .sheet(isPresented: $showUserProfile) {
+            if let user = authManager.currentUser {
+                UserProfileView(profileUser: user)
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(authManager)
+        }
+    }
+}
+
+// MARK: - Sidebar Menu Item
+
+struct SidebarMenuItem: View {
+    let icon: String
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(isSelected ? .blue : .primary)
+                    .frame(width: 24)
+                
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(isSelected ? .blue : .primary)
+                
+                Spacer()
+                
+                if isSelected {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 8, height: 8)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
 
 
 
