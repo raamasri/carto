@@ -868,6 +868,7 @@ struct MainMapView: View {
                 FindFriendsView()
             } else if selectedTab == 2 {
                 CreatePostView()
+                    .environmentObject(locationManager)
             } else {
                 LiveFeedView()
                     .environmentObject(pinStore)
@@ -922,8 +923,8 @@ struct MainMapView: View {
                             }
                         }) {
                             Image(systemName: "line.horizontal.3")
-                                .foregroundColor(.gray)
-                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                                .font(.system(size: 22, weight: .medium))
                         }
                         .padding(.trailing, 8)
                         

@@ -250,13 +250,17 @@ struct UserProfileView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(displayedUser.full_name.isEmpty ? "@\(displayedUser.username)" : displayedUser.full_name)
-                                .font(.headline)
+                            // Name and bio positioned over stats
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(displayedUser.full_name.isEmpty ? "@\(displayedUser.username)" : displayedUser.full_name)
+                                    .font(.headline)
 
-                            Text(bio)
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                                .lineLimit(2)
+                                Text(bio)
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                    .lineLimit(2)
+                            }
+                            .padding(.bottom, 8)
                             
                             // Instagram-style stats row
                             HStack(spacing: 0) {

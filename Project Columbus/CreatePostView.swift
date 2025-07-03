@@ -37,7 +37,7 @@ struct CreatePostView: View {
     @State private var showingImagePicker: Bool = false
     @State private var showingVideoPicker: Bool = false
     @State private var isFollowingUser: Bool = false
-    @StateObject private var locationManager = AppLocationManager()
+    @EnvironmentObject var locationManager: AppLocationManager
     @State private var searchResults: [MKLocalSearchCompletion] = []
     @State private var completer = MKLocalSearchCompleter()
     @State private var selectedCompletion: MKLocalSearchCompletion? = nil

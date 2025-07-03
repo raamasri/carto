@@ -16,6 +16,7 @@ struct LocationDetailView: View {
     @State private var region: MKCoordinateRegion
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var locationManager: AppLocationManager
     @State private var friends: [AppUser] = []
     @State private var isLoadingFriends = false
 
@@ -415,6 +416,7 @@ struct LocationDetailView: View {
             NavigationLink(destination: CreatePostView(prePopulatedMapItem: mapItem)
                 .environmentObject(authManager)
                 .environmentObject(pinStore)
+                .environmentObject(locationManager)
                 .onAppear {
                     print("📱 CreatePostView appeared from LocationDetailView")
                 }
