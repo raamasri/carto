@@ -1,0 +1,159 @@
+{
+  "backup_info": {
+    "version": "v0.73.7",
+    "description": "Project Columbus - Encrypted Location Sharing Frontend Integration",
+    "generated_date": "$(date)",
+    "total_policies": 67,
+    "encrypted_location_sharing_policies": 15
+  },
+  "encrypted_location_sharing_policies": {
+    "friend_groups": [
+      {
+        "policy_name": "Users can view their own friend groups",
+        "table_name": "friend_groups",
+        "operation": "SELECT",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "policy_name": "Users can create their own friend groups",
+        "table_name": "friend_groups",
+        "operation": "INSERT",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "policy_name": "Users can update their own friend groups",
+        "table_name": "friend_groups",
+        "operation": "UPDATE",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "policy_name": "Users can delete their own friend groups",
+        "table_name": "friend_groups",
+        "operation": "DELETE",
+        "definition": "auth.uid() = user_id"
+      }
+    ],
+    "friend_group_members": [
+      {
+        "policy_name": "Users can view members of their friend groups",
+        "table_name": "friend_group_members",
+        "operation": "SELECT",
+        "definition": "EXISTS (SELECT 1 FROM public.friend_groups fg WHERE fg.id = group_id AND fg.user_id = auth.uid())"
+      },
+      {
+        "policy_name": "Users can add members to their friend groups",
+        "table_name": "friend_group_members",
+        "operation": "INSERT",
+        "definition": "EXISTS (SELECT 1 FROM public.friend_groups fg WHERE fg.id = group_id AND fg.user_id = auth.uid())"
+      },
+      {
+        "policy_name": "Users can remove members from their friend groups",
+        "table_name": "friend_group_members",
+        "operation": "DELETE",
+        "definition": "EXISTS (SELECT 1 FROM public.friend_groups fg WHERE fg.id = group_id AND fg.user_id = auth.uid())"
+      }
+    ],
+    "shared_locations": [
+      {
+        "policy_name": "Users can view locations shared with them",
+        "table_name": "shared_locations",
+        "operation": "SELECT",
+        "definition": "auth.uid() = recipient_user_id AND expires_at > NOW()"
+      },
+      {
+        "policy_name": "Users can view locations they shared",
+        "table_name": "shared_locations",
+        "operation": "SELECT",
+        "definition": "auth.uid() = sender_user_id"
+      },
+      {
+        "policy_name": "Users can share their locations",
+        "table_name": "shared_locations",
+        "operation": "INSERT",
+        "definition": "auth.uid() = sender_user_id"
+      },
+      {
+        "policy_name": "Users can delete locations they shared",
+        "table_name": "shared_locations",
+        "operation": "DELETE",
+        "definition": "auth.uid() = sender_user_id"
+      }
+    ],
+    "user_public_keys": [
+      {
+        "policy_name": "Users can view their own public key",
+        "table_name": "user_public_keys",
+        "operation": "SELECT",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "policy_name": "Users can view public keys of users they can message",
+        "table_name": "user_public_keys",
+        "operation": "SELECT",
+        "definition": "EXISTS (SELECT 1 FROM public.users u WHERE u.id = user_id AND u.id != auth.uid())"
+      },
+      {
+        "policy_name": "Users can create their own public key",
+        "table_name": "user_public_keys",
+        "operation": "INSERT",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "policy_name": "Users can update their own public key",
+        "table_name": "user_public_keys",
+        "operation": "UPDATE",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "policy_name": "Users can delete their own public key",
+        "table_name": "user_public_keys",
+        "operation": "DELETE",
+        "definition": "auth.uid() = user_id"
+      }
+    ]
+  },
+  "performance_indexes": {
+    "friend_groups": [
+      "idx_friend_groups_user_id",
+      "idx_friend_groups_sharing_tier"
+    ],
+    "friend_group_members": [
+      "idx_friend_group_members_group_id",
+      "idx_friend_group_members_member_user_id"
+    ],
+    "shared_locations": [
+      "idx_shared_locations_recipient_expires",
+      "idx_shared_locations_sender_user_id",
+      "idx_shared_locations_expires_at"
+    ],
+    "user_public_keys": [
+      "idx_user_public_keys_user_id"
+    ]
+  },
+  "security_features": {
+    "rls_enabled": true,
+    "encryption": "End-to-end encryption using P256 ECDH key agreement",
+    "location_fuzzing": "Configurable sharing tiers: precise, approximate, city",
+    "expiration": "Automatic cleanup of expired shared locations",
+    "access_control": "Fine-grained RLS policies for all operations"
+  },
+  "database_functions": [
+    {
+      "name": "cleanup_expired_shared_locations",
+      "description": "Removes expired shared location records",
+      "security": "SECURITY DEFINER"
+    },
+    {
+      "name": "get_active_shared_locations_count",
+      "description": "Returns count of active shared locations for a user",
+      "security": "SECURITY DEFINER"
+    }
+  ],
+  "backup_verification": {
+    "tables_count": 26,
+    "columns_count": 216,
+    "policies_count": 67,
+    "encrypted_location_sharing_complete": true,
+    "frontend_integration_complete": true
+  }
+} 

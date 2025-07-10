@@ -1206,6 +1206,7 @@ struct MainMapView: View {
             if let user = authManager.currentUser {
                 UserProfileView(profileUser: user)
                         .environmentObject(authManager)
+                        .environmentObject(pinStore)
                 }
             }
 
