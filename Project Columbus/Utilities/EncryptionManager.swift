@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import Security
+import CoreLocation // Added for CLLocationCoordinate2D
 
 /// Manages end-to-end encryption for messages and local data encryption
 class EncryptionManager {
@@ -64,15 +65,16 @@ class EncryptionManager {
         return publicKey.rawRepresentation.base64EncodedString()
     }
     
-    /// Convert string back to public key
+    /// Convert string to public key
     func stringToPublicKey(_ string: String) throws -> P256.KeyAgreement.PublicKey {
         guard let keyData = Data(base64Encoded: string) else {
-            throw EncryptionError.invalidKey("Invalid public key format")
+            throw EncryptionError.invalidKey("Invalid base64 encoded key")
         }
+        
         return try P256.KeyAgreement.PublicKey(rawRepresentation: keyData)
     }
     
-    // MARK: - Message Encryption (End-to-End)
+    // MARK: - Message Encryption
     
     /// Encrypt a message for a specific recipient
     func encryptMessage(_ message: String, senderPrivateKey: P256.KeyAgreement.PrivateKey, recipientPublicKey: P256.KeyAgreement.PublicKey) throws -> EncryptedMessage {
@@ -111,7 +113,7 @@ class EncryptionManager {
             outputByteCount: 32
         )
         
-        // Reconstruct sealed box
+        // Reconstruct the sealed box
         guard let ciphertext = Data(base64Encoded: encryptedMessage.ciphertext),
               let nonce = Data(base64Encoded: encryptedMessage.nonce),
               let tag = Data(base64Encoded: encryptedMessage.tag) else {
@@ -124,7 +126,7 @@ class EncryptionManager {
         let decryptedData = try AES.GCM.open(sealedBox, using: symmetricKey)
         
         guard let decryptedMessage = String(data: decryptedData, encoding: .utf8) else {
-            throw EncryptionError.invalidData("Failed to decode decrypted message")
+            throw EncryptionError.decryptionFailed("Failed to decode decrypted message")
         }
         
         return decryptedMessage
@@ -132,7 +134,7 @@ class EncryptionManager {
     
     // MARK: - Local Data Encryption
     
-    /// Generate or retrieve device-specific encryption key
+    /// Get or create device-specific encryption key
     func getDeviceEncryptionKey() throws -> SymmetricKey {
         let keyIdentifier = "device_encryption_key"
         
@@ -249,9 +251,59 @@ class EncryptionManager {
         guard let hmacData = Data(base64Encoded: hmac) else { return false }
         return HMAC<SHA256>.isValidAuthenticationCode(hmacData, authenticating: data, using: key)
     }
+
+    /// Encrypt location data for sharing
+    func encryptLocation(
+        _ coordinate: CLLocationCoordinate2D,
+        senderPrivateKey: P256.KeyAgreement.PrivateKey,
+        recipientPublicKey: P256.KeyAgreement.PublicKey,
+        recipientId: UUID
+    ) throws -> EncryptedLocation {
+        // Create location data
+        let locationData = LocationData(
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            timestamp: Date()
+        )
+        
+        // Serialize to JSON
+        let jsonData = try JSONEncoder().encode(locationData)
+        
+        // Generate shared secret using ECDH
+        let sharedSecret = try senderPrivateKey.sharedSecretFromKeyAgreement(with: recipientPublicKey)
+        
+        // Derive encryption key from shared secret
+        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: Data(),
+            sharedInfo: Data("location_encryption".utf8),
+            outputByteCount: 32
+        )
+        
+        // Encrypt the location data
+        let sealedBox = try AES.GCM.seal(jsonData, using: symmetricKey)
+        
+        // Combine encrypted data into a single string
+        let encryptedData = EncryptedLocationData(
+            ciphertext: sealedBox.ciphertext.base64EncodedString(),
+            nonce: sealedBox.nonce.withUnsafeBytes { Data($0) }.base64EncodedString(),
+            tag: sealedBox.tag.base64EncodedString()
+        )
+        
+        let encryptedDataString = try JSONEncoder().encode(encryptedData)
+        
+        return EncryptedLocation(
+            id: UUID(),
+            senderId: UUID(), // This should be set by the caller
+            recipientId: recipientId,
+            encryptedData: String(data: encryptedDataString, encoding: .utf8) ?? "",
+            sharingTier: "approximate", // Use string literal instead of enum
+            expiresAt: Date().addingTimeInterval(24 * 60 * 60) // 24 hours
+        )
+    }
 }
 
-// MARK: - Data Models
+// MARK: - Data Models for Encryption
 
 struct EncryptedMessage: Codable {
     let ciphertext: String
@@ -259,24 +311,50 @@ struct EncryptedMessage: Codable {
     let tag: String
 }
 
+// MARK: - Location Encryption Data Models
+
+struct LocationData: Codable {
+    let latitude: Double
+    let longitude: Double
+    let timestamp: Date
+}
+
+struct EncryptedLocationData: Codable {
+    let ciphertext: String
+    let nonce: String
+    let tag: String
+}
+
+struct EncryptedLocation: Codable {
+    let id: UUID
+    let senderId: UUID
+    let recipientId: UUID
+    let encryptedData: String
+    let sharingTier: String // Use String instead of SharingTier to avoid circular dependency
+    let expiresAt: Date
+}
+
 // MARK: - Error Types
 
-enum EncryptionError: LocalizedError {
-    case keychainError(String)
+enum EncryptionError: Error {
     case invalidKey(String)
-    case invalidData(String)
     case encryptionFailed(String)
+    case decryptionFailed(String)
+    case keychainError(String)
+    case invalidData(String)
     
-    var errorDescription: String? {
+    var localizedDescription: String {
         switch self {
-        case .keychainError(let message):
-            return "Keychain error: \(message)"
         case .invalidKey(let message):
             return "Invalid key: \(message)"
-        case .invalidData(let message):
-            return "Invalid data: \(message)"
         case .encryptionFailed(let message):
             return "Encryption failed: \(message)"
+        case .decryptionFailed(let message):
+            return "Decryption failed: \(message)"
+        case .keychainError(let message):
+            return "Keychain error: \(message)"
+        case .invalidData(let message):
+            return "Invalid data: \(message)"
         }
     }
 } 

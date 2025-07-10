@@ -3247,3 +3247,179 @@ extension SupabaseManager {
         )
     }
 }
+
+// MARK: - Encrypted Location Sharing
+extension SupabaseManager {
+    /// Share encrypted locations with friends
+    func shareEncryptedLocations(_ encryptedLocations: [EncryptedLocation]) async throws {
+        let locationInserts = encryptedLocations.map { location in
+            SharedLocationDB(
+                id: location.id.uuidString,
+                created_at: ISO8601DateFormatter().string(from: Date()),
+                sender_user_id: location.senderId.uuidString,
+                recipient_user_id: location.recipientId.uuidString,
+                ciphertext: location.encryptedData,
+                nonce: "", // Extract from encrypted data
+                tag: "", // Extract from encrypted data
+                expires_at: ISO8601DateFormatter().string(from: location.expiresAt)
+            )
+        }
+        
+        try await client
+            .from("shared_locations")
+            .insert(locationInserts)
+            .execute()
+        
+        print("✅ [Encryption] Shared \(encryptedLocations.count) encrypted locations")
+    }
+    
+    /// Fetch user with friends and friend groups for location sharing
+    func fetchUserWithFriends(userId: String) async throws -> AppUser {
+        // First get the basic user
+        let basicUser: BasicUser = try await client
+            .from("users")
+            .select("*")
+            .eq("id", value: userId)
+            .single()
+            .execute()
+            .value
+        
+        // Get user's friend groups
+        let friendGroups: [FriendGroupDB] = try await client
+            .from("friend_groups")
+            .select("*")
+            .eq("user_id", value: userId)
+            .execute()
+            .value
+        
+        // Get friends from friend group members
+        var friendIds: Set<String> = []
+        for group in friendGroups {
+            let members: [FriendGroupMemberDB] = try await client
+                .from("friend_group_members")
+                .select("*")
+                .eq("group_id", value: group.id)
+                .execute()
+                .value
+            
+            for member in members {
+                if member.member_user_id != userId {
+                    friendIds.insert(member.member_user_id)
+                }
+            }
+        }
+        
+        // Get friend user details
+        var friends: [AppUser] = []
+        if !friendIds.isEmpty {
+            let friendUsers: [BasicUser] = try await client
+                .from("users")
+                .select("*")
+                .in("id", values: Array(friendIds))
+                .execute()
+                .value
+            
+            friends = friendUsers.map { $0.toAppUser() }
+        }
+        
+        // Convert to AppUser and add friend group info
+        var appUser = basicUser.toAppUser()
+        // Note: AppUser doesn't have friends or friend_groups properties in the current model
+        // This functionality would need to be added to the AppUser model
+        
+        return appUser
+    }
+    
+    /// Get user profile with public key
+    func getUserProfile(with userId: String) async throws -> AppUser? {
+        let basicUser: BasicUser = try await client
+            .from("users")
+            .select("*")
+            .eq("id", value: userId)
+            .single()
+            .execute()
+            .value
+        
+        // Get user's public key
+        let publicKey = try? await getUserPublicKey(userID: userId)
+        
+        var appUser = basicUser.toAppUser()
+        // Note: AppUser doesn't have publicKeyString property in the current model
+        // This functionality would need to be added to the AppUser model
+        
+        return appUser
+    }
+    
+    /// Create a friend group
+    func createFriendGroup(name: String, userId: String, sharingTier: SharingTier) async throws -> FriendGroup {
+        let groupId = UUID().uuidString
+        let groupInsert = FriendGroupDB(
+            id: groupId,
+            user_id: userId,
+            name: name,
+            sharing_tier: sharingTier.rawValue,
+            created_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        try await client
+            .from("friend_groups")
+            .insert(groupInsert)
+            .execute()
+        
+        return groupInsert.toFriendGroup()
+    }
+    
+    /// Add member to friend group
+    func addMemberToFriendGroup(groupId: String, memberUserId: String) async throws {
+        let memberInsert = FriendGroupMemberDB(
+            group_id: groupId,
+            member_user_id: memberUserId,
+            created_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        try await client
+            .from("friend_group_members")
+            .insert(memberInsert)
+            .execute()
+    }
+    
+    /// Get active shared locations for a user
+    func getActiveSharedLocations(for userId: String) async throws -> [SharedLocation] {
+        let sharedLocationDBs: [SharedLocationDB] = try await client
+            .from("shared_locations")
+            .select("*")
+            .eq("recipient_user_id", value: userId)
+            .gt("expires_at", value: ISO8601DateFormatter().string(from: Date()))
+            .execute()
+            .value
+        
+        return sharedLocationDBs.map { $0.toSharedLocation() }
+    }
+    
+    /// Get friend groups for a user
+    func getFriendGroups(for userId: String) async throws -> [FriendGroup] {
+        let friendGroupDBs: [FriendGroupDB] = try await client
+            .from("friend_groups")
+            .select("*")
+            .eq("user_id", value: userId)
+            .execute()
+            .value
+        
+        var friendGroups: [FriendGroup] = []
+        
+        for groupDB in friendGroupDBs {
+            let members: [FriendGroupMemberDB] = try await client
+                .from("friend_group_members")
+                .select("*")
+                .eq("group_id", value: groupDB.id)
+                .execute()
+                .value
+            
+            var friendGroup = groupDB.toFriendGroup()
+            friendGroup.memberIds = members.map { UUID(uuidString: $0.member_user_id) ?? UUID() }
+            friendGroups.append(friendGroup)
+        }
+        
+        return friendGroups
+    }
+}

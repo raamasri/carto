@@ -1,0 +1,297 @@
+{
+  "backup_info": {
+    "project_id": "rthgzxorsccgeztwaxnt",
+    "generated_date": "2025-01-10",
+    "description": "Complete backup of all RLS policies and configurations",
+    "total_policies": 67
+  },
+  "rls_policies": [
+    {
+      "table": "users",
+      "policies": [
+        {
+          "name": "Allow insert own profile",
+          "command": "INSERT",
+          "roles": ["authenticated"],
+          "with_check": "(id = auth.uid())"
+        },
+        {
+          "name": "Allow select own profile", 
+          "command": "SELECT",
+          "roles": ["authenticated"],
+          "using": "(auth.uid() IS NOT NULL)"
+        },
+        {
+          "name": "Allow update own profile",
+          "command": "UPDATE", 
+          "roles": ["authenticated"],
+          "using": "(id = auth.uid())",
+          "with_check": "(id = auth.uid())"
+        },
+        {
+          "name": "Delete own user profile",
+          "command": "DELETE",
+          "roles": ["authenticated"],
+          "using": "(id = auth.uid())"
+        }
+      ]
+    },
+    {
+      "table": "friend_groups",
+      "policies": [
+        {
+          "name": "Enable ALL for owner",
+          "command": "ALL",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)",
+          "with_check": "(auth.uid() = user_id)"
+        }
+      ]
+    },
+    {
+      "table": "friend_group_members",
+      "policies": [
+        {
+          "name": "Enable ALL for group owner",
+          "command": "ALL",
+          "roles": ["public"],
+          "using": "(EXISTS ( SELECT 1 FROM friend_groups WHERE (friend_groups.id = friend_group_members.group_id) AND (friend_groups.user_id = auth.uid())))"
+        },
+        {
+          "name": "Allow members to see they are in a group",
+          "command": "SELECT",
+          "roles": ["public"],
+          "using": "(auth.uid() = member_user_id)"
+        }
+      ]
+    },
+    {
+      "table": "shared_locations",
+      "policies": [
+        {
+          "name": "Users can insert their own shared locations",
+          "command": "INSERT",
+          "roles": ["authenticated"],
+          "with_check": "(auth.uid() = sender_user_id)"
+        },
+        {
+          "name": "Users can see locations shared with them",
+          "command": "SELECT", 
+          "roles": ["authenticated"],
+          "using": "(auth.uid() = recipient_user_id)"
+        }
+      ]
+    },
+    {
+      "table": "user_public_keys",
+      "policies": [
+        {
+          "name": "Users can manage own public key",
+          "command": "ALL",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)"
+        },
+        {
+          "name": "Users can read public keys",
+          "command": "SELECT",
+          "roles": ["public"],
+          "using": "true"
+        }
+      ]
+    },
+    {
+      "table": "location_privacy_settings",
+      "policies": [
+        {
+          "name": "Users can manage their own location privacy settings",
+          "command": "ALL",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)"
+        }
+      ]
+    },
+    {
+      "table": "pins",
+      "policies": [
+        {
+          "name": "Users can view all pins",
+          "command": "SELECT",
+          "roles": ["public"],
+          "using": "true"
+        },
+        {
+          "name": "Users can insert own pins",
+          "command": "INSERT",
+          "roles": ["public"],
+          "with_check": "(auth.uid() = user_id)"
+        },
+        {
+          "name": "Users can update own pins",
+          "command": "UPDATE",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)",
+          "with_check": "(auth.uid() = user_id)"
+        },
+        {
+          "name": "Users can delete own pins",
+          "command": "DELETE",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)"
+        }
+      ]
+    },
+    {
+      "table": "lists",
+      "policies": [
+        {
+          "name": "Users can view own lists",
+          "command": "SELECT",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)"
+        },
+        {
+          "name": "Users can insert own lists",
+          "command": "INSERT",
+          "roles": ["public"],
+          "with_check": "(auth.uid() = user_id)"
+        },
+        {
+          "name": "Users can update own lists",
+          "command": "UPDATE",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)",
+          "with_check": "(auth.uid() = user_id)"
+        },
+        {
+          "name": "Users can delete own lists",
+          "command": "DELETE",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)"
+        }
+      ]
+    },
+    {
+      "table": "follows",
+      "policies": [
+        {
+          "name": "Users can see follow relationships",
+          "command": "SELECT",
+          "roles": ["public"],
+          "using": "((follower_id = auth.uid()) OR (following_id = auth.uid()))"
+        },
+        {
+          "name": "Allow user to follow others",
+          "command": "INSERT",
+          "roles": ["authenticated"],
+          "with_check": "(auth.uid() = follower_id)"
+        },
+        {
+          "name": "Allow delete if user is follower",
+          "command": "DELETE",
+          "roles": ["authenticated"],
+          "using": "(auth.uid() = follower_id)"
+        }
+      ]
+    },
+    {
+      "table": "notifications",
+      "policies": [
+        {
+          "name": "Users can read their own notifications",
+          "command": "SELECT",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)"
+        },
+        {
+          "name": "Users can update their own notifications",
+          "command": "UPDATE",
+          "roles": ["public"],
+          "using": "(auth.uid() = user_id)"
+        },
+        {
+          "name": "Authenticated users can insert notifications",
+          "command": "INSERT",
+          "roles": ["public"],
+          "with_check": "(auth.uid() = from_user_id)"
+        }
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "table": "shared_locations",
+      "indexes": [
+        "idx_shared_locations_sender_user_id",
+        "idx_shared_locations_recipient_user_id", 
+        "idx_shared_locations_recipient_expires",
+        "idx_shared_locations_expires_at"
+      ]
+    },
+    {
+      "table": "friend_group_members",
+      "indexes": [
+        "idx_friend_group_members_member_user_id"
+      ]
+    },
+    {
+      "table": "user_public_keys",
+      "indexes": [
+        "idx_user_public_keys_user_id"
+      ]
+    }
+  ],
+  "foreign_keys": [
+    {
+      "table": "friend_groups",
+      "column": "user_id",
+      "references": "public.users(id)",
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "friend_group_members",
+      "column": "group_id",
+      "references": "public.friend_groups(id)",
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "friend_group_members",
+      "column": "member_user_id",
+      "references": "public.users(id)",
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "shared_locations",
+      "column": "sender_user_id",
+      "references": "public.users(id)",
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "shared_locations",
+      "column": "recipient_user_id",
+      "references": "public.users(id)",
+      "on_delete": "CASCADE"
+    },
+    {
+      "table": "user_public_keys",
+      "column": "user_id",
+      "references": "public.users(id)",
+      "on_delete": "CASCADE"
+    }
+  ],
+  "migration_history": [
+    "20250524024844 - add_missing_user_columns",
+    "20250524025348 - add_notification_columns",
+    "20250524040104 - create_messaging_tables",
+    "20250524040129 - create_messaging_functions",
+    "20250630112744 - create_user_blocks_table",
+    "20250701031420 - create_location_features_tables",
+    "20250703061514 - add_encryption_support_fixed",
+    "20250703124523 - create_video_content_tables",
+    "20250703124548 - create_video_rls_policies",
+    "20250703124611 - create_video_functions",
+    "20250710033630 - add_location_sharing_schema_v2",
+    "20250710035303 - create_shared_locations_table",
+    "20250710042126 - fix_friend_groups_foreign_key",
+    "20250710042415 - optimize_shared_locations_performance_v3"
+  ]
+} 

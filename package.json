@@ -1,0 +1,30 @@
+{
+  "name": "project-columbus-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Project Columbus iOS app",
+  "main": "mcp-server.js",
+  "scripts": {
+    "start": "node mcp-server.js",
+    "dev": "nodemon mcp-server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ios",
+    "swift",
+    "supabase",
+    "claude-code"
+  ],
+  "author": "Project Columbus Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

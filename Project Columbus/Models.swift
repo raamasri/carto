@@ -1898,3 +1898,180 @@ extension VideoLikeDB {
         )
     }
 }
+
+// MARK: - Encrypted Location Sharing Models
+
+// Sharing tier enum for location privacy
+enum SharingTier: String, CaseIterable, Codable {
+    case precise = "precise"
+    case approximate = "approximate"
+    case city = "city"
+    
+    var displayName: String {
+        switch self {
+        case .precise: return "Precise Location"
+        case .approximate: return "Approximate Location"
+        case .city: return "City Only"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .precise: return "Share exact location"
+        case .approximate: return "Share location within ~100m"
+        case .city: return "Share city only"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .precise: return "location.fill"
+        case .approximate: return "location.circle"
+        case .city: return "building.2.fill"
+        }
+    }
+}
+
+// Friend Group model
+struct FriendGroup: Identifiable, Codable {
+    let id: UUID
+    let userId: UUID
+    let name: String
+    let sharingTier: SharingTier
+    let createdAt: Date
+    var memberIds: [UUID] = []
+    
+    init(id: UUID = UUID(), userId: UUID, name: String, sharingTier: SharingTier, createdAt: Date = Date(), memberIds: [UUID] = []) {
+        self.id = id
+        self.userId = userId
+        self.name = name
+        self.sharingTier = sharingTier
+        self.createdAt = createdAt
+        self.memberIds = memberIds
+    }
+}
+
+// Friend Group Member model
+struct FriendGroupMember: Identifiable, Codable {
+    let id: UUID = UUID()
+    let groupId: UUID
+    let memberUserId: UUID
+    let createdAt: Date
+    
+    init(groupId: UUID, memberUserId: UUID, createdAt: Date = Date()) {
+        self.groupId = groupId
+        self.memberUserId = memberUserId
+        self.createdAt = createdAt
+    }
+}
+
+// Shared Location model for encrypted location data
+struct SharedLocation: Identifiable, Codable {
+    let id: UUID
+    let createdAt: Date
+    let senderUserId: UUID
+    let recipientUserId: UUID
+    let ciphertext: String
+    let nonce: String
+    let tag: String
+    let expiresAt: Date
+    
+    init(id: UUID = UUID(), createdAt: Date = Date(), senderUserId: UUID, recipientUserId: UUID, ciphertext: String, nonce: String, tag: String, expiresAt: Date) {
+        self.id = id
+        self.createdAt = createdAt
+        self.senderUserId = senderUserId
+        self.recipientUserId = recipientUserId
+        self.ciphertext = ciphertext
+        self.nonce = nonce
+        self.tag = tag
+        self.expiresAt = expiresAt
+    }
+    
+    var isActive: Bool {
+        return expiresAt > Date()
+    }
+}
+
+// MARK: - Database Models for Encrypted Location Sharing
+
+struct FriendGroupDB: Codable {
+    let id: String
+    let user_id: String
+    let name: String
+    let sharing_tier: String
+    let created_at: String
+}
+
+struct FriendGroupMemberDB: Codable {
+    let group_id: String
+    let member_user_id: String
+    let created_at: String
+}
+
+struct SharedLocationDB: Codable {
+    let id: String
+    let created_at: String
+    let sender_user_id: String
+    let recipient_user_id: String
+    let ciphertext: String
+    let nonce: String
+    let tag: String
+    let expires_at: String
+}
+
+// MARK: - Extensions for Database Conversion
+
+extension FriendGroupDB {
+    func toFriendGroup() -> FriendGroup {
+        return FriendGroup(
+            id: UUID(uuidString: id) ?? UUID(),
+            userId: UUID(uuidString: user_id) ?? UUID(),
+            name: name,
+            sharingTier: SharingTier(rawValue: sharing_tier) ?? .approximate,
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            memberIds: []
+        )
+    }
+}
+
+extension FriendGroup {
+    func toFriendGroupDB() -> FriendGroupDB {
+        return FriendGroupDB(
+            id: id.uuidString,
+            user_id: userId.uuidString,
+            name: name,
+            sharing_tier: sharingTier.rawValue,
+            created_at: ISO8601DateFormatter().string(from: createdAt)
+        )
+    }
+}
+
+extension SharedLocationDB {
+    func toSharedLocation() -> SharedLocation {
+        return SharedLocation(
+            id: UUID(uuidString: id) ?? UUID(),
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            senderUserId: UUID(uuidString: sender_user_id) ?? UUID(),
+            recipientUserId: UUID(uuidString: recipient_user_id) ?? UUID(),
+            ciphertext: ciphertext,
+            nonce: nonce,
+            tag: tag,
+            expiresAt: ISO8601DateFormatter().date(from: expires_at) ?? Date()
+        )
+    }
+}
+
+extension SharedLocation {
+    func toSharedLocationDB() -> SharedLocationDB {
+        return SharedLocationDB(
+            id: id.uuidString,
+            created_at: ISO8601DateFormatter().string(from: createdAt),
+            sender_user_id: senderUserId.uuidString,
+            recipient_user_id: recipientUserId.uuidString,
+            ciphertext: ciphertext,
+            nonce: nonce,
+            tag: tag,
+            expires_at: ISO8601DateFormatter().string(from: expiresAt)
+        )
+    }
+}

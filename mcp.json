@@ -1,0 +1,230 @@
+{
+  "mcpServers": {
+    "project-columbus": {
+      "command": "node",
+      "args": ["./mcp-server.js"],
+      "cwd": "/Users/raamasrivatsan/carto/Project Columbus",
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    "supabase-integration": {
+      "command": "swift",
+      "args": ["run", "mcp-supabase-bridge"],
+      "cwd": "/Users/raamasrivatsan/carto/Project Columbus",
+      "env": {
+        "SUPABASE_URL": "from-config-plist",
+        "SUPABASE_KEY": "from-config-plist"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "build-project",
+      "description": "Build the iOS project for simulator or device",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": ["simulator", "device", "archive"],
+            "description": "Build target"
+          },
+          "scheme": {
+            "type": "string",
+            "default": "Project Columbus",
+            "description": "Xcode scheme to build"
+          }
+        },
+        "required": ["target"]
+      }
+    },
+    {
+      "name": "run-tests",
+      "description": "Run unit tests or UI tests",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "testType": {
+            "type": "string",
+            "enum": ["unit", "ui", "all"],
+            "description": "Type of tests to run"
+          },
+          "testClass": {
+            "type": "string",
+            "description": "Specific test class to run (optional)"
+          }
+        },
+        "required": ["testType"]
+      }
+    },
+    {
+      "name": "deploy-testflight",
+      "description": "Deploy the app to TestFlight",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "commitMessage": {
+            "type": "string",
+            "description": "Commit message for deployment"
+          },
+          "skipBuild": {
+            "type": "boolean",
+            "default": false,
+            "description": "Skip build and only upload existing archive"
+          }
+        }
+      }
+    },
+    {
+      "name": "query-supabase",
+      "description": "Query Supabase database for app data",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "enum": ["pins", "users", "pin_lists", "messages", "conversations", "reactions", "comments"],
+            "description": "Database table to query"
+          },
+          "operation": {
+            "type": "string",
+            "enum": ["select", "insert", "update", "delete"],
+            "description": "Database operation"
+          },
+          "filters": {
+            "type": "object",
+            "description": "Query filters"
+          }
+        },
+        "required": ["table", "operation"]
+      }
+    },
+    {
+      "name": "manage-location-privacy",
+      "description": "Manage location privacy settings",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "User ID"
+          },
+          "privacyLevel": {
+            "type": "string",
+            "enum": ["public", "friends", "private"],
+            "description": "Privacy level for location sharing"
+          }
+        },
+        "required": ["userId", "privacyLevel"]
+      }
+    },
+    {
+      "name": "analyze-app-performance",
+      "description": "Analyze app performance metrics",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": ["memory", "cpu", "network", "battery", "all"],
+            "description": "Performance metric to analyze"
+          },
+          "timeRange": {
+            "type": "string",
+            "enum": ["1h", "24h", "7d", "30d"],
+            "description": "Time range for analysis"
+          }
+        },
+        "required": ["metric"]
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "project-structure",
+      "description": "Access to project file structure and organization",
+      "uri": "file:///Users/raamasrivatsan/carto/Project Columbus/",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "supabase-schema",
+      "description": "Supabase database schema and tables",
+      "uri": "supabase://schema",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "user-analytics",
+      "description": "User behavior and app usage analytics",
+      "uri": "analytics://user-data",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "location-data",
+      "description": "Location and mapping data",
+      "uri": "location://pins-and-lists",
+      "mimeType": "application/json"
+    }
+  ],
+  "prompts": [
+    {
+      "name": "debug-crash",
+      "description": "Debug app crash with stack trace analysis",
+      "arguments": [
+        {
+          "name": "crashLog",
+          "description": "Crash log or stack trace",
+          "required": true
+        },
+        {
+          "name": "appVersion",
+          "description": "App version where crash occurred",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "optimize-performance",
+      "description": "Analyze and suggest performance optimizations",
+      "arguments": [
+        {
+          "name": "performanceMetrics",
+          "description": "Performance metrics data",
+          "required": true
+        },
+        {
+          "name": "targetArea",
+          "description": "Specific area to optimize (memory, cpu, network, etc.)",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "security-audit",
+      "description": "Perform security audit of the app",
+      "arguments": [
+        {
+          "name": "auditScope",
+          "description": "Scope of security audit (auth, data, network, etc.)",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "feature-implementation",
+      "description": "Plan and implement new features",
+      "arguments": [
+        {
+          "name": "featureDescription",
+          "description": "Description of the feature to implement",
+          "required": true
+        },
+        {
+          "name": "priority",
+          "description": "Feature priority (high, medium, low)",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
