@@ -1,0 +1,25 @@
+{
+  "version": "v0.74.0",
+  "timestamp": "20250709_231852",
+  "project_id": "rthgzxorsccgeztwaxnt",
+  "features": {
+    "real_time_activity_feed": {
+      "tables": ["friend_activities", "activity_feed_subscriptions"],
+      "description": "Live friend activity tracking with real-time updates"
+    },
+    "smart_recommendations": {
+      "tables": ["place_recommendations", "user_interactions"],
+      "description": "ML-powered personalized place recommendations"
+    },
+    "encrypted_location_sharing": {
+      "tables": ["friend_groups", "friend_group_members", "shared_locations", "user_public_keys"],
+      "description": "End-to-end encrypted location sharing with privacy tiers"
+    }
+  },
+  "database_stats": {
+    "total_tables": 30,
+    "new_tables_in_v0.74.0": 4,
+    "total_rls_policies": 74,
+    "new_policies_in_v0.74.0": 7
+  }
+}

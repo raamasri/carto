@@ -115,7 +115,7 @@ struct CommentsAndReactionsView: View {
                 }
             }
             .sheet(isPresented: $showReactionPicker) {
-                ReactionPickerView(
+                SimpleReactionPickerView(
                     currentReaction: userReaction,
                     onReactionSelected: { reaction in
                         Task {
@@ -472,9 +472,10 @@ struct CommentInputView: View {
     }
 }
 
-// MARK: - Reaction Picker View
 
-struct ReactionPickerView: View {
+
+// MARK: - Simple Reaction Picker View
+struct SimpleReactionPickerView: View {
     let currentReaction: PinReactionType?
     let onReactionSelected: (PinReactionType) -> Void
     @Environment(\.dismiss) private var dismiss

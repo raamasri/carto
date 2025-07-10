@@ -1,0 +1,72 @@
+{
+  "version": "v0.74.0",
+  "generated": "2025-01-09",
+  "total_policies": 74,
+  "new_policies_in_v0_74_0": 7,
+  "policies": {
+    "friend_activities": [
+      {
+        "name": "Users can view activities from followed users",
+        "operation": "SELECT",
+        "check": "is_visible = TRUE AND (user_id = auth.uid() OR EXISTS (SELECT 1 FROM public.follows WHERE follower_id = auth.uid() AND following_id = user_id) OR EXISTS (SELECT 1 FROM public.activity_feed_subscriptions WHERE subscriber_user_id = auth.uid() AND publisher_user_id = user_id AND is_active = TRUE))"
+      },
+      {
+        "name": "Users can insert their own activities",
+        "operation": "INSERT",
+        "check": "user_id = auth.uid()"
+      },
+      {
+        "name": "Users can update their own activities",
+        "operation": "UPDATE",
+        "check": "user_id = auth.uid()"
+      }
+    ],
+    "activity_feed_subscriptions": [
+      {
+        "name": "Users can view their own subscriptions",
+        "operation": "SELECT",
+        "check": "subscriber_user_id = auth.uid()"
+      },
+      {
+        "name": "Users can manage their own subscriptions",
+        "operation": "ALL",
+        "check": "subscriber_user_id = auth.uid()"
+      }
+    ],
+    "place_recommendations": [
+      {
+        "name": "Users can view their own recommendations",
+        "operation": "SELECT",
+        "check": "user_id = auth.uid()"
+      },
+      {
+        "name": "Users can update their own recommendations",
+        "operation": "UPDATE",
+        "check": "user_id = auth.uid()"
+      }
+    ],
+    "user_interactions": [
+      {
+        "name": "Users can insert their own interactions",
+        "operation": "INSERT",
+        "check": "user_id = auth.uid()"
+      }
+    ],
+    "existing_policies_summary": {
+      "users": 4,
+      "pins": 4,
+      "lists": 4,
+      "follows": 4,
+      "messages": 4,
+      "notifications": 4,
+      "location_history": 3,
+      "location_privacy_settings": 2,
+      "geofences": 4,
+      "video_content": 5,
+      "friend_groups": 3,
+      "friend_group_members": 3,
+      "shared_locations": 3,
+      "user_public_keys": 2
+    }
+  }
+} 

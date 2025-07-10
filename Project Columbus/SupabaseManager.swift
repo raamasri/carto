@@ -38,7 +38,31 @@ struct FollowDB: Codable {
     }
 }
 
-class SupabaseManager: ObservableObject {
+// MARK: - Database Insert Models for New Features
+struct GroupListMemberInsert: Codable {
+    let group_list_id: String
+    let user_id: String
+    let role: String
+    let permissions: [String: Bool]
+    let invited_by: String?
+}
+
+struct GroupListActivityInsert: Codable {
+    let group_list_id: String
+    let user_id: String
+    let username: String
+    let activity_type: String
+    let related_pin_id: String?
+    let related_user_id: String?
+}
+
+struct ReviewHelpfulVoteInsert: Codable {
+    let review_id: String
+    let user_id: String
+    let is_helpful: Bool
+}
+
+class SupabaseManager: ObservableObject, @unchecked Sendable {
     static let shared = SupabaseManager()
     let baseURL: URL
     
@@ -82,6 +106,23 @@ class SupabaseManager: ObservableObject {
             return nil 
         }
         return UUID(uuidString: session.user.id.uuidString)
+    }
+    
+    /// Gets the current authenticated user as AppUser
+    func getCurrentUser() async throws -> AppUser {
+        guard let session = try? await client.auth.session else {
+            throw NSError(domain: "Auth", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let basicUser: BasicUser = try await client
+            .from("users")
+            .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
+            .eq("id", value: session.user.id.uuidString)
+            .single()
+            .execute()
+            .value
+        
+        return basicUser.toAppUser(currentUserID: session.user.id.uuidString)
     }
 
     // MARK: - Lists Management (NEW SCHEMA)
@@ -2249,12 +2290,18 @@ class SupabaseManager: ObservableObject {
                 }
             }
             
-            // Sort by confidence and rating
-            recommendations.sort { $0.confidence * $0.averageRating > $1.confidence * $1.averageRating }
+            // Sort by confidence and limit results
+            let sortedRecommendations = recommendations
+                .sorted { $0.confidence > $1.confidence }
+                .prefix(limit)
             
-            return Array(recommendations.prefix(limit))
+            // Store recommendations in database for tracking
+            try await storeRecommendations(Array(sortedRecommendations), for: userId)
+            
+            return Array(sortedRecommendations)
+            
         } catch {
-            print("❌ Failed to get friend recommendations: \(error)")
+            print("❌ [Recommendations] Failed to generate recommendations: \(error)")
             return []
         }
     }
@@ -3609,8 +3656,10 @@ extension SupabaseManager {
                 if let userIdString = activityDB.related_user_id {
                     relatedUser = await getUserById(userIdString)
                 }
+                // Use relatedUser if needed for future features
+                _ = relatedUser
                 
-                let metadata = parseMetadata(activityDB.metadata)
+                let _ = parseMetadata(activityDB.metadata)
                 
                 let activity = FriendActivity(
                     id: UUID(uuidString: activityDB.id) ?? UUID(),
@@ -3714,7 +3763,7 @@ extension SupabaseManager {
     func generatePlaceRecommendations(for userId: String, limit: Int = 20) async throws -> [FriendRecommendation] {
         do {
             // Get user preferences
-            let preferences = try await getUserPreferences(userId: userId)
+            let _ = try await getUserPreferences(userId: userId)
             
             // Get user's following list for friend-based recommendations
             let followingUsers = await getFollowingUsers(for: userId)
@@ -4133,3 +4182,524 @@ extension SupabaseManager {
 }
 
 // MARK: - Helper Database Models
+
+// MARK: - Advanced Social Features (v0.75.0)
+
+// MARK: - Stories/Moments System
+extension SupabaseManager {
+    /// Create a location story
+    func createLocationStory(
+        locationId: UUID? = nil,
+        locationName: String,
+        latitude: Double,
+        longitude: Double,
+        contentType: StoryContentType,
+        mediaURL: String? = nil,
+        thumbnailURL: String? = nil,
+        caption: String? = nil,
+        visibility: StoryVisibility = .friends
+    ) async throws -> LocationStory {
+        guard let session = try? await client.auth.session,
+              let currentUser = try? await getCurrentUser() else {
+            throw NSError(domain: "Auth", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let storyDB = LocationStoryDB(
+            id: UUID().uuidString,
+            user_id: session.user.id.uuidString,
+            username: currentUser.username,
+            user_avatar_url: currentUser.avatarURL,
+            location_id: locationId?.uuidString,
+            location_name: locationName,
+            location_latitude: latitude,
+            location_longitude: longitude,
+            content_type: contentType.rawValue,
+            media_url: mediaURL,
+            thumbnail_url: thumbnailURL,
+            caption: caption,
+            visibility: visibility.rawValue,
+            view_count: 0,
+            is_active: true,
+            expires_at: ISO8601DateFormatter().string(from: Date().addingTimeInterval(24 * 60 * 60)),
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            updated_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        let response: [LocationStoryDB] = try await client
+            .from("location_stories")
+            .insert(storyDB)
+            .select()
+            .execute()
+            .value
+        
+        guard let createdStoryDB = response.first else {
+            throw NSError(domain: "Database", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to create story"])
+        }
+        
+        return convertToLocationStory(createdStoryDB)
+    }
+    
+    /// Fetch active stories from friends
+    func fetchFriendStories() async throws -> [LocationStory] {
+        guard let userId = try? await client.auth.session.user.id.uuidString else {
+            throw NSError(domain: "Auth", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let storiesDB: [LocationStoryDB] = try await client
+            .from("location_stories")
+            .select()
+            .eq("is_active", value: true)
+            .gte("expires_at", value: ISO8601DateFormatter().string(from: Date()))
+            .or("visibility.eq.public,user_id.eq.\(userId),and(visibility.eq.friends,user_id.in.(select following_id from follows where follower_id=\(userId)))")
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        return storiesDB.map(convertToLocationStory)
+    }
+    
+    /// Record a story view
+    func recordStoryView(storyId: UUID) async throws {
+        guard let userId = try? await client.auth.session.user.id.uuidString else { return }
+        
+        let viewData = [
+            "story_id": storyId.uuidString,
+            "viewer_id": userId
+        ]
+        
+        // Insert view (will be ignored if duplicate due to unique constraint)
+        _ = try? await client
+            .from("story_views")
+            .insert(viewData)
+            .execute()
+        
+        // Increment view count
+        _ = try? await client
+            .rpc("increment_story_view_count", params: ["story_id": storyId.uuidString])
+            .execute()
+    }
+    
+    /// Get story viewers
+    func getStoryViewers(storyId: UUID) async throws -> [AppUser] {
+        struct StoryViewResponse: Codable {
+            let viewer_id: String
+        }
+        
+        let viewsDB: [StoryViewResponse] = try await client
+            .from("story_views")
+            .select("viewer_id")
+            .eq("story_id", value: storyId.uuidString)
+            .order("viewed_at", ascending: false)
+            .execute()
+            .value
+        
+        // Get user details for each viewer
+        var viewers: [AppUser] = []
+        for view in viewsDB {
+            if let user = await fetchUserProfile(userID: view.viewer_id) {
+                viewers.append(user)
+            }
+        }
+        return viewers
+    }
+    
+    private func convertToLocationStory(_ db: LocationStoryDB) -> LocationStory {
+        LocationStory(
+            id: UUID(uuidString: db.id) ?? UUID(),
+            userId: db.user_id,
+            username: db.username,
+            userAvatarURL: db.user_avatar_url,
+            locationId: db.location_id.flatMap(UUID.init),
+            locationName: db.location_name,
+            locationLatitude: db.location_latitude,
+            locationLongitude: db.location_longitude,
+            contentType: StoryContentType(rawValue: db.content_type) ?? .photo,
+            mediaURL: db.media_url,
+            thumbnailURL: db.thumbnail_url,
+            caption: db.caption,
+            visibility: StoryVisibility(rawValue: db.visibility) ?? .friends,
+            viewCount: db.view_count,
+            isActive: db.is_active,
+            expiresAt: ISO8601DateFormatter().date(from: db.expires_at) ?? Date(),
+            createdAt: ISO8601DateFormatter().date(from: db.created_at) ?? Date(),
+            updatedAt: ISO8601DateFormatter().date(from: db.updated_at) ?? Date()
+        )
+    }
+}
+
+// MARK: - Group Lists System
+extension SupabaseManager {
+    /// Create a collaborative group list
+    func createGroupList(
+        listId: UUID,
+        memberCanAdd: Bool = true,
+        memberCanRemove: Bool = false,
+        memberCanInvite: Bool = true,
+        requireApproval: Bool = false
+    ) async throws -> GroupList {
+        guard let userId = try? await client.auth.session.user.id.uuidString else {
+            throw NSError(domain: "Auth", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let groupListDB = GroupListDB(
+            id: UUID().uuidString,
+            list_id: listId.uuidString,
+            owner_id: userId,
+            is_collaborative: true,
+            member_can_add: memberCanAdd,
+            member_can_remove: memberCanRemove,
+            member_can_invite: memberCanInvite,
+            require_approval: requireApproval,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            updated_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        let response: [GroupListDB] = try await client
+            .from("group_lists")
+            .insert(groupListDB)
+            .select()
+            .execute()
+            .value
+        
+        guard let createdDB = response.first else {
+            throw NSError(domain: "Database", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to create group list"])
+        }
+        
+        // Add owner as first member
+        _ = try await addGroupListMember(
+            groupListId: UUID(uuidString: createdDB.id)!,
+            userId: userId,
+            role: .owner
+        )
+        
+        return convertToGroupList(createdDB)
+    }
+    
+    /// Add member to group list
+    func addGroupListMember(
+        groupListId: UUID,
+        userId: String,
+        role: GroupListRole = .member,
+        invitedBy: String? = nil
+    ) async throws {
+        let memberData = GroupListMemberInsert(
+            group_list_id: groupListId.uuidString,
+            user_id: userId,
+            role: role.rawValue,
+            permissions: [
+                "can_add": role != .member,
+                "can_remove": role == .owner || role == .admin,
+                "can_invite": role != .member
+            ],
+            invited_by: invitedBy
+        )
+        
+        _ = try await client
+            .from("group_list_members")
+            .insert(memberData)
+            .execute()
+    }
+    
+    /// Get group list members
+    func getGroupListMembers(groupListId: UUID) async throws -> [GroupListMember] {
+        struct MemberResponse: Codable {
+            let id: String
+            let user_id: String
+            let role: String
+            let permissions: [String: Bool]
+            let invited_by: String?
+            let joined_at: String
+        }
+        
+        let membersDB: [MemberResponse] = try await client
+            .from("group_list_members")
+            .select("id, user_id, role, permissions, invited_by, joined_at")
+            .eq("group_list_id", value: groupListId.uuidString)
+            .execute()
+            .value
+        
+        return membersDB.compactMap { member in
+            guard let role = GroupListRole(rawValue: member.role) else {
+                return nil
+            }
+            
+            let permissions = GroupListPermissions(
+                canAdd: member.permissions["can_add"] ?? false,
+                canRemove: member.permissions["can_remove"] ?? false,
+                canInvite: member.permissions["can_invite"] ?? false
+            )
+            
+            return GroupListMember(
+                id: UUID(uuidString: member.id) ?? UUID(),
+                groupListId: groupListId,
+                userId: member.user_id,
+                role: role,
+                permissions: permissions,
+                invitedBy: member.invited_by,
+                joinedAt: ISO8601DateFormatter().date(from: member.joined_at) ?? Date()
+            )
+        }
+    }
+    
+    /// Record group list activity
+    func recordGroupListActivity(
+        groupListId: UUID,
+        activityType: GroupListActivityType,
+        relatedPinId: UUID? = nil,
+        relatedUserId: UUID? = nil
+    ) async throws {
+        guard let session = try? await client.auth.session,
+              let currentUser = try? await getCurrentUser() else { return }
+        
+        let activityData = GroupListActivityInsert(
+            group_list_id: groupListId.uuidString,
+            user_id: session.user.id.uuidString,
+            username: currentUser.username,
+            activity_type: activityType.rawValue,
+            related_pin_id: relatedPinId?.uuidString,
+            related_user_id: relatedUserId?.uuidString
+        )
+        
+        _ = try await client
+            .from("group_list_activities")
+            .insert(activityData)
+            .execute()
+    }
+    
+    private func convertToGroupList(_ db: GroupListDB) -> GroupList {
+        GroupList(
+            id: UUID(uuidString: db.id) ?? UUID(),
+            listId: UUID(uuidString: db.list_id) ?? UUID(),
+            ownerId: db.owner_id,
+            isCollaborative: db.is_collaborative,
+            memberCanAdd: db.member_can_add,
+            memberCanRemove: db.member_can_remove,
+            memberCanInvite: db.member_can_invite,
+            requireApproval: db.require_approval,
+            createdAt: ISO8601DateFormatter().date(from: db.created_at) ?? Date(),
+            updatedAt: ISO8601DateFormatter().date(from: db.updated_at) ?? Date()
+        )
+    }
+}
+
+// MARK: - Location Reviews System
+extension SupabaseManager {
+    /// Create a location review
+    func createLocationReview(
+        pinId: UUID,
+        rating: Int,
+        title: String? = nil,
+        content: String,
+        pros: [String] = [],
+        cons: [String] = [],
+        mediaURLs: [String] = [],
+        visitDate: Date? = nil,
+        priceRange: Int? = nil,
+        tags: [String] = []
+    ) async throws -> LocationReview {
+        guard let session = try? await client.auth.session,
+              let currentUser = try? await getCurrentUser() else {
+            throw NSError(domain: "Auth", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let reviewDB = LocationReviewDB(
+            id: UUID().uuidString,
+            pin_id: pinId.uuidString,
+            user_id: session.user.id.uuidString,
+            username: currentUser.username,
+            user_avatar_url: currentUser.avatarURL,
+            rating: rating,
+            title: title,
+            content: content,
+            pros: pros,
+            cons: cons,
+            media_urls: mediaURLs,
+            visit_date: visitDate.map { ISO8601DateFormatter().string(from: $0) },
+            price_range: priceRange,
+            tags: tags,
+            helpful_count: 0,
+            reply_count: 0,
+            is_verified_visit: false, // TODO: Implement visit verification
+            is_edited: false,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            updated_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        let response: [LocationReviewDB] = try await client
+            .from("location_reviews")
+            .insert(reviewDB)
+            .select()
+            .execute()
+            .value
+        
+        guard let createdDB = response.first else {
+            throw NSError(domain: "Database", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to create review"])
+        }
+        
+        // Create activity for review
+        try await createFriendActivity(
+            activityType: .ratedPlace,
+            relatedPinId: pinId,
+            locationName: nil,
+            description: "rated a place \(rating) stars"
+        )
+        
+        return convertToLocationReview(createdDB)
+    }
+    
+    /// Get reviews for a location
+    func getLocationReviews(pinId: UUID) async throws -> [LocationReview] {
+        let reviewsDB: [LocationReviewDB] = try await client
+            .from("location_reviews")
+            .select()
+            .eq("pin_id", value: pinId.uuidString)
+            .order("helpful_count", ascending: false)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        return reviewsDB.map(convertToLocationReview)
+    }
+    
+    /// Vote on review helpfulness
+    func voteReviewHelpful(reviewId: UUID, isHelpful: Bool) async throws {
+        guard let userId = try? await client.auth.session.user.id.uuidString else { return }
+        
+        let voteData = ReviewHelpfulVoteInsert(
+            review_id: reviewId.uuidString,
+            user_id: userId,
+            is_helpful: isHelpful
+        )
+        
+        _ = try await client
+            .from("review_helpful_votes")
+            .upsert(voteData, onConflict: "review_id,user_id")
+            .execute()
+        
+        // Update helpful count
+        if isHelpful {
+            _ = try await client
+                .rpc("increment_review_helpful_count", params: ["review_id": reviewId.uuidString])
+                .execute()
+        }
+    }
+    
+    private func convertToLocationReview(_ db: LocationReviewDB) -> LocationReview {
+        LocationReview(
+            id: UUID(uuidString: db.id) ?? UUID(),
+            pinId: UUID(uuidString: db.pin_id) ?? UUID(),
+            userId: db.user_id,
+            username: db.username,
+            userAvatarURL: db.user_avatar_url,
+            rating: db.rating,
+            title: db.title,
+            content: db.content,
+            pros: db.pros,
+            cons: db.cons,
+            mediaURLs: db.media_urls,
+            visitDate: db.visit_date.flatMap { ISO8601DateFormatter().date(from: $0) },
+            priceRange: db.price_range,
+            tags: db.tags,
+            helpfulCount: db.helpful_count,
+            replyCount: db.reply_count,
+            isVerifiedVisit: db.is_verified_visit,
+            isEdited: db.is_edited,
+            createdAt: ISO8601DateFormatter().date(from: db.created_at) ?? Date(),
+            updatedAt: ISO8601DateFormatter().date(from: db.updated_at) ?? Date()
+        )
+    }
+}
+
+// MARK: - Social Reactions System
+extension SupabaseManager {
+    /// Add reaction to a pin
+    func addPinReaction(pinId: UUID, reactionType: ReactionType) async throws {
+        guard let userId = try? await client.auth.session.user.id.uuidString else { return }
+        
+        let reactionData = [
+            "pin_id": pinId.uuidString,
+            "user_id": userId,
+            "reaction_type": reactionType.rawValue
+        ]
+        
+        _ = try await client
+            .from("pin_reactions")
+            .upsert(reactionData, onConflict: "pin_id,user_id")
+            .execute()
+    }
+    
+    /// Remove reaction from a pin
+    func removePinReaction(pinId: UUID) async throws {
+        guard let userId = try? await client.auth.session.user.id.uuidString else { return }
+        
+        _ = try await client
+            .from("pin_reactions")
+            .delete()
+            .eq("pin_id", value: pinId.uuidString)
+            .eq("user_id", value: userId)
+            .execute()
+    }
+    
+    /// Get reactions for a pin
+    func getPinReactions(pinId: UUID) async throws -> [SocialPinReaction] {
+        struct PinReactionResponse: Codable {
+            let id: String
+            let user_id: String
+            let reaction_type: String
+            let created_at: String
+        }
+        
+        let reactionsDB: [PinReactionResponse] = try await client
+            .from("pin_reactions")
+            .select("id, user_id, reaction_type, created_at")
+            .eq("pin_id", value: pinId.uuidString)
+            .execute()
+            .value
+        
+        return reactionsDB.compactMap { reaction in
+            guard let type = ReactionType(rawValue: reaction.reaction_type) else {
+                return nil
+            }
+            
+            return SocialPinReaction(
+                id: UUID(uuidString: reaction.id) ?? UUID(),
+                pinId: pinId,
+                userId: reaction.user_id,
+                reactionType: type,
+                createdAt: ISO8601DateFormatter().date(from: reaction.created_at) ?? Date()
+            )
+        }
+    }
+    
+    /// Add reaction to an activity
+    func addActivityReaction(activityId: UUID, reactionType: ReactionType) async throws {
+        guard let userId = try? await client.auth.session.user.id.uuidString else { return }
+        
+        let reactionData = [
+            "activity_id": activityId.uuidString,
+            "user_id": userId,
+            "reaction_type": reactionType.rawValue
+        ]
+        
+        _ = try await client
+            .from("activity_reactions")
+            .upsert(reactionData, onConflict: "activity_id,user_id")
+            .execute()
+    }
+    
+    /// Add reaction to a story
+    func addStoryReaction(storyId: UUID, reactionType: ReactionType) async throws {
+        guard let userId = try? await client.auth.session.user.id.uuidString else { return }
+        
+        let reactionData = [
+            "story_id": storyId.uuidString,
+            "user_id": userId,
+            "reaction_type": reactionType.rawValue
+        ]
+        
+        _ = try await client
+            .from("story_reactions")
+            .upsert(reactionData, onConflict: "story_id,user_id")
+            .execute()
+    }
+}

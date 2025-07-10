@@ -2123,4 +2123,345 @@ struct ActivityFeedSubscriptionDB: Codable {
     let created_at: String
 }
 
+// MARK: - Advanced Social Features Models (v0.75.0)
+
+// MARK: - Stories/Moments System
+
+enum StoryContentType: String, Codable, CaseIterable {
+    case photo = "photo"
+    case video = "video"
+    case text = "text"
+    
+    var icon: String {
+        switch self {
+        case .photo: return "photo"
+        case .video: return "video"
+        case .text: return "text.quote"
+        }
+    }
+}
+
+enum StoryVisibility: String, Codable, CaseIterable {
+    case publicVisibility = "public"
+    case friends = "friends"
+    case privateVisibility = "private"
+    
+    var icon: String {
+        switch self {
+        case .publicVisibility: return "globe"
+        case .friends: return "person.2"
+        case .privateVisibility: return "lock"
+        }
+    }
+    
+    var displayName: String {
+        switch self {
+        case .publicVisibility: return "Public"
+        case .friends: return "Friends"
+        case .privateVisibility: return "Private"
+        }
+    }
+}
+
+struct LocationStory: Identifiable, Codable {
+    let id: UUID
+    let userId: String
+    let username: String
+    let userAvatarURL: String?
+    let locationId: UUID?
+    let locationName: String
+    let locationLatitude: Double
+    let locationLongitude: Double
+    let contentType: StoryContentType
+    let mediaURL: String?
+    let thumbnailURL: String?
+    let caption: String?
+    let visibility: StoryVisibility
+    let viewCount: Int
+    let isActive: Bool
+    let expiresAt: Date
+    let createdAt: Date
+    let updatedAt: Date
+    
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: locationLatitude, longitude: locationLongitude)
+    }
+    
+    var isExpired: Bool {
+        Date() > expiresAt
+    }
+    
+    var timeRemaining: TimeInterval {
+        expiresAt.timeIntervalSince(Date())
+    }
+}
+
+struct StoryView: Identifiable, Codable {
+    let id: UUID
+    let storyId: UUID
+    let viewerId: String
+    let viewedAt: Date
+}
+
+// MARK: - Group Lists System
+
+struct GroupList: Identifiable, Codable {
+    let id: UUID
+    let listId: UUID
+    let ownerId: String
+    let isCollaborative: Bool
+    let memberCanAdd: Bool
+    let memberCanRemove: Bool
+    let memberCanInvite: Bool
+    let requireApproval: Bool
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+enum GroupListRole: String, Codable, CaseIterable {
+    case owner = "owner"
+    case admin = "admin"
+    case member = "member"
+    
+    var displayName: String {
+        rawValue.capitalized
+    }
+    
+    var icon: String {
+        switch self {
+        case .owner: return "crown"
+        case .admin: return "star"
+        case .member: return "person"
+        }
+    }
+}
+
+struct GroupListMember: Identifiable, Codable {
+    let id: UUID
+    let groupListId: UUID
+    let userId: String
+    let role: GroupListRole
+    let permissions: GroupListPermissions
+    let invitedBy: String?
+    let joinedAt: Date
+}
+
+struct GroupListPermissions: Codable {
+    let canAdd: Bool
+    let canRemove: Bool
+    let canInvite: Bool
+}
+
+enum GroupListActivityType: String, Codable, CaseIterable {
+    case addedPin = "added_pin"
+    case removedPin = "removed_pin"
+    case invitedMember = "invited_member"
+    case joined = "joined"
+    case left = "left"
+    case changedSettings = "changed_settings"
+    case renamedList = "renamed_list"
+    
+    var actionText: String {
+        switch self {
+        case .addedPin: return "added a pin"
+        case .removedPin: return "removed a pin"
+        case .invitedMember: return "invited"
+        case .joined: return "joined the list"
+        case .left: return "left the list"
+        case .changedSettings: return "changed settings"
+        case .renamedList: return "renamed the list"
+        }
+    }
+}
+
+struct GroupListActivity: Identifiable, Codable {
+    let id: UUID
+    let groupListId: UUID
+    let userId: String
+    let username: String
+    let activityType: GroupListActivityType
+    let relatedPinId: UUID?
+    let relatedUserId: UUID?
+    let createdAt: Date
+}
+
+// MARK: - Location Reviews System
+
+struct LocationReview: Identifiable, Codable {
+    let id: UUID
+    let pinId: UUID
+    let userId: String
+    let username: String
+    let userAvatarURL: String?
+    let rating: Int
+    let title: String?
+    let content: String
+    let pros: [String]
+    let cons: [String]
+    let mediaURLs: [String]
+    let visitDate: Date?
+    let priceRange: Int?
+    let tags: [String]
+    let helpfulCount: Int
+    let replyCount: Int
+    let isVerifiedVisit: Bool
+    let isEdited: Bool
+    let createdAt: Date
+    let updatedAt: Date
+    
+    var priceRangeDisplay: String {
+        guard let range = priceRange else { return "" }
+        return String(repeating: "$", count: range)
+    }
+}
+
+struct ReviewResponse: Identifiable, Codable {
+    let id: UUID
+    let reviewId: UUID
+    let userId: String
+    let username: String
+    let content: String
+    let isOwnerResponse: Bool
+    let createdAt: Date
+}
+
+struct ReviewHelpfulVote: Identifiable, Codable {
+    let id: UUID
+    let reviewId: UUID
+    let userId: String
+    let isHelpful: Bool
+    let createdAt: Date
+}
+
+// MARK: - Social Reactions System
+
+enum ReactionType: String, Codable, CaseIterable {
+    case like = "like"
+    case love = "love"
+    case wow = "wow"
+    case haha = "haha"
+    case sad = "sad"
+    case angry = "angry"
+    case fire = "fire"
+    case star = "star"
+    case celebrate = "celebrate"
+    case support = "support"
+    case clap = "clap"
+    
+    var emoji: String {
+        switch self {
+        case .like: return "👍"
+        case .love: return "❤️"
+        case .wow: return "😮"
+        case .haha: return "😂"
+        case .sad: return "😢"
+        case .angry: return "😡"
+        case .fire: return "🔥"
+        case .star: return "⭐"
+        case .celebrate: return "🎉"
+        case .support: return "🤝"
+        case .clap: return "👏"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .like: return .blue
+        case .love: return .red
+        case .wow: return .yellow
+        case .haha: return .orange
+        case .sad: return .blue
+        case .angry: return .red
+        case .fire: return .orange
+        case .star: return .yellow
+        case .celebrate: return .purple
+        case .support: return .green
+        case .clap: return .yellow
+        }
+    }
+}
+
+struct SocialPinReaction: Identifiable, Codable {
+    let id: UUID
+    let pinId: UUID
+    let userId: String
+    let reactionType: ReactionType
+    let createdAt: Date
+}
+
+struct ActivityReaction: Identifiable, Codable {
+    let id: UUID
+    let activityId: UUID
+    let userId: String
+    let reactionType: ReactionType
+    let createdAt: Date
+}
+
+struct StoryReaction: Identifiable, Codable {
+    let id: UUID
+    let storyId: UUID
+    let userId: String
+    let reactionType: ReactionType
+    let createdAt: Date
+}
+
+// MARK: - Database Conversion Models
+
+struct LocationStoryDB: Codable {
+    let id: String
+    let user_id: String
+    let username: String
+    let user_avatar_url: String?
+    let location_id: String?
+    let location_name: String
+    let location_latitude: Double
+    let location_longitude: Double
+    let content_type: String
+    let media_url: String?
+    let thumbnail_url: String?
+    let caption: String?
+    let visibility: String
+    let view_count: Int
+    let is_active: Bool
+    let expires_at: String
+    let created_at: String
+    let updated_at: String
+}
+
+struct GroupListDB: Codable {
+    let id: String
+    let list_id: String
+    let owner_id: String
+    let is_collaborative: Bool
+    let member_can_add: Bool
+    let member_can_remove: Bool
+    let member_can_invite: Bool
+    let require_approval: Bool
+    let created_at: String
+    let updated_at: String
+}
+
+struct LocationReviewDB: Codable {
+    let id: String
+    let pin_id: String
+    let user_id: String
+    let username: String
+    let user_avatar_url: String?
+    let rating: Int
+    let title: String?
+    let content: String
+    let pros: [String]
+    let cons: [String]
+    let media_urls: [String]
+    let visit_date: String?
+    let price_range: Int?
+    let tags: [String]
+    let helpful_count: Int
+    let reply_count: Int
+    let is_verified_visit: Bool
+    let is_edited: Bool
+    let created_at: String
+    let updated_at: String
+}
+
 
