@@ -206,7 +206,42 @@ class SupabaseManager: ObservableObject {
             .execute()
             .value
         
-        return response.first?.id ?? ""
+        let pinId = response.first?.id ?? ""
+        
+        // Create friend activity for this pin creation
+        if !pinId.isEmpty, let pinUUID = UUID(uuidString: pinId) {
+            Task {
+                do {
+                    let activityType: FriendActivityType = pin.starRating != nil ? .ratedPlace : .visitedPlace
+                    let description = pin.starRating != nil ? 
+                        "rated \(pin.locationName) \(Int(pin.starRating ?? 0)) stars" :
+                        "visited \(pin.locationName)"
+                    
+                    try await createFriendActivity(
+                        activityType: activityType,
+                        relatedPinId: pinUUID,
+                        locationName: pin.locationName,
+                        locationLatitude: pin.latitude,
+                        locationLongitude: pin.longitude,
+                        description: description,
+                        metadata: [
+                            "pin_id": pinId,
+                            "location_name": pin.locationName,
+                            "city": pin.city,
+                            "rating": pin.starRating ?? 0
+                        ]
+                    )
+                    
+                    // Post notification for real-time updates
+                    NotificationCenter.default.post(name: .friendActivityUpdated, object: nil)
+                    
+                } catch {
+                    print("❌ Failed to create friend activity for pin: \(error)")
+                }
+            }
+        }
+        
+        return pinId
     }
     
     /// Fetches pins for a specific list
@@ -3423,3 +3458,678 @@ extension SupabaseManager {
         return friendGroups
     }
 }
+
+// MARK: - Real-Time Friend Activity Feed
+extension SupabaseManager {
+    /// Create a friend activity entry
+    func createFriendActivity(
+        activityType: FriendActivityType,
+        relatedPinId: UUID? = nil,
+        relatedListId: UUID? = nil,
+        relatedUserId: UUID? = nil,
+        locationName: String? = nil,
+        locationLatitude: Double? = nil,
+        locationLongitude: Double? = nil,
+        description: String,
+        metadata: [String: Any] = [:]
+    ) async throws {
+        guard let session = try? await client.auth.session else { 
+            throw NSError(domain: "Auth", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        guard let currentUser = try? await getCurrentUserProfile() else { 
+            throw NSError(domain: "User", code: 404, userInfo: [NSLocalizedDescriptionKey: "Current user not found"])
+        }
+        
+        do {
+            struct ActivityInsert: Codable {
+                let id: String
+                let user_id: String
+                let username: String
+                let user_avatar_url: String?
+                let activity_type: String
+                let related_pin_id: String?
+                let related_list_id: String?
+                let related_user_id: String?
+                let location_name: String?
+                let location_latitude: Double?
+                let location_longitude: Double?
+                let description: String
+                let metadata: String
+                let created_at: String
+                let is_visible: Bool
+            }
+            
+            let metadataJSON = try JSONSerialization.data(withJSONObject: metadata)
+            let metadataString = String(data: metadataJSON, encoding: .utf8) ?? "{}"
+            
+            let activityInsert = ActivityInsert(
+                id: UUID().uuidString,
+                user_id: session.user.id.uuidString,
+                username: currentUser.username,
+                user_avatar_url: currentUser.avatarURL,
+                activity_type: activityType.rawValue,
+                related_pin_id: relatedPinId?.uuidString,
+                related_list_id: relatedListId?.uuidString,
+                related_user_id: relatedUserId?.uuidString,
+                location_name: locationName,
+                location_latitude: locationLatitude,
+                location_longitude: locationLongitude,
+                description: description,
+                metadata: metadataString,
+                created_at: ISO8601DateFormatter().string(from: Date()),
+                is_visible: true
+            )
+            
+            try await client
+                .from("friend_activities")
+                .insert(activityInsert)
+                .execute()
+            
+            print("✅ [Activity Feed] Created activity: \(activityType.rawValue)")
+            
+            // Track interaction for ML
+            try await trackUserInteraction(
+                type: "activity_created",
+                targetPinId: relatedPinId,
+                targetUserId: relatedUserId,
+                locationName: locationName,
+                locationLatitude: locationLatitude,
+                locationLongitude: locationLongitude,
+                value: 1.0,
+                metadata: metadata
+            )
+            
+        } catch {
+            print("❌ [Activity Feed] Failed to create activity: \(error)")
+            throw error
+        }
+    }
+    
+    /// Get real-time friend activity feed
+    func getFriendActivityFeed(for userId: String, limit: Int = 50, offset: Int = 0) async throws -> [FriendActivity] {
+        do {
+            struct ActivityDB: Codable {
+                let id: String
+                let user_id: String
+                let username: String
+                let user_avatar_url: String?
+                let activity_type: String
+                let related_pin_id: String?
+                let related_list_id: String?
+                let related_user_id: String?
+                let location_name: String?
+                let location_latitude: Double?
+                let location_longitude: Double?
+                let description: String
+                let metadata: String
+                let created_at: String
+                let is_visible: Bool
+            }
+            
+            // Get users that this user follows or has active subscriptions to
+            let followingUsers = await getFollowingUsers(for: userId)
+            let followingIds = followingUsers.map { $0.id }
+            
+            // Also get users from active activity subscriptions
+            let subscriptions: [ActivityFeedSubscriptionDB] = try await client
+                .from("activity_feed_subscriptions")
+                .select("publisher_user_id")
+                .eq("subscriber_user_id", value: userId)
+                .eq("is_active", value: true)
+                .execute()
+                .value
+            
+            let subscribedUserIds = subscriptions.map { $0.publisher_user_id }
+            let allUserIds = Array(Set(followingIds + subscribedUserIds))
+            
+            if allUserIds.isEmpty { return [] }
+            
+            // Get activities from followed/subscribed users
+            let activitiesDB: [ActivityDB] = try await client
+                .from("friend_activities")
+                .select("*")
+                .in("user_id", values: allUserIds)
+                .eq("is_visible", value: true)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+                .value
+            
+            // Convert to FriendActivity objects and fetch related data
+            var activities: [FriendActivity] = []
+            for activityDB in activitiesDB {
+                var relatedPin: Pin? = nil
+                if let pinIdString = activityDB.related_pin_id,
+                   let pinId = UUID(uuidString: pinIdString) {
+                    relatedPin = await getPinById(pinId)
+                }
+                
+                var relatedUser: AppUser? = nil
+                if let userIdString = activityDB.related_user_id {
+                    relatedUser = await getUserById(userIdString)
+                }
+                
+                let metadata = parseMetadata(activityDB.metadata)
+                
+                let activity = FriendActivity(
+                    id: UUID(uuidString: activityDB.id) ?? UUID(),
+                    userId: activityDB.user_id,
+                    username: activityDB.username,
+                    userAvatarURL: activityDB.user_avatar_url,
+                    activityType: FriendActivityType(rawValue: activityDB.activity_type) ?? .visitedPlace,
+                    relatedPinId: activityDB.related_pin_id != nil ? UUID(uuidString: activityDB.related_pin_id!) : nil,
+                    relatedPin: relatedPin,
+                    locationName: activityDB.location_name,
+                    description: activityDB.description,
+                    createdAt: ISO8601DateFormatter().date(from: activityDB.created_at) ?? Date()
+                )
+                
+                activities.append(activity)
+            }
+            
+            return activities
+            
+        } catch {
+            print("❌ [Activity Feed] Failed to get feed: \(error)")
+            throw error
+        }
+    }
+    
+    /// Subscribe to a user's activity feed
+    func subscribeToActivityFeed(publisherUserId: String, subscriptionType: String = "following") async throws {
+        guard let session = try? await client.auth.session else { return }
+        
+        struct SubscriptionInsert: Codable {
+            let subscriber_user_id: String
+            let publisher_user_id: String
+            let subscription_type: String
+            let activity_types: [String]
+            let is_active: Bool
+            let created_at: String
+        }
+        
+        let subscription = SubscriptionInsert(
+            subscriber_user_id: session.user.id.uuidString,
+            publisher_user_id: publisherUserId,
+            subscription_type: subscriptionType,
+            activity_types: FriendActivityType.allCases.map { $0.rawValue },
+            is_active: true,
+            created_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        try await client
+            .from("activity_feed_subscriptions")
+            .upsert(subscription)
+            .execute()
+        
+        print("✅ [Activity Feed] Subscribed to user: \(publisherUserId)")
+    }
+    
+    /// Unsubscribe from a user's activity feed
+    func unsubscribeFromActivityFeed(publisherUserId: String) async throws {
+        guard let session = try? await client.auth.session else { return }
+        
+        try await client
+            .from("activity_feed_subscriptions")
+            .update(["is_active": false])
+            .eq("subscriber_user_id", value: session.user.id.uuidString)
+            .eq("publisher_user_id", value: publisherUserId)
+            .execute()
+        
+        print("✅ [Activity Feed] Unsubscribed from user: \(publisherUserId)")
+    }
+    
+    /// Helper method to parse metadata JSON
+    private func parseMetadata(_ metadataString: String) -> [String: Any] {
+        guard let data = metadataString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        return json
+    }
+    
+    /// Helper method to get user by ID
+    private func getUserById(_ userId: String) async -> AppUser? {
+        do {
+            let basicUser: BasicUser = try await client
+                .from("users")
+                .select("id, username, full_name, email, bio, latitude, longitude, avatar_url")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+                .value
+            
+            return basicUser.toAppUser()
+        } catch {
+            print("❌ Failed to get user by ID: \(error)")
+            return nil
+        }
+    }
+}
+
+// MARK: - Smart Recommendations Engine
+extension SupabaseManager {
+    /// Generate personalized place recommendations
+    func generatePlaceRecommendations(for userId: String, limit: Int = 20) async throws -> [FriendRecommendation] {
+        do {
+            // Get user preferences
+            let preferences = try await getUserPreferences(userId: userId)
+            
+            // Get user's following list for friend-based recommendations
+            let followingUsers = await getFollowingUsers(for: userId)
+            let followingIds = followingUsers.map { $0.id }
+            
+            if followingIds.isEmpty {
+                return try await generateTrendingRecommendations(for: userId, limit: limit)
+            }
+            
+            // Get highly-rated pins from friends
+            let friendPins: [PinDB] = try await client
+                .from("pins")
+                .select("*")
+                .in("user_id", values: followingIds)
+                .gte("star_rating", value: 4.0)
+                .order("created_at", ascending: false)
+                .limit(100)
+                .execute()
+                .value
+            
+            // Group pins by location and calculate recommendations
+            var locationGroups: [String: [PinDB]] = [:]
+            for pin in friendPins {
+                let key = "\(pin.location_name)_\(pin.latitude)_\(pin.longitude)"
+                locationGroups[key, default: []].append(pin)
+            }
+            
+            var recommendations: [FriendRecommendation] = []
+            
+            for (_, pins) in locationGroups {
+                guard let firstPin = pins.first else { continue }
+                
+                let averageRating = pins.compactMap { $0.star_rating }.reduce(0, +) / Double(pins.count)
+                let totalVisits = pins.count
+                let recentVisits = pins.compactMap { ISO8601DateFormatter().date(from: $0.created_at) }
+                    .filter { $0.timeIntervalSinceNow > -30 * 24 * 60 * 60 } // Last 30 days
+                
+                let endorsingFriendIds = Array(Set(pins.map { $0.user_id }))
+                let endorsingFriendUsernames = await getFriendUsernames(for: endorsingFriendIds)
+                
+                // Calculate confidence score based on multiple factors
+                let friendEndorsements = endorsingFriendIds.count
+                let recencyBonus = recentVisits.isEmpty ? 0.0 : 0.2
+                let popularityBonus = totalVisits > 3 ? 0.1 : 0.0
+                let ratingBonus = averageRating >= 4.5 ? 0.1 : 0.0
+                
+                let baseConfidence = min(Double(friendEndorsements) * 0.2, 0.8)
+                let confidence = min(baseConfidence + recencyBonus + popularityBonus + ratingBonus, 1.0)
+                
+                // Create reasoning text
+                let reasonText = generateReasoningText(
+                    friendCount: friendEndorsements,
+                    averageRating: averageRating,
+                    totalVisits: totalVisits,
+                    recentVisits: recentVisits.count
+                )
+                
+                let recommendation = FriendRecommendation(
+                    recommendedPlace: firstPin.toPin(),
+                    recommendingFriendIds: endorsingFriendIds,
+                    recommendingFriendUsernames: endorsingFriendUsernames,
+                    averageRating: averageRating,
+                    totalVisits: totalVisits,
+                    recentVisits: recentVisits,
+                    reasonText: reasonText,
+                    confidence: confidence
+                )
+                
+                recommendations.append(recommendation)
+            }
+            
+            // Sort by confidence and limit results
+            let sortedRecommendations = recommendations
+                .sorted { $0.confidence > $1.confidence }
+                .prefix(limit)
+            
+            // Store recommendations in database for tracking
+            try await storeRecommendations(Array(sortedRecommendations), for: userId)
+            
+            return Array(sortedRecommendations)
+            
+        } catch {
+            print("❌ [Recommendations] Failed to generate recommendations: \(error)")
+            throw error
+        }
+    }
+    
+    /// Get user preferences (create default if none exist)
+    private func getUserPreferences(userId: String) async throws -> UserPreferences {
+        struct UserPreferencesDB: Codable {
+            let id: String
+            let user_id: String
+            let preferred_categories: [String]
+            let favorite_cuisines: [String]
+            let activity_types: [String]
+            let price_range_min: Int
+            let price_range_max: Int
+            let distance_preference_km: Double
+            let time_preferences: String
+            let avoid_categories: [String]
+            let recommendation_frequency: String
+            let created_at: String
+            let updated_at: String
+        }
+        
+        do {
+            let preferencesDB: UserPreferencesDB = try await client
+                .from("user_preferences")
+                .select("*")
+                .eq("user_id", value: userId)
+                .single()
+                .execute()
+                .value
+            
+            return UserPreferences(
+                userId: userId,
+                preferredCategories: preferencesDB.preferred_categories,
+                favoriteCuisines: preferencesDB.favorite_cuisines,
+                activityTypes: preferencesDB.activity_types,
+                priceRangeMin: preferencesDB.price_range_min,
+                priceRangeMax: preferencesDB.price_range_max,
+                distancePreferenceKm: preferencesDB.distance_preference_km,
+                avoidCategories: preferencesDB.avoid_categories,
+                recommendationFrequency: preferencesDB.recommendation_frequency
+            )
+        } catch {
+            // Create default preferences if none exist
+            return try await createDefaultUserPreferences(userId: userId)
+        }
+    }
+    
+    /// Create default user preferences
+    private func createDefaultUserPreferences(userId: String) async throws -> UserPreferences {
+        struct UserPreferencesInsert: Codable {
+            let user_id: String
+            let preferred_categories: [String]
+            let favorite_cuisines: [String]
+            let activity_types: [String]
+            let price_range_min: Int
+            let price_range_max: Int
+            let distance_preference_km: Double
+            let time_preferences: String
+            let avoid_categories: [String]
+            let recommendation_frequency: String
+            let created_at: String
+            let updated_at: String
+        }
+        
+        let defaultPreferences = UserPreferencesInsert(
+            user_id: userId,
+            preferred_categories: ["restaurants", "cafes", "parks"],
+            favorite_cuisines: [],
+            activity_types: ["outdoor", "indoor"],
+            price_range_min: 1,
+            price_range_max: 4,
+            distance_preference_km: 10.0,
+            time_preferences: "{}",
+            avoid_categories: [],
+            recommendation_frequency: "daily",
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            updated_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        try await client
+            .from("user_preferences")
+            .insert(defaultPreferences)
+            .execute()
+        
+        return UserPreferences(
+            userId: userId,
+            preferredCategories: defaultPreferences.preferred_categories,
+            favoriteCuisines: defaultPreferences.favorite_cuisines,
+            activityTypes: defaultPreferences.activity_types,
+            priceRangeMin: defaultPreferences.price_range_min,
+            priceRangeMax: defaultPreferences.price_range_max,
+            distancePreferenceKm: defaultPreferences.distance_preference_km,
+            avoidCategories: defaultPreferences.avoid_categories,
+            recommendationFrequency: defaultPreferences.recommendation_frequency
+        )
+    }
+    
+    /// Generate trending recommendations when user has no friends
+    private func generateTrendingRecommendations(for userId: String, limit: Int) async throws -> [FriendRecommendation] {
+        let trendingPins: [PinDB] = try await client
+            .from("pins")
+            .select("*")
+            .gte("star_rating", value: 4.0)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+        
+        return trendingPins.map { pin in
+            FriendRecommendation(
+                recommendedPlace: pin.toPin(),
+                recommendingFriendIds: [],
+                recommendingFriendUsernames: [],
+                averageRating: pin.star_rating ?? 0.0,
+                totalVisits: 1,
+                recentVisits: [ISO8601DateFormatter().date(from: pin.created_at) ?? Date()],
+                reasonText: "Trending place with high ratings",
+                confidence: 0.6
+            )
+        }
+    }
+    
+    /// Get usernames for friend IDs
+    private func getFriendUsernames(for userIds: [String]) async -> [String] {
+        do {
+            let users: [BasicUser] = try await client
+                .from("users")
+                .select("username")
+                .in("id", values: userIds)
+                .execute()
+                .value
+            
+            return users.map { $0.username }
+        } catch {
+            print("❌ Failed to get friend usernames: \(error)")
+            return []
+        }
+    }
+    
+    /// Generate reasoning text for recommendations
+    private func generateReasoningText(
+        friendCount: Int,
+        averageRating: Double,
+        totalVisits: Int,
+        recentVisits: Int
+    ) -> String {
+        var reasons: [String] = []
+        
+        if friendCount == 1 {
+            reasons.append("1 friend visited this place")
+        } else if friendCount > 1 {
+            reasons.append("\(friendCount) friends visited this place")
+        }
+        
+        if averageRating >= 4.5 {
+            reasons.append("excellent rating (\(String(format: "%.1f", averageRating))★)")
+        } else if averageRating >= 4.0 {
+            reasons.append("great rating (\(String(format: "%.1f", averageRating))★)")
+        }
+        
+        if recentVisits > 0 {
+            reasons.append("recently visited")
+        }
+        
+        if totalVisits > 3 {
+            reasons.append("popular among friends")
+        }
+        
+        return reasons.isEmpty ? "Recommended for you" : reasons.joined(separator: ", ")
+    }
+    
+    /// Store recommendations in database for tracking
+    private func storeRecommendations(_ recommendations: [FriendRecommendation], for userId: String) async throws {
+        struct RecommendationInsert: Codable {
+            let id: String
+            let user_id: String
+            let recommended_pin_id: String?
+            let location_name: String
+            let location_latitude: Double
+            let location_longitude: Double
+            let city: String?
+            let category: String?
+            let subcategory: String?
+            let recommendation_type: String
+            let confidence_score: Double
+            let reasoning: String
+            let friend_endorsements: Int
+            let endorsing_friend_ids: [String]
+            let endorsing_friend_usernames: [String]
+            let average_friend_rating: Double?
+            let total_friend_visits: Int
+            let is_trending: Bool
+            let is_nearby: Bool
+            let distance_km: Double?
+            let predicted_rating: Double?
+            let features: String
+            let created_at: String
+            let expires_at: String
+        }
+        
+        let inserts = recommendations.map { rec in
+            RecommendationInsert(
+                id: UUID().uuidString,
+                user_id: userId,
+                recommended_pin_id: rec.recommendedPlace.id.uuidString,
+                location_name: rec.recommendedPlace.locationName,
+                location_latitude: rec.recommendedPlace.latitude,
+                location_longitude: rec.recommendedPlace.longitude,
+                city: rec.recommendedPlace.city,
+                category: "restaurant", // Simplified
+                subcategory: nil,
+                recommendation_type: "friend_based",
+                confidence_score: rec.confidence,
+                reasoning: rec.reasonText,
+                friend_endorsements: rec.recommendingFriendIds.count,
+                endorsing_friend_ids: rec.recommendingFriendIds,
+                endorsing_friend_usernames: rec.recommendingFriendUsernames,
+                average_friend_rating: rec.averageRating,
+                total_friend_visits: rec.totalVisits,
+                is_trending: false,
+                is_nearby: false,
+                distance_km: nil,
+                predicted_rating: rec.averageRating,
+                features: "{}",
+                created_at: ISO8601DateFormatter().string(from: Date()),
+                expires_at: ISO8601DateFormatter().string(from: Date().addingTimeInterval(7 * 24 * 60 * 60))
+            )
+        }
+        
+        try await client
+            .from("place_recommendations")
+            .insert(inserts)
+            .execute()
+    }
+    
+    /// Track user interactions for ML learning
+    func trackUserInteraction(
+        type: String,
+        targetPinId: UUID? = nil,
+        targetRecommendationId: UUID? = nil,
+        targetUserId: UUID? = nil,
+        locationName: String? = nil,
+        locationLatitude: Double? = nil,
+        locationLongitude: Double? = nil,
+        value: Double = 1.0,
+        metadata: [String: Any] = [:]
+    ) async throws {
+        guard let session = try? await client.auth.session else { return }
+        
+        struct InteractionInsert: Codable {
+            let id: String
+            let user_id: String
+            let interaction_type: String
+            let target_pin_id: String?
+            let target_recommendation_id: String?
+            let target_user_id: String?
+            let location_name: String?
+            let location_latitude: Double?
+            let location_longitude: Double?
+            let interaction_value: Double
+            let metadata: String
+            let created_at: String
+        }
+        
+        let metadataJSON = try JSONSerialization.data(withJSONObject: metadata)
+        let metadataString = String(data: metadataJSON, encoding: .utf8) ?? "{}"
+        
+        let interaction = InteractionInsert(
+            id: UUID().uuidString,
+            user_id: session.user.id.uuidString,
+            interaction_type: type,
+            target_pin_id: targetPinId?.uuidString,
+            target_recommendation_id: targetRecommendationId?.uuidString,
+            target_user_id: targetUserId?.uuidString,
+            location_name: locationName,
+            location_latitude: locationLatitude,
+            location_longitude: locationLongitude,
+            interaction_value: value,
+            metadata: metadataString,
+            created_at: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        try await client
+            .from("user_interactions")
+            .insert(interaction)
+            .execute()
+        
+        print("✅ [ML] Tracked interaction: \(type)")
+    }
+    
+    /// Update recommendation interaction (viewed, saved, dismissed)
+    func updateRecommendationInteraction(
+        recommendationId: UUID,
+        isViewed: Bool? = nil,
+        isSaved: Bool? = nil,
+        isDismissed: Bool? = nil
+    ) async throws {
+        struct RecommendationUpdate: Codable {
+            let is_viewed: Bool?
+            let is_saved: Bool?
+            let is_dismissed: Bool?
+            
+            init(isViewed: Bool? = nil, isSaved: Bool? = nil, isDismissed: Bool? = nil) {
+                self.is_viewed = isViewed
+                self.is_saved = isSaved
+                self.is_dismissed = isDismissed
+            }
+        }
+        
+        let updates = RecommendationUpdate(
+            isViewed: isViewed,
+            isSaved: isSaved,
+            isDismissed: isDismissed
+        )
+        
+        try await client
+            .from("place_recommendations")
+            .update(updates)
+            .eq("id", value: recommendationId.uuidString)
+            .execute()
+        
+        // Track the interaction for ML
+        let interactionType = isDismissed == true ? "recommendation_dismiss" : 
+                             isSaved == true ? "recommendation_save" : "recommendation_view"
+        
+        try await trackUserInteraction(
+            type: interactionType,
+            targetRecommendationId: recommendationId,
+            value: isDismissed == true ? -1.0 : 1.0
+        )
+    }
+}
+
+// MARK: - Helper Database Models

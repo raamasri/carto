@@ -6,6 +6,7 @@
 //
 import Foundation
 import CoreLocation
+import SwiftUI
 import MapKit
 
 // MARK: - Reaction Enum
@@ -1388,28 +1389,44 @@ enum FriendActivityType: String, CaseIterable, Codable {
     case reactedToPin = "reacted_to_pin"
     case createdList = "created_list"
     case followedUser = "followed_user"
+    case sharedLocation = "shared_location"
+    
+    var actionText: String {
+        switch self {
+        case .visitedPlace: return "visited a place"
+        case .ratedPlace: return "rated a place"
+        case .addedToList: return "added to list"
+        case .commentedOnPin: return "commented on pin"
+        case .reactedToPin: return "reacted to pin"
+        case .createdList: return "created a list"
+        case .followedUser: return "followed a user"
+        case .sharedLocation: return "shared location"
+        }
+    }
     
     var systemImage: String {
         switch self {
         case .visitedPlace: return "location.fill"
         case .ratedPlace: return "star.fill"
-        case .addedToList: return "list.bullet"
+        case .addedToList: return "plus.square.fill"
         case .commentedOnPin: return "bubble.left.fill"
         case .reactedToPin: return "heart.fill"
-        case .createdList: return "folder.fill"
-        case .followedUser: return "person.badge.plus.fill"
+        case .createdList: return "list.bullet"
+        case .followedUser: return "person.fill.badge.plus"
+        case .sharedLocation: return "location.circle.fill"
         }
     }
     
-    var actionText: String {
+    var color: Color {
         switch self {
-        case .visitedPlace: return "visited"
-        case .ratedPlace: return "rated"
-        case .addedToList: return "added to list"
-        case .commentedOnPin: return "commented on"
-        case .reactedToPin: return "reacted to"
-        case .createdList: return "created list"
-        case .followedUser: return "followed"
+        case .visitedPlace: return .blue
+        case .ratedPlace: return .yellow
+        case .addedToList: return .green
+        case .commentedOnPin: return .purple
+        case .reactedToPin: return .red
+        case .createdList: return .orange
+        case .followedUser: return .blue
+        case .sharedLocation: return .cyan
         }
     }
 }
@@ -1478,9 +1495,15 @@ struct FriendActivityDB: Codable {
     let user_avatar_url: String?
     let activity_type: String
     let related_pin_id: String?
+    let related_list_id: String?
+    let related_user_id: String?
     let location_name: String?
+    let location_latitude: Double?
+    let location_longitude: Double?
     let description: String
+    let metadata: String
     let created_at: String
+    let is_visible: Bool
 }
 
 // MARK: - Conversion Extensions for Social Features
@@ -2075,3 +2098,29 @@ extension SharedLocation {
         )
     }
 }
+
+// MARK: - Additional Models for Activity Feed
+
+struct UserPreferences: Codable {
+    let userId: String
+    let preferredCategories: [String]
+    let favoriteCuisines: [String]
+    let activityTypes: [String]
+    let priceRangeMin: Int
+    let priceRangeMax: Int
+    let distancePreferenceKm: Double
+    let avoidCategories: [String]
+    let recommendationFrequency: String
+}
+
+struct ActivityFeedSubscriptionDB: Codable {
+    let id: String
+    let subscriber_user_id: String
+    let publisher_user_id: String
+    let subscription_type: String
+    let activity_types: [String]
+    let is_active: Bool
+    let created_at: String
+}
+
+

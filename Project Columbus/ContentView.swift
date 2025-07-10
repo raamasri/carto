@@ -1712,6 +1712,52 @@ struct NavigationSidebar: View {
                         }
                     }
                     
+                    // Friend Activity Feed
+                    NavigationLink(destination: FriendActivityFeedView()
+                        .environmentObject(authManager)
+                        .environmentObject(SupabaseManager.shared)
+                        .environmentObject(PinStore())
+                        .onAppear {
+                            print("📱 FriendActivityFeedView appeared from sidebar")
+                        }
+                    ) {
+                        SidebarMenuItemView(
+                            icon: "heart.text.square.fill",
+                            title: "Friend Activity",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        print("📱 Friend Activity navigation link tapped")
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    })
+                    
+                    // Smart Recommendations
+                    NavigationLink(destination: SmartRecommendationsView()
+                        .environmentObject(authManager)
+                        .environmentObject(SupabaseManager.shared)
+                        .environmentObject(PinStore())
+                        .onAppear {
+                            print("📱 SmartRecommendationsView appeared from sidebar")
+                        }
+                    ) {
+                        SidebarMenuItemView(
+                            icon: "sparkles",
+                            title: "Recommendations",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        print("📱 Recommendations navigation link tapped")
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    })
+                    
                     // Find Friends
                     SidebarMenuItem(
                         icon: "person.2.fill",
