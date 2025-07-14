@@ -1,22 +1,70 @@
+//
+//  ContentView.swift
+//  Project Columbus
+//
+//  Created by Joe Schacter on 3/16/25.
+//
+//  DESCRIPTION:
+//  This file contains the main content view structure and supporting components for the
+//  Project Columbus (Carto) social map-sharing app. It includes the primary map interface,
+//  navigation, point of interest views, and various UI components.
+//
+//  MAJOR COMPONENTS:
+//  - ContentView: Main app router that handles authentication states
+//  - MainMapView: Core map interface with pins, search, and filtering
+//  - FullPOIView: Detailed point of interest information display
+//  - CollectionMapView: Map view for displaying pin collections
+//  - Custom tab bar and navigation components
+//  - Search functionality and map item handling
+//  - Sidebar and profile integration
+//
+//  ARCHITECTURE:
+//  - SwiftUI-based declarative UI
+//  - MapKit integration for location services
+//  - Environment objects for global state management
+//  - Reactive data flow with @Published properties
+//  - Custom view modifiers and extensions
+//
+
+import SwiftUI
+import MapKit
+import Combine
+import Foundation
+
+// MARK: - Point of Interest Views
+
+/**
+ * FullPOIView
+ * 
+ * A comprehensive view for displaying detailed information about a point of interest.
+ * This view presents location details including name, address, phone number, and website.
+ * It's typically presented as a sheet or navigation destination when a user selects
+ * a location from search results or map markers.
+ */
 struct FullPOIView: View {
+    /// The map item containing location data and metadata
     let mapItem: MKMapItem
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // Location name/title
                 Text(mapItem.name ?? "Unknown Place")
                     .font(.largeTitle)
                     .bold()
 
+                // Address information
                 if let address = mapItem.placemark.title {
                     Text(address)
                         .font(.body)
                 }
 
+                // Phone number if available
                 if let phone = mapItem.phoneNumber {
                     Text("Phone: \(phone)")
                 }
 
+                // Website link if available
                 if let url = mapItem.url {
                     Link("Visit Website", destination: url)
                 }
@@ -25,32 +73,49 @@ struct FullPOIView: View {
             }
             .padding()
         }
-        
         .navigationTitle("Location Details")
     }
 }
-import SwiftUI
-import MapKit
-import Combine
-import Foundation
 
-// MARK: - Models and Enums
-// MARK: - Global Spacing & Radius Constants
+// MARK: - Design System Constants
+
+/**
+ * AppSpacing
+ * 
+ * Centralized spacing and layout constants used throughout the app.
+ * This ensures consistent spacing and visual hierarchy across all components.
+ */
 struct AppSpacing {
+    /// Standard horizontal padding for most UI elements
     static let horizontal: CGFloat = 16
+    
+    /// Standard vertical spacing between elements
     static let vertical: CGFloat = 12
+    
+    /// Standard corner radius for rounded elements
     static let cornerRadius: CGFloat = 12
 }
 
+// MARK: - Collection Map View
 
-
-// MARK: - Location Manager - Using AppLocationManager from LocationManager.swift
-
+/**
+ * CollectionMapView
+ * 
+ * A specialized map view for displaying a collection of pins.
+ * This view automatically centers the map on the pins and provides
+ * a clean interface for viewing multiple related locations.
+ */
 struct CollectionMapView: View {
+    /// Array of pins to display on the map
     let pins: [Pin]
     
+    /// Camera position state for map positioning
     @State private var cameraPosition: MapCameraPosition
     
+    /**
+     * Initializer that sets up the map camera position
+     * Centers the map on the first pin or defaults to San Francisco
+     */
     init(pins: [Pin]) {
         self.pins = pins
         if let first = pins.first {
@@ -59,6 +124,7 @@ struct CollectionMapView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
             )))
         } else {
+            // Default to San Francisco if no pins available
             _cameraPosition = State(initialValue: .region(MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
                 span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
@@ -71,6 +137,7 @@ struct CollectionMapView: View {
             center: pins.first.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) } ?? CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )))) {
+            // Display markers for all pins in the collection
             ForEach(pins, id: \.id) { pin in
                 Marker("", coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
                     .tint(.red)
@@ -79,19 +146,29 @@ struct CollectionMapView: View {
         .edgesIgnoringSafeArea(.all)
         .navigationTitle("Map View")
     }
-
 }
 
 // MARK: - Utility Functions
 
+/**
+ * Returns a formatted date string for the current date
+ * Used for displaying current date in various UI components
+ */
 func formattedDate() -> String {
     let formatter = DateFormatter()
     formatter.dateFormat = "MMM dd"
     return formatter.string(from: Date())
 }
 
-// MARK: - Identifiable Map Item
+// MARK: - Supporting Data Models
 
+/**
+ * IdentifiableMapItem
+ * 
+ * A wrapper around MKMapItem that conforms to Identifiable protocol.
+ * This allows MapKit items to be used in SwiftUI lists and other
+ * views that require identifiable items.
+ */
 struct IdentifiableMapItem: Identifiable {
     let id = UUID()
     let mapItem: MKMapItem
@@ -99,56 +176,154 @@ struct IdentifiableMapItem: Identifiable {
 
 
 
-// MARK: - Main Map View with Bottom Nav and Side Menu
-import SwiftUI
-import MapKit
+// MARK: - Main Map View Interface
+
+/**
+ * MainMapView
+ * 
+ * The primary map interface for the Project Columbus app. This complex view serves as the
+ * central hub for user interaction with the map, pins, and social features.
+ * 
+ * FUNCTIONALITY:
+ * - Displays interactive map with user pins and markers
+ * - Handles location search and point of interest discovery
+ * - Manages map filtering by lists, time, and star ratings
+ * - Provides navigation to other app sections via bottom tab bar
+ * - Integrates with location services for user position tracking
+ * - Supports pin creation, editing, and social interactions
+ * - Manages sidebar navigation and user profile access
+ * 
+ * ARCHITECTURE:
+ * - Environment object integration for global state
+ * - Complex state management with multiple @State properties
+ * - Reactive filtering and pin display logic
+ * - MapKit integration for location services
+ * - Search functionality with MKLocalSearchCompleter
+ */
 struct MainMapView: View {
+    
+    // MARK: - Environment Objects
+    
+    /// Authentication manager for user session and login state
     @EnvironmentObject var authManager: AuthManager
+    
+    /// Pin store for managing pins, lists, and user data
     @EnvironmentObject var pinStore: PinStore
+    
+    /// Location manager for GPS services and location tracking
+    @EnvironmentObject var locationManager: AppLocationManager
+    
+    // MARK: - Map State Management
+    
+    /// Controls whether the map should track the user's location
     @State private var shouldTrackUser = false
+    
+    /// Indicates when the user is manually panning or zooming the map
     @State private var isUserManuallyMovingMap = false
+    
+    /// Current camera position and region displayed on the map
     @State private var cameraPosition = MapCameraPosition.region(MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+        center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194), // Default to San Francisco
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     ))
-
-    @EnvironmentObject var locationManager: AppLocationManager
-    @State private var showSideMenu = false
-    @State private var selectedTab = 0
-    @Binding var navigateToFeed: Bool
-    @State private var selectedPin: Pin? = nil
-    @State private var selectedPinForPopup: UUID? = nil
-    @State private var animatePulse = false
+    
+    /// Map display style (Standard, Satellite, Hybrid)
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
-
-    @State private var searchText: String = ""
-    @State private var searchResults: [MKLocalSearchCompletion] = []
-    @State private var searchCompleter = MKLocalSearchCompleter()
-    @State private var searchCompleterDelegateHolder: SearchCompleterDelegate? = nil
-    @State private var selectedMapItem: MKMapItem? = nil
-    @State private var showFullPOIView: Bool = false
-    @State private var showPOISheet: Bool = false
-    @FocusState private var isSearchFieldFocused: Bool
-
     
-    // Sidebar sheet state variables
-    @State private var showUserProfile = false
-
-    @State private var showAccountMenu = false
-    @State private var showProfileEdit = false
-    @State private var showAccountSettings = false
-    
-    // Enhanced Map Filter States
-    @State private var showMapFilters = false
-    @State private var selectedListFilter: UUID? = nil
-    @State private var selectedTimeFilter: TimeFilter = .all
-    @State private var selectedStarFilter: StarFilter = .all
-    @State private var mapSearchText = ""
-    
-    // Auto-centering state
+    /// Tracks whether the map has auto-centered on user location
     @State private var hasAutocentered = false
     
-    // Computed filtered pins for enhanced map
+    // MARK: - Navigation State
+    
+    /// Controls the display of the sidebar menu
+    @State private var showSideMenu = false
+    
+    /// Currently selected tab in the bottom navigation
+    @State private var selectedTab = 0
+    
+    /// Binding to trigger navigation to the live feed view
+    @Binding var navigateToFeed: Bool
+    
+    // MARK: - Pin Selection and Interaction
+    
+    /// Currently selected pin for detail view
+    @State private var selectedPin: Pin? = nil
+    
+    /// Pin ID for popup/modal display
+    @State private var selectedPinForPopup: UUID? = nil
+    
+    /// Animation state for pin pulse effect
+    @State private var animatePulse = false
+    
+    // MARK: - Search Functionality
+    
+    /// Current search text entered by the user
+    @State private var searchText: String = ""
+    
+    /// Search results from MKLocalSearchCompleter
+    @State private var searchResults: [MKLocalSearchCompletion] = []
+    
+    /// MapKit search completer for location suggestions
+    @State private var searchCompleter = MKLocalSearchCompleter()
+    
+    /// Delegate holder for search completer callbacks
+    @State private var searchCompleterDelegateHolder: SearchCompleterDelegate? = nil
+    
+    /// Currently selected map item from search results
+    @State private var selectedMapItem: MKMapItem? = nil
+    
+    /// Controls display of full point of interest view
+    @State private var showFullPOIView: Bool = false
+    
+    /// Controls display of POI sheet modal
+    @State private var showPOISheet: Bool = false
+    
+    /// Focus state for search text field
+    @FocusState private var isSearchFieldFocused: Bool
+    
+    // MARK: - Profile and Account Management
+    
+    /// Controls display of user profile sheet
+    @State private var showUserProfile = false
+    
+    /// Controls display of account menu
+    @State private var showAccountMenu = false
+    
+    /// Controls display of profile edit sheet
+    @State private var showProfileEdit = false
+    
+    /// Controls display of account settings
+    @State private var showAccountSettings = false
+    
+    // MARK: - Map Filtering System
+    
+    /// Controls display of map filters interface
+    @State private var showMapFilters = false
+    
+    /// Currently selected list filter for pin display
+    @State private var selectedListFilter: UUID? = nil
+    
+    /// Currently selected time filter for pin display
+    @State private var selectedTimeFilter: TimeFilter = .all
+    
+    /// Currently selected star rating filter for pin display
+    @State private var selectedStarFilter: StarFilter = .all
+    
+    /// Search text for filtering pins on the map
+    @State private var mapSearchText = ""
+    
+    // MARK: - Computed Properties
+    
+    /**
+     * Filtered pins based on current filter settings
+     * 
+     * This computed property applies multiple filtering criteria to the pins:
+     * - Deduplicates pins that appear in multiple lists
+     * - Filters by selected list if specified
+     * - Filters by time period (week, month, year)
+     * - Filters by star rating
+     * - Includes comprehensive logging for debugging
+     */
     private var filteredPins: [Pin] {
         // Only show pins that are actually in user's lists (not orphaned pins)
         // Use Set to remove duplicates when pins appear in multiple lists
@@ -170,14 +345,14 @@ struct MainMapView: View {
         
         var pins = uniquePins
         
-        // Filter by reaction
+        // Filter by list selection
         if let listId = selectedListFilter {
             pins = pins.filter { pin in
                 pinStore.lists.first(where: { $0.id == listId })?.pins.contains(where: { $0.id == pin.id }) == true
             }
         }
         
-        // Filter by time
+        // Filter by time period
         let calendar = Calendar.current
         let now = Date()
         

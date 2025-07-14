@@ -1,39 +1,141 @@
 //
 //  Models.swift
-//  Project Columbus copy
+//  Project Columbus
 //
 //  Created by raama srivatsan on 4/15/25.
 //
+//  DESCRIPTION:
+//  This file contains the complete data model for Project Columbus (Carto), including
+//  all core data structures, enums, and database conversion extensions. It serves as
+//  the foundation for the app's data layer architecture.
+//
+//  MAJOR COMPONENTS:
+//  - Pin Model: Core location data with social features
+//  - PinList Model: Enhanced list system with sharing and collaboration
+//  - User Models: User profiles and authentication data
+//  - Messaging Models: Real-time messaging system
+//  - Database Models: Supabase database integration
+//  - Conversion Extensions: Type-safe database conversions
+//
+//  ARCHITECTURE:
+//  - Protocol-driven design with Identifiable, Codable conformance
+//  - Comprehensive enum system for type safety
+//  - Bidirectional database conversion extensions
+//  - Rich metadata and social features
+//  - End-to-end encryption support
+//  - Template and collaboration system
+//
+
 import Foundation
 import CoreLocation
 import SwiftUI
 import MapKit
 
-// MARK: - Reaction Enum
+// MARK: - Core Enums
+
+/**
+ * Reaction
+ * 
+ * Represents the type of reaction a user can have to a location.
+ * This enum defines the emotional response or intent related to a pin.
+ */
 enum Reaction: String, CaseIterable, Codable {
-    case lovedIt = "Loved It"
-    case wantToGo = "Want to Go"
+    case lovedIt = "Loved It"      // User loved this location
+    case wantToGo = "Want to Go"   // User wants to visit this location
 }
 
-// MARK: - Pin Model
+// MARK: - Core Pin Model
+
+/**
+ * Pin
+ * 
+ * The fundamental data structure representing a location pin in the app.
+ * Each pin represents a specific location with associated metadata, social features,
+ * and user-generated content.
+ * 
+ * FEATURES:
+ * - Location coordinates and metadata
+ * - User reactions and ratings
+ * - Social features (mentions, reviews)
+ * - Media attachments
+ * - Trip organization
+ * - Temporal information
+ * 
+ * RELATIONSHIPS:
+ * - Belongs to one or more PinLists
+ * - Created by a specific user (authorHandle)
+ * - Can mention other users (mentionedFriends)
+ * - Can include media attachments (mediaURLs)
+ */
 struct Pin: Identifiable, Equatable, Codable {
+    // MARK: - Core Properties
+    
+    /// Unique identifier for the pin
     let id: UUID
+    
+    /// Human-readable location name
     let locationName: String
+    
+    /// City where the location is situated
     let city: String
+    
+    /// Formatted date string for display
     let date: String
+    
+    /// Latitude coordinate of the location
     let latitude: Double
+    
+    /// Longitude coordinate of the location
     let longitude: Double
+    
+    /// User's reaction to this location
     let reaction: Reaction
-    // --- New properties ---
+    
+    // MARK: - Enhanced Properties
+    
+    /// User's written review of the location
     let reviewText: String?
+    
+    /// Array of media URLs (photos, videos) associated with the pin
     let mediaURLs: [String]?
+    
+    /// Array of user IDs mentioned in this pin
     let mentionedFriends: [UUID]
+    
+    /// User's star rating (1-5 stars)
     let starRating: Double?
+    
+    /// Distance from user's current location (in meters)
     let distance: Double?
+    
+    /// Handle/username of the user who created this pin
     let authorHandle: String
+    
+    /// Timestamp when the pin was created
     let createdAt: Date
+    
+    /// Optional trip name this pin belongs to
     let tripName: String?
     
+    /**
+     * Comprehensive initializer for Pin creation
+     * 
+     * @param id Unique identifier (defaults to new UUID)
+     * @param locationName Human-readable location name
+     * @param city City where the location is situated
+     * @param date Formatted date string
+     * @param latitude Latitude coordinate
+     * @param longitude Longitude coordinate
+     * @param reaction User's reaction to the location
+     * @param reviewText Optional user review
+     * @param mediaURLs Optional array of media URLs
+     * @param mentionedFriends Array of mentioned user IDs
+     * @param starRating Optional star rating (1-5)
+     * @param distance Optional distance from current location
+     * @param authorHandle Username of the creator
+     * @param createdAt Creation timestamp
+     * @param tripName Optional trip name
+     */
     init(id: UUID = UUID(), locationName: String, city: String, date: String, latitude: Double, longitude: Double, reaction: Reaction, reviewText: String?, mediaURLs: [String]?, mentionedFriends: [UUID], starRating: Double?, distance: Double?, authorHandle: String, createdAt: Date, tripName: String?) {
         self.id = id
         self.locationName = locationName
@@ -53,16 +155,23 @@ struct Pin: Identifiable, Equatable, Codable {
     }
 }
 
-// MARK: - Enhanced List Models
+// MARK: - List Sharing System
 
-// List sharing permissions
+/**
+ * ListSharingType
+ * 
+ * Defines the various sharing and privacy options available for pin lists.
+ * This enum controls who can view and edit lists, enabling flexible
+ * collaboration and privacy settings.
+ */
 enum ListSharingType: String, CaseIterable, Codable {
-    case privateList = "private"
-    case publicReadOnly = "public_read_only"
-    case publicEditable = "public_editable"
-    case friendsOnly = "friends_only"
-    case specificUsers = "specific_users"
+    case privateList = "private"                // Only owner can view/edit
+    case publicReadOnly = "public_read_only"    // Anyone can view, owner can edit
+    case publicEditable = "public_editable"     // Anyone can view and edit
+    case friendsOnly = "friends_only"           // Only friends can view
+    case specificUsers = "specific_users"       // Only specified users can view
     
+    /// Human-readable display name for the sharing type
     var displayName: String {
         switch self {
         case .privateList: return "Private"
@@ -73,6 +182,7 @@ enum ListSharingType: String, CaseIterable, Codable {
         }
     }
     
+    /// System icon name for the sharing type
     var icon: String {
         switch self {
         case .privateList: return "lock.fill"
@@ -84,35 +194,106 @@ enum ListSharingType: String, CaseIterable, Codable {
     }
 }
 
-// Enhanced List Model with sharing and collaboration features
+// MARK: - Enhanced List Model
+
+/**
+ * PinList
+ * 
+ * An enhanced list model that supports sharing, collaboration, and templates.
+ * This represents a collection of pins with advanced features for social
+ * interaction and content organization.
+ * 
+ * FEATURES:
+ * - Pin organization and management
+ * - Flexible sharing and privacy controls
+ * - Collaborative editing capabilities
+ * - Template system for reusable lists
+ * - Activity tracking and statistics
+ * - Tag-based organization
+ * - Invitation system for collaboration
+ * 
+ * RELATIONSHIPS:
+ * - Contains multiple Pins
+ * - Owned by a specific user (ownerId)
+ * - Can have multiple collaborators and viewers
+ * - Can be used as a template by other users
+ */
 struct PinList: Identifiable, Codable {
+    // MARK: - Core Properties
+    
+    /// Unique identifier for the list
     let id: UUID
+    
+    /// Display name of the list
     let name: String
+    
+    /// Array of pins contained in this list
     var pins: [Pin]
     
-    // Enhanced properties for sharing and collaboration
+    // MARK: - Ownership and Sharing
+    
+    /// User ID of the list owner
     let ownerId: UUID
+    
+    /// Current sharing/privacy settings
     var sharingType: ListSharingType
+    
+    /// Optional description of the list
     var description: String?
+    
+    /// Tags for categorization and discovery
     var tags: [String]
+    
+    /// Whether this list can be used as a template
     var isTemplate: Bool
+    
+    /// Template category for organization
     var templateCategory: String?
     
-    // Collaboration properties
-    var collaborators: [UUID] // Users who can edit
-    var viewers: [UUID] // Users who can view (for specific_users type)
-    var pendingInvites: [String] // Email addresses of pending invites
+    // MARK: - Collaboration Properties
     
-    // Metadata
+    /// Array of user IDs who can edit this list
+    var collaborators: [UUID]
+    
+    /// Array of user IDs who can view this list (for specific_users type)
+    var viewers: [UUID]
+    
+    /// Array of email addresses with pending invitations
+    var pendingInvites: [String]
+    
+    // MARK: - Metadata and Statistics
+    
+    /// Timestamp when the list was created
     let createdAt: Date
+    
+    /// Timestamp when the list was last updated
     var updatedAt: Date
+    
+    /// Timestamp of the last activity on this list
     var lastActivityAt: Date
     
-    // Statistics
+    /// Total number of views this list has received
     var totalViews: Int
-    var totalShares: Int
-    var totalForks: Int // When someone copies this template
     
+    /// Total number of times this list has been shared
+    var totalShares: Int
+    
+    /// Total number of times this list has been forked/copied
+    var totalForks: Int
+    
+    /**
+     * Initializer for PinList creation with sensible defaults
+     * 
+     * @param id Unique identifier (defaults to new UUID)
+     * @param name Display name of the list
+     * @param pins Array of pins (defaults to empty)
+     * @param ownerId User ID of the owner
+     * @param sharingType Privacy/sharing settings (defaults to private)
+     * @param description Optional description
+     * @param tags Array of tags (defaults to empty)
+     * @param isTemplate Whether this is a template (defaults to false)
+     * @param templateCategory Optional template category
+     */
     init(id: UUID = UUID(), name: String, pins: [Pin] = [], ownerId: UUID, sharingType: ListSharingType = .privateList, description: String? = nil, tags: [String] = [], isTemplate: Bool = false, templateCategory: String? = nil) {
         self.id = id
         self.name = name
@@ -134,19 +315,24 @@ struct PinList: Identifiable, Codable {
         self.totalForks = 0
     }
     
-    // Computed properties
+    // MARK: - Computed Properties
+    
+    /// Whether this list is publicly accessible
     var isPublic: Bool {
         return sharingType == .publicReadOnly || sharingType == .publicEditable
     }
     
+    /// Whether this list supports collaborative editing
     var isCollaborative: Bool {
         return sharingType == .publicEditable || !collaborators.isEmpty
     }
     
+    /// Whether this list can be shared with others
     var canBeShared: Bool {
         return sharingType != .privateList
     }
     
+    /// Human-readable sharing status for display
     var displaySharingStatus: String {
         switch sharingType {
         case .privateList: return "Private"
@@ -158,7 +344,15 @@ struct PinList: Identifiable, Codable {
     }
 }
 
-// MARK: - Legacy PinCollection (for backward compatibility)
+// MARK: - Backward Compatibility
+
+/**
+ * PinCollection
+ * 
+ * Legacy type alias for PinList to maintain backward compatibility.
+ * This allows existing code to continue using the old PinCollection name
+ * while benefiting from the enhanced PinList functionality.
+ */
 typealias PinCollection = PinList
 
 // MARK: - Database Models
