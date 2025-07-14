@@ -9,6 +9,7 @@ import Foundation
 import UserNotifications
 import SwiftUI
 import Combine
+import UIKit
 
 // MARK: - Notification Types
 enum NotificationType: String, CaseIterable, Codable {
@@ -22,6 +23,14 @@ enum NotificationType: String, CaseIterable, Codable {
     case locationReminder = "location_reminder"
     case system = "system"
     
+    // Proximity Alert Types
+    case friendNearby = "friend_nearby"
+    case friendAtLocation = "friend_at_location"
+    case friendActivityAtLocation = "friend_activity_at_location"
+    case friendAvailableNearby = "friend_available_nearby"
+    case locationRecommendation = "location_recommendation"
+    case groupActivity = "group_activity"
+    
     var title: String {
         switch self {
         case .follow: return "New Follower"
@@ -33,6 +42,12 @@ enum NotificationType: String, CaseIterable, Codable {
         case .listInvite: return "List Invitation"
         case .locationReminder: return "Location Reminder"
         case .system: return "System Notification"
+        case .friendNearby: return "Friend Nearby"
+        case .friendAtLocation: return "Friend at Location"
+        case .friendActivityAtLocation: return "Friend Activity"
+        case .friendAvailableNearby: return "Friend Available"
+        case .locationRecommendation: return "Location Recommendation"
+        case .groupActivity: return "Group Activity"
         }
     }
     
@@ -47,6 +62,12 @@ enum NotificationType: String, CaseIterable, Codable {
         case .listInvite: return "list.bullet"
         case .locationReminder: return "bell.fill"
         case .system: return "gear"
+        case .friendNearby: return "person.circle.fill"
+        case .friendAtLocation: return "location.circle.fill"
+        case .friendActivityAtLocation: return "person.2.circle.fill"
+        case .friendAvailableNearby: return "person.badge.clock.fill"
+        case .locationRecommendation: return "star.circle.fill"
+        case .groupActivity: return "person.3.fill"
         }
     }
     
@@ -61,6 +82,12 @@ enum NotificationType: String, CaseIterable, Codable {
         case .listInvite: return .indigo
         case .locationReminder: return .yellow
         case .system: return .gray
+        case .friendNearby: return .blue
+        case .friendAtLocation: return .green
+        case .friendActivityAtLocation: return .cyan
+        case .friendAvailableNearby: return .mint
+        case .locationRecommendation: return .yellow
+        case .groupActivity: return .purple
         }
     }
 }
@@ -135,6 +162,15 @@ struct NotificationSettings: Codable {
     var listInviteNotifications: Bool = true
     var locationReminderNotifications: Bool = true
     var systemNotifications: Bool = true
+    
+    // Proximity Alert Settings
+    var friendNearbyNotifications: Bool = true
+    var friendAtLocationNotifications: Bool = true
+    var friendActivityAtLocationNotifications: Bool = true
+    var friendAvailableNearbyNotifications: Bool = true
+    var locationRecommendationNotifications: Bool = false
+    var groupActivityNotifications: Bool = true
+    
     var quietHoursEnabled: Bool = false
     var quietHoursStart: Date = Calendar.current.date(from: DateComponents(hour: 22)) ?? Date()
     var quietHoursEnd: Date = Calendar.current.date(from: DateComponents(hour: 8)) ?? Date()
@@ -153,6 +189,12 @@ struct NotificationSettings: Codable {
         case .listInvite: return listInviteNotifications
         case .locationReminder: return locationReminderNotifications
         case .system: return systemNotifications
+        case .friendNearby: return friendNearbyNotifications
+        case .friendAtLocation: return friendAtLocationNotifications
+        case .friendActivityAtLocation: return friendActivityAtLocationNotifications
+        case .friendAvailableNearby: return friendAvailableNearbyNotifications
+        case .locationRecommendation: return locationRecommendationNotifications
+        case .groupActivity: return groupActivityNotifications
         }
     }
 }
@@ -639,6 +681,158 @@ class NotificationManager: NSObject, ObservableObject {
             relatedListID: listID
         )
         addNotification(notification)
+    }
+    
+    // MARK: - Proximity Alert Notifications
+    
+    func createFriendNearbyNotification(from user: String, userID: String, distance: Double, locationName: String? = nil) {
+        let distanceString = formatDistance(distance)
+        var message = "\(user) is \(distanceString) away"
+        
+        if let locationName = locationName {
+            message += " at \(locationName)"
+        }
+        
+        var actionData: [String: String] = [
+            "action": "view_friend_location",
+            "friendId": userID,
+            "distance": String(distance)
+        ]
+        
+        if let locationName = locationName {
+            actionData["locationName"] = locationName
+        }
+        
+        let notification = AppNotification(
+            type: .friendNearby,
+            title: "Friend Nearby",
+            message: message,
+            priority: .normal,
+            actionData: actionData,
+            senderID: userID
+        )
+        addNotification(notification)
+    }
+    
+    func createFriendAtLocationNotification(from user: String, userID: String, locationName: String) {
+        let notification = AppNotification(
+            type: .friendAtLocation,
+            title: "Friend at Location",
+            message: "\(user) is at \(locationName)",
+            priority: .normal,
+            actionData: [
+                "action": "view_location",
+                "friendId": userID,
+                "locationName": locationName
+            ],
+            senderID: userID
+        )
+        addNotification(notification)
+    }
+    
+    func createFriendActivityNotification(friendNames: [String], locationName: String, activityType: String) {
+        let friendsText = friendNames.count == 1 ? friendNames.first! : 
+                         friendNames.count == 2 ? "\(friendNames[0]) and \(friendNames[1])" :
+                         "\(friendNames.count) friends"
+        
+        var message = ""
+        switch activityType {
+        case "visited":
+            message = "\(friendsText) visited \(locationName)"
+        case "rated":
+            message = "\(friendsText) rated \(locationName)"
+        case "reviewed":
+            message = "\(friendsText) reviewed \(locationName)"
+        default:
+            message = "\(friendsText) had activity at \(locationName)"
+        }
+        
+        let notification = AppNotification(
+            type: .friendActivityAtLocation,
+            title: "Friend Activity",
+            message: message,
+            priority: .normal,
+            actionData: [
+                "action": "view_location",
+                "locationName": locationName,
+                "activityType": activityType
+            ]
+        )
+        addNotification(notification)
+    }
+    
+    func createFriendAvailableNotification(from user: String, userID: String, distance: Double, status: String) {
+        let distanceString = formatDistance(distance)
+        let message = "\(user) is available and \(distanceString) away"
+        
+        let notification = AppNotification(
+            type: .friendAvailableNearby,
+            title: "Friend Available",
+            message: message,
+            priority: .normal,
+            actionData: [
+                "action": "message_friend",
+                "friendId": userID,
+                "distance": String(distance),
+                "status": status
+            ],
+            senderID: userID
+        )
+        addNotification(notification)
+    }
+    
+    func createLocationRecommendationNotification(locationName: String, friendNames: [String], averageRating: Double? = nil) {
+        let friendsText = friendNames.count == 1 ? friendNames.first! : 
+                         friendNames.count == 2 ? "\(friendNames[0]) and \(friendNames[1])" :
+                         "\(friendNames.count) friends"
+        
+        var message = "\(friendsText) recommend \(locationName)"
+        if let rating = averageRating {
+            message += " (★\(String(format: "%.1f", rating)))"
+        }
+        
+        let notification = AppNotification(
+            type: .locationRecommendation,
+            title: "Location Recommendation",
+            message: message,
+            priority: .low,
+            actionData: [
+                "action": "view_location",
+                "locationName": locationName,
+                "friendNames": friendNames.joined(separator: ","),
+                "averageRating": String(averageRating ?? 0)
+            ]
+        )
+        addNotification(notification)
+    }
+    
+    func createGroupActivityNotification(groupName: String, activityType: String, locationName: String, participantCount: Int) {
+        let message = "\(participantCount) people in \(groupName) are \(activityType) at \(locationName)"
+        
+        let notification = AppNotification(
+            type: .groupActivity,
+            title: "Group Activity",
+            message: message,
+            priority: .normal,
+            actionData: [
+                "action": "view_group_activity",
+                "groupName": groupName,
+                "locationName": locationName,
+                "activityType": activityType,
+                "participantCount": String(participantCount)
+            ]
+        )
+        addNotification(notification)
+    }
+    
+    // MARK: - Proximity Alert Helper Methods
+    
+    private func formatDistance(_ distance: Double) -> String {
+        if distance < 1000 {
+            return String(format: "%.0f m", distance)
+        } else {
+            return String(format: "%.1f km", distance / 1000)
+        }
     }
 }
 

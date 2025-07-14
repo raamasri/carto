@@ -313,15 +313,46 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
         
         lastLocationUpdate = now
         
-        // TODO: Integrate with SupabaseManager when import issues are resolved
-        // For now, save locally with enhanced data structure
+        // Save locally with enhanced data structure
         saveLocationLocally(location, timestamp: now)
+        
+        // Update location for proximity alerts
+        Task {
+            await updateLocationForProximityAlerts(location)
+        }
         
         // Future implementation will include:
         // - Database integration via SupabaseManager
         // - Activity type detection
         // - Reverse geocoding for location names
         print("✅ Location saved to history: \(location.coordinate)")
+    }
+    
+    /**
+     * Updates location for proximity alerts system
+     * 
+     * This method integrates with the ProximityAlertManager to enable
+     * real-time friend proximity detection and notifications.
+     * 
+     * @param location The current location to update
+     */
+    private func updateLocationForProximityAlerts(_ location: CLLocation) async {
+        // Check if proximity alerts are enabled
+        let proximityManager = ProximityAlertManager.shared
+        guard proximityManager.isActive else { return }
+        
+        // Update location in database for proximity detection
+        let success = await SupabaseManager.shared.updateUserLocationForProximity(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude,
+            isAvailable: true // Could be determined by availability status
+        )
+        
+        if success {
+            print("✅ Location updated for proximity alerts")
+        } else {
+            print("❌ Failed to update location for proximity alerts")
+        }
     }
     
     /**

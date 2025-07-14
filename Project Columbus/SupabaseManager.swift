@@ -10,6 +10,7 @@ import Foundation
 import CryptoKit
 import SwiftUI
 import UserNotifications
+import CoreLocation
 import os.log
 
 // MARK: - Legacy Database Models (to be removed after migration)
@@ -4701,5 +4702,369 @@ extension SupabaseManager {
             .from("story_reactions")
             .upsert(reactionData, onConflict: "story_id,user_id")
             .execute()
+    }
+}
+
+// MARK: - Proximity Alert Extensions
+
+extension SupabaseManager {
+    /**
+     * Get pins near a specific location
+     * 
+     * Returns pins from the database that are within a specified radius
+     * of the given coordinates.
+     */
+    func getPinsNearLocation(latitude: Double, longitude: Double, radius: Double) async -> [Pin] {
+        do {
+            // Calculate bounding box for efficient querying
+            let radiusInDegrees = radius / 111000.0 // Approximate conversion from meters to degrees
+            let minLat = latitude - radiusInDegrees
+            let maxLat = latitude + radiusInDegrees
+            let minLon = longitude - radiusInDegrees
+            let maxLon = longitude + radiusInDegrees
+            
+            // Query pins within the bounding box
+            let pins: [PinDB] = try await client
+                .from("pins")
+                .select("*")
+                .gte("latitude", value: minLat)
+                .lte("latitude", value: maxLat)
+                .gte("longitude", value: minLon)
+                .lte("longitude", value: maxLon)
+                .order("created_at", ascending: false)
+                .limit(100)
+                .execute()
+                .value
+            
+            // Convert to Pin objects and filter by exact distance
+            var nearbyPins: [Pin] = []
+            for pinDB in pins {
+                let pinLocation = CLLocation(latitude: pinDB.latitude, longitude: pinDB.longitude)
+                let searchLocation = CLLocation(latitude: latitude, longitude: longitude)
+                let distance = pinLocation.distance(from: searchLocation)
+                
+                if distance <= radius {
+                    nearbyPins.append(pinDB.toPin())
+                }
+            }
+            
+            return nearbyPins
+        } catch {
+            print("❌ Failed to get pins near location: \(error)")
+            return []
+        }
+    }
+    
+    /**
+     * Get friend activity near a location
+     * 
+     * Returns friend activities (pins, reviews, etc.) near a specific location
+     * within a given time frame.
+     */
+    func getFriendActivityNearLocation(latitude: Double, longitude: Double, radius: Double, since: Date) async -> [FriendActivity] {
+        do {
+            // Get current user's following list
+            guard let session = try? await client.auth.session else { return [] }
+            let currentUserID = session.user.id.uuidString
+            
+            let followingUsers = await getFollowingUsers(for: currentUserID)
+            let followingIds = followingUsers.map { $0.id }
+            
+            if followingIds.isEmpty {
+                return []
+            }
+            
+            // Get pins from friends near the location
+            let nearbyPins = await getPinsNearLocation(latitude: latitude, longitude: longitude, radius: radius)
+            let friendPins = nearbyPins.filter { pin in
+                followingIds.contains(pin.authorHandle) // This might need adjustment based on how authorHandle is stored
+            }
+            
+            // Filter by time frame
+            let recentPins = friendPins.filter { pin in
+                pin.createdAt >= since
+            }
+            
+            // Convert to FriendActivity objects
+            var activities: [FriendActivity] = []
+            for pin in recentPins {
+                let activity = FriendActivity(
+                    userId: pin.authorHandle,
+                    username: pin.authorHandle,
+                    userAvatarURL: nil,
+                    activityType: .visitedPlace,
+                    relatedPinId: pin.id,
+                    relatedPin: pin,
+                    locationName: pin.locationName,
+                    description: "\(pin.authorHandle) visited \(pin.locationName)",
+                    createdAt: pin.createdAt
+                )
+                activities.append(activity)
+            }
+            
+            return activities.sorted { $0.createdAt > $1.createdAt }
+        } catch {
+            print("❌ Failed to get friend activity near location: \(error)")
+            return []
+        }
+    }
+    
+    /**
+     * Get friends currently at a location
+     * 
+     * Returns friends who are currently at or near a specific location
+     * based on their last known location.
+     */
+    func getFriendsAtLocation(latitude: Double, longitude: Double, radius: Double) async -> [AppUser] {
+        do {
+            guard let session = try? await client.auth.session else { return [] }
+            let currentUserID = session.user.id.uuidString
+            
+            // Get users who are following the current user (mutual friends)
+            let followingUsers = await getFollowingUsers(for: currentUserID)
+            var friendsAtLocation: [AppUser] = []
+            
+            for friend in followingUsers {
+                guard let friendLat = friend.latitude,
+                      let friendLng = friend.longitude else {
+                    continue
+                }
+                
+                let friendLocation = CLLocation(latitude: friendLat, longitude: friendLng)
+                let targetLocation = CLLocation(latitude: latitude, longitude: longitude)
+                let distance = friendLocation.distance(from: targetLocation)
+                
+                if distance <= radius {
+                    friendsAtLocation.append(friend)
+                }
+            }
+            
+            return friendsAtLocation.sorted { friend1, friend2 in
+                guard let lat1 = friend1.latitude, let lng1 = friend1.longitude,
+                      let lat2 = friend2.latitude, let lng2 = friend2.longitude else {
+                    return false
+                }
+                
+                let loc1 = CLLocation(latitude: lat1, longitude: lng1)
+                let loc2 = CLLocation(latitude: lat2, longitude: lng2)
+                let target = CLLocation(latitude: latitude, longitude: longitude)
+                
+                return target.distance(from: loc1) < target.distance(from: loc2)
+            }
+        } catch {
+            print("❌ Failed to get friends at location: \(error)")
+            return []
+        }
+    }
+    
+    /**
+     * Get social context for a location
+     * 
+     * Returns comprehensive social context about a location including
+     * friend visits, ratings, and recommendations.
+     */
+    func getLocationSocialContext(latitude: Double, longitude: Double, radius: Double = 100) async -> LocationSocialContext {
+        do {
+            // Get pins near the location
+            let nearbyPins = await getPinsNearLocation(latitude: latitude, longitude: longitude, radius: radius)
+            
+            // Get friend activity
+            let lastWeek = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+            let recentActivity = await getFriendActivityNearLocation(latitude: latitude, longitude: longitude, radius: radius, since: lastWeek)
+            
+            // Get friends currently at location
+            let friendsAtLocation = await getFriendsAtLocation(latitude: latitude, longitude: longitude, radius: radius)
+            
+            // Calculate statistics
+            let totalVisits = nearbyPins.count
+            let uniqueVisitors = Set(nearbyPins.map { $0.authorHandle }).count
+            let averageRating = nearbyPins.compactMap { $0.starRating }.isEmpty ? 0.0 : 
+                nearbyPins.compactMap { $0.starRating }.reduce(0, +) / Double(nearbyPins.compactMap { $0.starRating }.count)
+            
+            // Get most common location name
+            let locationName = nearbyPins.first?.locationName ?? "Unknown Location"
+            
+            return LocationSocialContext(
+                locationName: locationName,
+                latitude: latitude,
+                longitude: longitude,
+                totalVisits: totalVisits,
+                uniqueVisitors: uniqueVisitors,
+                averageRating: averageRating,
+                recentActivity: recentActivity,
+                friendsCurrentlyHere: friendsAtLocation,
+                lastVisit: nearbyPins.first?.createdAt,
+                topReviews: nearbyPins.compactMap { $0.reviewText }.prefix(3).map { String($0) }
+            )
+        } catch {
+            print("❌ Failed to get location social context: \(error)")
+            return LocationSocialContext(
+                locationName: "Unknown Location",
+                latitude: latitude,
+                longitude: longitude,
+                totalVisits: 0,
+                uniqueVisitors: 0,
+                averageRating: 0.0,
+                recentActivity: [],
+                friendsCurrentlyHere: [],
+                lastVisit: nil,
+                topReviews: []
+            )
+        }
+    }
+    
+    /**
+     * Create a proximity alert notification
+     * 
+     * Creates a notification for proximity alerts with social context.
+     */
+    func createProximityNotification(to userID: String, from fromUserID: String, alertType: String, locationName: String?, distance: Double, additionalContext: [String: Any]? = nil) async -> Bool {
+        do {
+            let distanceString = distance < 1000 ? String(format: "%.0f m", distance) : String(format: "%.1f km", distance / 1000)
+            
+            var message = ""
+            var title = ""
+            
+            switch alertType {
+            case "friend_nearby":
+                title = "Friend Nearby"
+                message = "is \(distanceString) away"
+            case "friend_at_location":
+                title = "Friend at Location"
+                message = "is at \(locationName ?? "a location you've been to")"
+            case "friend_activity":
+                title = "Friend Activity"
+                message = "and others have been to \(locationName ?? "a nearby location") recently"
+            default:
+                title = "Proximity Alert"
+                message = "is nearby"
+            }
+            
+            var actionData: [String: Any] = [
+                "action": "view_friend_location",
+                "friendId": fromUserID,
+                "alertType": alertType,
+                "distance": distance
+            ]
+            
+            if let locationName = locationName {
+                actionData["locationName"] = locationName
+            }
+            
+            if let additionalContext = additionalContext {
+                actionData = actionData.merging(additionalContext) { (_, new) in new }
+            }
+            
+            let actionDataString = try JSONSerialization.data(withJSONObject: actionData)
+            let actionDataJSON = String(data: actionDataString, encoding: .utf8) ?? "{}"
+            
+            struct ProximityNotificationData: Codable {
+                let user_id: String
+                let type: String
+                let title: String
+                let message: String
+                let from_user_id: String
+                let action_data: String
+                let priority: String
+                let created_at: String
+            }
+            
+            let notificationData = ProximityNotificationData(
+                user_id: userID,
+                type: alertType,
+                title: title,
+                message: message,
+                from_user_id: fromUserID,
+                action_data: actionDataJSON,
+                priority: "normal",
+                created_at: ISO8601DateFormatter().string(from: Date())
+            )
+            
+            try await client
+                .from("notifications")
+                .insert(notificationData)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to create proximity notification: \(error)")
+            return false
+        }
+    }
+    
+    /**
+     * Update user's current location for proximity alerts
+     * 
+     * Updates the user's location in the database for proximity detection.
+     */
+    func updateUserLocationForProximity(latitude: Double, longitude: Double, isAvailable: Bool = true) async -> Bool {
+        do {
+            guard let session = try? await client.auth.session else { return false }
+            let currentUserID = session.user.id.uuidString
+            
+            // Update user's location in the users table
+            try await client
+                .from("users")
+                .update([
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "last_active": Date().timeIntervalSince1970
+                ])
+                .eq("id", value: currentUserID)
+                .execute()
+            
+            return true
+        } catch {
+            print("❌ Failed to update user location for proximity: \(error)")
+            return false
+        }
+    }
+}
+
+// MARK: - Location Social Context Model
+
+struct LocationSocialContext {
+    let locationName: String
+    let latitude: Double
+    let longitude: Double
+    let totalVisits: Int
+    let uniqueVisitors: Int
+    let averageRating: Double
+    let recentActivity: [FriendActivity]
+    let friendsCurrentlyHere: [AppUser]
+    let lastVisit: Date?
+    let topReviews: [String]
+    
+    var socialScore: Double {
+        var score = 0.0
+        
+        // Recent activity score
+        let recentVisits = recentActivity.filter { $0.createdAt.timeIntervalSinceNow > -604800 } // Last week
+        score += Double(recentVisits.count) * 0.3
+        
+        // Rating score
+        if averageRating > 0 {
+            score += averageRating * 0.4
+        }
+        
+        // Unique visitors score
+        score += Double(uniqueVisitors) * 0.2
+        
+        // Current friends score
+        score += Double(friendsCurrentlyHere.count) * 0.1
+        
+        return score
+    }
+    
+    var recommendationText: String {
+        if friendsCurrentlyHere.count > 0 {
+            return "\(friendsCurrentlyHere.count) friend\(friendsCurrentlyHere.count == 1 ? "" : "s") \(friendsCurrentlyHere.count == 1 ? "is" : "are") here now"
+        } else if !recentActivity.isEmpty {
+            return "\(recentActivity.count) friend\(recentActivity.count == 1 ? "" : "s") visited recently"
+        } else if averageRating > 0 {
+            return String(format: "%.1f star rating from friends", averageRating)
+        } else {
+            return "Popular with your friends"
+        }
     }
 }
