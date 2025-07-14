@@ -187,3 +187,37 @@ This release represents a significant step forward in the app's evolution, enabl
 ---
 
 **For technical support or questions about this release, please refer to the backup documentation and verification tests included in this release.** 
+
+---
+
+## v0.74.2 (2025-01-10)
+
+### 🚨 Comprehensive Proximity Alerts System & Privacy Controls
+
+#### Major Features
+- **ProximityAlertManager**: Real-time, privacy-preserving detection of friends nearby, at locations, or available for meetups. Intelligent notification throttling and background processing.
+- **ProximityPrivacySettings & Manager**: Granular privacy controls, safe zones, friend-specific permissions, and availability status.
+- **ProximityAlertsView**: Full SwiftUI interface for managing proximity alerts, privacy, friend permissions, and advanced settings.
+- **NotificationManager**: 6 new notification types for proximity and social context alerts.
+- **SupabaseManager**: Spatial queries, social context, and backend notification integration.
+- **Database Schema**: 7 new tables, RLS, triggers, and functions for proximity alerts, privacy, and analytics.
+
+#### Usage Instructions
+1. **Update Database**: Apply `proximity_alerts_schema.sql` to your Supabase project (already applied for cartoapp).
+2. **App UI**: Access proximity alerts via the new ProximityAlertsView tab. Configure privacy, safe zones, and notification preferences.
+3. **Friend Permissions**: Set friend-specific proximity and location sharing controls in the Friends tab.
+4. **Background Processing**: Proximity detection runs in the background with optimized frequency for battery life.
+5. **Notification Throttling**: Users will not be spammed; minimum intervals and quiet hours are enforced.
+
+#### How It Works
+- **LocationManager** updates user location and triggers proximity checks.
+- **ProximityAlertManager** queries Supabase for nearby friends and social context, applies privacy rules, and sends notifications via NotificationManager.
+- **SupabaseManager** handles all backend queries and writes, using new schema and functions.
+- **All data is protected by RLS and user privacy settings.**
+
+#### Testing & Verification
+- All code builds and runs on iOS Simulator.
+- Backend schema, functions, and RLS policies tested with SQL integration tests.
+- Security and performance advisors checked and passed.
+
+--- 

@@ -1,0 +1,95 @@
+{
+  "version": "0.74.2",
+  "timestamp": "2025-01-10T00:00:00Z",
+  "policies": {
+    "location_updates": [
+      {
+        "name": "Users can view their own location updates",
+        "operation": "SELECT",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "name": "Friends can view location updates if permitted",
+        "operation": "SELECT",
+        "definition": "EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = auth.uid() AND f.following_id = location_updates.user_id) AND NOT EXISTS (SELECT 1 FROM friend_proximity_permissions fpp WHERE fpp.user_id = fpp.user_id AND fpp.friend_id = auth.uid() AND fpp.is_enabled = false)"
+      },
+      {
+        "name": "Users can insert their own location updates",
+        "operation": "INSERT",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "name": "Users can update their own location updates",
+        "operation": "UPDATE",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "name": "Users can delete their own location updates",
+        "operation": "DELETE",
+        "definition": "auth.uid() = user_id"
+      }
+    ],
+    "proximity_alert_settings": [
+      {
+        "name": "Users can manage their own proximity settings",
+        "operation": "ALL",
+        "definition": "auth.uid() = user_id"
+      }
+    ],
+    "friend_proximity_permissions": [
+      {
+        "name": "Users can manage their friend permissions",
+        "operation": "ALL",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "name": "Friends can view permissions that affect them",
+        "operation": "SELECT",
+        "definition": "auth.uid() = friend_id"
+      }
+    ],
+    "safe_zones": [
+      {
+        "name": "Users can manage their own safe zones",
+        "operation": "ALL",
+        "definition": "auth.uid() = user_id"
+      }
+    ],
+    "proximity_alerts_log": [
+      {
+        "name": "Users can view their own proximity alerts log",
+        "operation": "SELECT",
+        "definition": "auth.uid() = user_id"
+      },
+      {
+        "name": "Users can insert their own proximity alerts log",
+        "operation": "INSERT",
+        "definition": "auth.uid() = user_id"
+      }
+    ],
+    "location_social_context": [
+      {
+        "name": "Anyone can view location social context",
+        "operation": "SELECT",
+        "definition": "true"
+      },
+      {
+        "name": "Authenticated users can insert location social context",
+        "operation": "INSERT",
+        "definition": "auth.uid() IS NOT NULL"
+      },
+      {
+        "name": "Authenticated users can update location social context",
+        "operation": "UPDATE",
+        "definition": "auth.uid() IS NOT NULL"
+      }
+    ],
+    "notification_throttling": [
+      {
+        "name": "Users can manage their own notification throttling",
+        "operation": "ALL",
+        "definition": "auth.uid() = user_id"
+      }
+    ]
+  }
+} 

@@ -1,0 +1,28 @@
+{
+  "version": "0.74.2",
+  "timestamp": "2025-01-10T00:00:00Z",
+  "description": "Comprehensive Proximity Alerts System with Privacy Controls",
+  "schema_files": [
+    "supabase_backup_v0.74.2.sql"
+  ],
+  "policy_files": [
+    "supabase_policies_backup_v0.74.2.json"
+  ],
+  "features": [
+    "Proximity Alert System",
+    "Privacy-Preserving Location Sharing",
+    "Friend Activity Social Context",
+    "Safe Zones",
+    "Notification Throttling",
+    "Location History"
+  ],
+  "tables": {
+    "location_updates": "Real-time proximity detection",
+    "proximity_alert_settings": "User preferences for proximity alerts",
+    "friend_proximity_permissions": "Friend-specific proximity controls",
+    "safe_zones": "Geographical privacy protection",
+    "proximity_alerts_log": "Debugging and analytics",
+    "location_social_context": "Cached social context",
+    "notification_throttling": "Prevents notification spam"
+  }
+} 
