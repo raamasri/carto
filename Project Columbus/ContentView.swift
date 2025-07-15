@@ -281,6 +281,17 @@ struct MainMapView: View {
     /// Focus state for search text field
     @FocusState private var isSearchFieldFocused: Bool
     
+    // MARK: - Search Results State
+    
+    /// Search result pins to display on map and in swipeable cards
+    @State private var searchResultPins: [Pin] = []
+    
+    /// Controls display of search results sheet
+    @State private var showSearchResults: Bool = false
+    
+    /// Original map items for search results (for reference)
+    @State private var searchResultMapItems: [MKMapItem] = []
+    
     // MARK: - Profile and Account Management
     
     /// Controls display of user profile sheet
@@ -847,6 +858,87 @@ struct MainMapView: View {
         }
     }
     
+    func handleSearchSubmit() {
+        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchText
+        
+        // Use broader Bay Area region to ensure we get results
+        request.region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194), // San Francisco center
+            span: MKCoordinateSpan(latitudeDelta: 1.0, longitudeDelta: 1.0) // Large span covering Bay Area
+        )
+        
+        print("🔍 [ContentView] Starting search for: '\(searchText)' in Bay Area region")
+        
+        let search = MKLocalSearch(request: request)
+        search.start { response, error in
+            if let error = error {
+                print("❌ [ContentView] Search error: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let response = response else {
+                print("❌ [ContentView] No search response")
+                return
+            }
+            
+            print("🔍 [ContentView] Found \(response.mapItems.count) search results")
+            
+            // Convert all results to Pin objects
+            let pins = response.mapItems.map { mapItem in
+                let pin = Pin(
+                    locationName: mapItem.name ?? "Unknown Location",
+                    city: mapItem.placemark.locality ?? mapItem.placemark.administrativeArea ?? "",
+                    date: formattedDate(),
+                    latitude: mapItem.placemark.coordinate.latitude,
+                    longitude: mapItem.placemark.coordinate.longitude,
+                    reaction: .lovedIt,
+                    reviewText: nil,
+                    mediaURLs: [],
+                    mentionedFriends: [],
+                    starRating: nil,
+                    distance: nil,
+                    authorHandle: "@search",
+                    createdAt: Date(),
+                    tripName: nil
+                )
+                print("📍 [ContentView] Created search pin: \(pin.locationName) at \(pin.latitude), \(pin.longitude)")
+                return pin
+            }
+            
+            // Update state on main thread
+            DispatchQueue.main.async {
+                searchResultPins = pins
+                searchResultMapItems = response.mapItems
+                
+                if !pins.isEmpty {
+                    showSearchResults = true
+                    print("🎴 [ContentView] Showing search results with \(pins.count) pins")
+                } else {
+                    print("❌ [ContentView] No search results to display")
+                }
+                
+                // Clear search UI
+                searchText = ""
+                searchResults = []
+                isSearchFieldFocused = false
+            }
+        }
+    }
+    
+    // Helper function to center map on search result pin
+    private func centerMapOnSearchPin(_ pin: Pin) {
+        print("🗺️ [ContentView] Centering map on search pin: \(pin.locationName)")
+        withAnimation(.easeInOut(duration: 0.8)) {
+            cameraPosition = .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            ))
+        }
+    }
+    
     struct PinAnnotationView: View {
         let pin: Pin
         let isSelected: Bool
@@ -890,6 +982,24 @@ struct MainMapView: View {
             .onTapGesture(perform: onTap)
         }
     }
+    
+    struct SearchResultPinAnnotation: View {
+        let pin: Pin
+        
+        var body: some View {
+            ZStack {
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 30, height: 30)
+                    .shadow(radius: 3)
+                
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.orange)
+            }
+            .scaleEffect(1.0)
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -904,8 +1014,16 @@ struct MainMapView: View {
                                     Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
                                         MainMapEnhancedPinAnnotation(pin: pin, pinStore: pinStore)
                                     }
-                            .tag(pin.id)
+                                    .tag(pin.id)
                                 }
+                            }
+                            
+                            // Show search result pins
+                            ForEach(searchResultPins, id: \.id) { pin in
+                                Annotation(pin.locationName, coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
+                                    SearchResultPinAnnotation(pin: pin)
+                                }
+                                .tag(pin.id)
                             }
                             
                             // Show user location
@@ -1111,6 +1229,9 @@ struct MainMapView: View {
                     TextField("Places, Memories, Ideas, #tags", text: $searchText)
                         .autocorrectionDisabled()
                         .focused($isSearchFieldFocused)
+                        .onSubmit {
+                            handleSearchSubmit()
+                        }
                         .padding(8)
  
                     if !searchText.isEmpty || !searchResults.isEmpty {
@@ -1313,8 +1434,11 @@ struct MainMapView: View {
             // Dismiss the POI popup and clear search results when switching tabs
             showPOISheet = false
             showFullPOIView = false
+            showSearchResults = false
             selectedPinForPopup = nil
             searchResults = []
+            searchResultPins = []
+            searchResultMapItems = []
             searchText = ""
         }
         .onChange(of: showFullPOIView) { oldValue, newValue in
@@ -1392,6 +1516,46 @@ struct MainMapView: View {
         .sheet(isPresented: $showAccountSettings) {
             SettingsView()
                 .environmentObject(authManager)
+        }
+        .sheet(isPresented: $showSearchResults) {
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("\(searchResultPins.count) search results")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    Button("Done") {
+                        showSearchResults = false
+                        searchResultPins = []
+                        searchResultMapItems = []
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                
+                Divider()
+                
+                // SwipablePinCardsView for search results
+                SwipablePinCardsView(pins: searchResultPins, onPinChanged: centerMapOnSearchPin)
+                    .padding(.top, 16)
+                    .onAppear {
+                        print("🎴 [ContentView] SwipablePinCardsView appeared for search results")
+                    }
+            }
+            .background(.ultraThinMaterial)
+            .presentationDetents([.height(500), .large])
+            .presentationDragIndicator(.visible)
+            .onAppear {
+                print("📝 [ContentView] Search results sheet presented with \(searchResultPins.count) pins")
+            }
+            .onDisappear {
+                print("📝 [ContentView] Search results sheet dismissed")
+            }
         }
 
         .actionSheet(isPresented: $showAccountMenu) {
