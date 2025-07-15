@@ -28,6 +28,10 @@
 
 import SwiftUI
 import MapKit
+import CoreLocation
+import Speech
+import NaturalLanguage
+import AVFoundation
 import Combine
 import Foundation
 
@@ -291,6 +295,41 @@ struct MainMapView: View {
     
     /// Original map items for search results (for reference)
     @State private var searchResultMapItems: [MKMapItem] = []
+    
+    // MARK: - Voice Intelligence State
+    
+    /// Speech recognizer for voice input
+    @State private var speechRecognizer: SFSpeechRecognizer?
+    
+    /// Audio engine for voice input processing
+    @State private var audioEngine = AVAudioEngine()
+    
+    /// Speech recognition request
+    @State private var speechRequest: SFSpeechAudioBufferRecognitionRequest?
+    
+    /// Speech recognition task
+    @State private var speechTask: SFSpeechRecognitionTask?
+    
+    /// Controls voice recording state
+    @State private var isRecording = false
+    
+    /// Voice input authorization status
+    @State private var speechAuthStatus = SFSpeechRecognizer.authorizationStatus()
+    
+    /// Current voice query text
+    @State private var voiceQueryText = ""
+    
+    /// Natural language tagger for intent recognition
+    @State private var nlTagger = NLTagger(tagSchemes: [.nameType, .lexicalClass])
+    
+    /// Voice intelligence processing state
+    @State private var isProcessingVoice = false
+    
+    /// Speech recognizer availability
+    @State private var isSpeechRecognizerAvailable = false
+    
+    /// Real-time transcription text for user feedback
+    @State private var liveTranscriptionText = ""
     
     // MARK: - Profile and Account Management
     
@@ -939,6 +978,343 @@ struct MainMapView: View {
         }
     }
     
+    // MARK: - Voice Intelligence Functions
+    
+    /// Initialize speech recognizer and check availability
+    private func initializeSpeechRecognizer() {
+        print("[LOG] initializeSpeechRecognizer called")
+        
+        // Create speech recognizer for current locale
+        speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+        
+        // Check if speech recognizer is available
+        if speechRecognizer != nil {
+            isSpeechRecognizerAvailable = true
+            print("[LOG] Speech recognizer initialized successfully")
+        } else {
+            isSpeechRecognizerAvailable = false
+            print("[LOG] Speech recognizer not available for current locale")
+        }
+        
+        // Update authorization status
+        speechAuthStatus = SFSpeechRecognizer.authorizationStatus()
+        print("[LOG] Initial speech auth status: \(speechAuthStatus.rawValue)")
+    }
+    
+    /// Requests permissions and starts voice recording
+    private func startVoiceRecording() {
+        print("[LOG] startVoiceRecording called")
+        print("🎤 [VoiceIntelligence] Starting voice recording...")
+        
+        // Check if speech recognizer is available
+        guard speechRecognizer != nil else {
+            print("❌ [VoiceIntelligence] Speech recognizer not available")
+            return
+        }
+        
+        // Request speech recognition authorization
+        SFSpeechRecognizer.requestAuthorization { authStatus in
+            DispatchQueue.main.async {
+                print("[LOG] Speech authorization status: \(authStatus.rawValue)")
+                self.speechAuthStatus = authStatus
+                
+                if authStatus == .authorized {
+                    // Request microphone permission (iOS 17+ compatible)
+                    if #available(iOS 17.0, *) {
+                        AVAudioApplication.requestRecordPermission { granted in
+                            DispatchQueue.main.async {
+                                print("[LOG] Microphone permission granted: \(granted)")
+                                if granted {
+                                    self.beginVoiceRecording()
+                                } else {
+                                    print("❌ [VoiceIntelligence] Microphone permission denied")
+                                }
+                            }
+                        }
+                    } else {
+                        // Fallback for iOS 16 and earlier
+                        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                            DispatchQueue.main.async {
+                                print("[LOG] Microphone permission granted: \(granted)")
+                                if granted {
+                                    self.beginVoiceRecording()
+                                } else {
+                                    print("❌ [VoiceIntelligence] Microphone permission denied")
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    print("❌ [VoiceIntelligence] Speech recognition not authorized: \(authStatus)")
+                }
+            }
+        }
+    }
+    
+    /// Begins the actual voice recording process
+    private func beginVoiceRecording() {
+        print("[LOG] beginVoiceRecording called")
+        print("🎤 [VoiceIntelligence] Beginning voice recording...")
+        
+        // Cancel any existing task
+        speechTask?.cancel()
+        speechTask = nil
+        
+        // Clear live transcription for new recording
+        liveTranscriptionText = ""
+        voiceQueryText = ""
+        
+        // Configure audio session
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            print("[LOG] Audio session configured successfully")
+        } catch {
+            print("❌ [VoiceIntelligence] Audio session error: \(error)")
+            return
+        }
+        
+        // Create speech recognition request
+        speechRequest = SFSpeechAudioBufferRecognitionRequest()
+        guard let speechRequest = speechRequest else {
+            print("❌ [VoiceIntelligence] Unable to create speech request")
+            return
+        }
+        
+        speechRequest.shouldReportPartialResults = true
+        
+        // Create audio input node
+        let inputNode = audioEngine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        
+        // Install tap on input node
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+            print("[LOG] Audio buffer appended to speech request")
+            speechRequest.append(buffer)
+        }
+        
+        // Prepare and start audio engine
+        audioEngine.prepare()
+        do {
+            try audioEngine.start()
+            isRecording = true
+            voiceQueryText = ""
+            print("[LOG] Audio engine started successfully")
+            print("🎤 [VoiceIntelligence] Audio engine started successfully")
+        } catch {
+            print("❌ [VoiceIntelligence] Audio engine start error: \(error)")
+            return
+        }
+        
+        // Start speech recognition task
+        guard let recognizer = speechRecognizer else {
+            print("❌ [VoiceIntelligence] Speech recognizer not available for task creation")
+            return
+        }
+        
+        speechTask = recognizer.recognitionTask(with: speechRequest) { result, error in
+            DispatchQueue.main.async {
+                if let result = result {
+                    print("[LOG] Speech recognition result received: \(result.bestTranscription.formattedString)")
+                    self.voiceQueryText = result.bestTranscription.formattedString
+                    
+                    // Update live transcription for real-time feedback
+                    self.liveTranscriptionText = result.bestTranscription.formattedString
+                    print("🎤 [VoiceIntelligence] Live transcription: \(self.liveTranscriptionText)")
+                    
+                    if result.isFinal {
+                        print("[LOG] Speech recognition result is final")
+                        self.processVoiceQuery(self.voiceQueryText)
+                    }
+                }
+                
+                if let error = error {
+                    print("❌ [VoiceIntelligence] Speech recognition error: \(error.localizedDescription)")
+                    self.stopVoiceRecording()
+                }
+            }
+        }
+    }
+    
+    /// Stops voice recording and cleans up resources
+    private func stopVoiceRecording() {
+        print("[LOG] stopVoiceRecording called")
+        print("🎤 [VoiceIntelligence] Stopping voice recording...")
+        
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        speechRequest?.endAudio()
+        speechTask?.cancel()
+        
+        speechRequest = nil
+        speechTask = nil
+        isRecording = false
+        
+        // Process the final voice query if we have text
+        if !voiceQueryText.isEmpty {
+            print("[LOG] Processing final voice query after stop: \(voiceQueryText)")
+            processVoiceQuery(voiceQueryText)
+        } else {
+            print("[LOG] No voice query text to process")
+        }
+        
+        // Clear live transcription after a brief delay to show final result
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.liveTranscriptionText = ""
+        }
+        
+        print("🎤 [VoiceIntelligence] Voice recording stopped")
+    }
+    
+    /// Processes the voice query using natural language understanding
+    private func processVoiceQuery(_ query: String) {
+        print("[LOG] processVoiceQuery called with query: \(query)")
+        print("🧠 [VoiceIntelligence] Processing voice query: \(query)")
+        
+        isProcessingVoice = true
+        print("[LOG] isProcessingVoice set to true")
+        
+        // Use NLTagger for basic intent and entity recognition
+        nlTagger.string = query.lowercased()
+        print("[LOG] NLTagger string set: \(query.lowercased())")
+        
+        // Extract entities and intent
+        let voiceIntent = extractVoiceIntent(from: query)
+        print("[LOG] Extracted voice intent: \(voiceIntent)")
+        
+        // Process based on intent
+        switch voiceIntent.type {
+        case .findLocation:
+            print("[LOG] Detected intent: findLocation")
+            handleFindLocationIntent(voiceIntent)
+        case .findWithSocialContext:
+            print("[LOG] Detected intent: findWithSocialContext")
+            handleSocialContextIntent(voiceIntent)
+        case .general:
+            print("[LOG] Detected intent: general")
+            handleGeneralSearchIntent(voiceIntent)
+        }
+        
+        isProcessingVoice = false
+        print("[LOG] isProcessingVoice set to false")
+    }
+    
+    /// Extracts intent and entities from voice query
+    private func extractVoiceIntent(from query: String) -> VoiceIntent {
+        print("[LOG] extractVoiceIntent called with query: \(query)")
+        let lowercaseQuery = query.lowercased()
+        
+        // Check for social context keywords
+        let socialKeywords = ["sarah", "mike", "friend", "friends", "loved", "liked", "recommended", "both"]
+        let hasSocialContext = socialKeywords.contains { lowercaseQuery.contains($0) }
+        print("[LOG] hasSocialContext: \(hasSocialContext)")
+        
+        // Check for location keywords
+        let locationKeywords = ["find", "search", "locate", "where", "near", "close", "nearby"]
+        let hasLocationIntent = locationKeywords.contains { lowercaseQuery.contains($0) }
+        print("[LOG] hasLocationIntent: \(hasLocationIntent)")
+        
+        // Extract location type
+        let locationTypes = [
+            "coffee": ["coffee", "cafe", "starbucks", "coffee shop"],
+            "restaurant": ["restaurant", "food", "eat", "dining"],
+            "store": ["store", "shop", "shopping"],
+            "park": ["park", "garden", "outdoor"],
+            "gas": ["gas", "fuel", "gas station"]
+        ]
+        
+        var extractedLocationType = ""
+        var extractedFriends: [String] = []
+        var timeConstraint = ""
+        
+        // Find location type
+        for (type, keywords) in locationTypes {
+            if keywords.contains(where: { lowercaseQuery.contains($0) }) {
+                extractedLocationType = type
+                print("[LOG] extractedLocationType: \(type)")
+                break
+            }
+        }
+        
+        // Extract friend names (simple pattern matching)
+        if lowercaseQuery.contains("sarah") { extractedFriends.append("sarah"); print("[LOG] Found friend: sarah") }
+        if lowercaseQuery.contains("mike") { extractedFriends.append("mike"); print("[LOG] Found friend: mike") }
+        
+        // Extract time constraints
+        if lowercaseQuery.contains("10 minutes") || lowercaseQuery.contains("ten minutes") {
+            timeConstraint = "10 minutes"
+            print("[LOG] Found time constraint: 10 minutes")
+        } else if lowercaseQuery.contains("5 minutes") || lowercaseQuery.contains("five minutes") {
+            timeConstraint = "5 minutes"
+            print("[LOG] Found time constraint: 5 minutes")
+        } else if lowercaseQuery.contains("15 minutes") || lowercaseQuery.contains("fifteen minutes") {
+            timeConstraint = "15 minutes"
+            print("[LOG] Found time constraint: 15 minutes")
+        }
+        
+        // Determine intent type
+        let intentType: VoiceIntentType
+        if hasSocialContext && hasLocationIntent {
+            intentType = .findWithSocialContext
+            print("[LOG] intentType: findWithSocialContext")
+        } else if hasLocationIntent {
+            intentType = .findLocation
+            print("[LOG] intentType: findLocation")
+        } else {
+            intentType = .general
+            print("[LOG] intentType: general")
+        }
+        
+        let intent = VoiceIntent(
+            type: intentType,
+            originalQuery: query,
+            locationType: extractedLocationType,
+            friends: extractedFriends,
+            timeConstraint: timeConstraint
+        )
+        print("[LOG] Returning VoiceIntent: \(intent)")
+        return intent
+    }
+    
+    /// Handles find location intent
+    private func handleFindLocationIntent(_ intent: VoiceIntent) {
+        print("[LOG] handleFindLocationIntent called with intent: \(intent)")
+        print("🔍 [VoiceIntelligence] Handling find location intent: \(intent.locationType)")
+        
+        // Use the existing search functionality
+        let searchQuery = intent.locationType.isEmpty ? intent.originalQuery : intent.locationType
+        print("[LOG] Setting searchText to: \(searchQuery)")
+        searchText = searchQuery
+        handleSearchSubmit()
+    }
+    
+    /// Handles social context intent
+    private func handleSocialContextIntent(_ intent: VoiceIntent) {
+        print("[LOG] handleSocialContextIntent called with intent: \(intent)")
+        print("👥 [VoiceIntelligence] Handling social context intent for friends: \(intent.friends)")
+        
+        // For now, perform a regular search and then we'll filter by social context
+        // In a full implementation, this would query the database for friend preferences
+        let searchQuery = intent.locationType.isEmpty ? intent.originalQuery : intent.locationType
+        print("[LOG] Setting searchText to: \(searchQuery)")
+        searchText = searchQuery
+        handleSearchSubmit()
+        
+        // TODO: Implement social context filtering
+        // This would involve querying the database for pins/reviews from specified friends
+    }
+    
+    /// Handles general search intent
+    private func handleGeneralSearchIntent(_ intent: VoiceIntent) {
+        print("[LOG] handleGeneralSearchIntent called with intent: \(intent)")
+        print("🔍 [VoiceIntelligence] Handling general search intent")
+        
+        print("[LOG] Setting searchText to: \(intent.originalQuery)")
+        searchText = intent.originalQuery
+        handleSearchSubmit()
+    }
+    
     struct PinAnnotationView: View {
         let pin: Pin
         let isSelected: Bool
@@ -1226,13 +1602,57 @@ struct MainMapView: View {
                         
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.gray)
-                    TextField("Places, Memories, Ideas, #tags", text: $searchText)
-                        .autocorrectionDisabled()
-                        .focused($isSearchFieldFocused)
-                        .onSubmit {
-                            handleSearchSubmit()
+                    
+                    ZStack(alignment: .leading) {
+                        TextField("Places, Memories, Ideas, #tags", text: $searchText)
+                            .autocorrectionDisabled()
+                            .focused($isSearchFieldFocused)
+                            .onSubmit {
+                                handleSearchSubmit()
+                            }
+                            .padding(8)
+                            .opacity(isRecording && !liveTranscriptionText.isEmpty ? 0.3 : 1.0)
+                        
+                        // Real-time transcription overlay
+                        if isRecording && !liveTranscriptionText.isEmpty {
+                            HStack {
+                                Text(liveTranscriptionText)
+                                    .foregroundColor(.blue)
+                                    .font(.system(size: 16))
+                                    .fontWeight(.medium)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.blue.opacity(0.1))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                                            )
+                                    )
+                                    .animation(.easeInOut(duration: 0.2), value: liveTranscriptionText)
+                                
+                                Spacer()
+                                
+                                // Listening indicator
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(Color.red)
+                                        .frame(width: 6, height: 6)
+                                        .scaleEffect(isRecording ? 1.2 : 0.8)
+                                        .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: isRecording)
+                                    
+                                    Text("Listening...")
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                        .fontWeight(.medium)
+                                }
+                                .padding(.trailing, 8)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                         }
-                        .padding(8)
+                    }
  
                     if !searchText.isEmpty || !searchResults.isEmpty {
                         Button(action: {
@@ -1243,6 +1663,23 @@ struct MainMapView: View {
                                 .foregroundColor(.gray)
                         }
                     }
+                    
+                    // Voice Intelligence Button
+                    Button(action: {
+                        print("[LOG] Voice button tapped - isRecording: \(isRecording)")
+                        if isRecording {
+                            stopVoiceRecording()
+                        } else {
+                            startVoiceRecording()
+                        }
+                    }) {
+                        Image(systemName: isRecording ? "mic.fill" : "mic")
+                            .foregroundColor(isRecording ? .red : (isSpeechRecognizerAvailable ? .blue : .gray))
+                            .font(.system(size: 16, weight: .medium))
+                            .scaleEffect(isRecording ? 1.2 : 1.0)
+                            .animation(.easeInOut(duration: 0.1), value: isRecording)
+                    }
+                    .disabled(!isSpeechRecognizerAvailable)
                     }
                     .padding(AppSpacing.vertical)
                     .background(.ultraThinMaterial)
@@ -1387,6 +1824,9 @@ struct MainMapView: View {
             
             // Reset auto-center flag when view appears
             hasAutocentered = false
+            
+            // Initialize speech recognizer
+            initializeSpeechRecognizer()
             
             // Load data immediately if user is already authenticated
             if authManager.isLoggedIn && pinStore.lists.isEmpty {
@@ -2367,9 +2807,20 @@ struct SidebarUserAvatar: View {
     }
 }
 
+// MARK: - Voice Intelligence Data Structures
 
+/// Represents the type of voice intent
+enum VoiceIntentType {
+    case findLocation
+    case findWithSocialContext
+    case general
+}
 
-
-
-
-
+/// Represents a parsed voice intent with extracted entities
+struct VoiceIntent {
+    let type: VoiceIntentType
+    let originalQuery: String
+    let locationType: String
+    let friends: [String]
+    let timeConstraint: String
+}
