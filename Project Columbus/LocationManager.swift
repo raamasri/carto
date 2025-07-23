@@ -227,6 +227,13 @@ class AppLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate 
             self.currentLocation = location
         }
         
+        // Send notification for timeline tracking
+        NotificationCenter.default.post(
+            name: NSNotification.Name("LocationDidUpdate"),
+            object: nil,
+            userInfo: ["location": location]
+        )
+        
         // Save to location history if user has enabled this feature
         if isLocationHistoryEnabled {
             saveLocationToHistory(location)

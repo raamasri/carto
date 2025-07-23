@@ -2658,4 +2658,340 @@ struct LocationReviewDB: Codable {
     let updated_at: String
 }
 
+// MARK: - Timeline and Post Draft Models
+
+/**
+ * TimelineEntry
+ * 
+ * Represents a user's visit to a place with duration tracking.
+ * This is the core model for the timeline feature that tracks where users go.
+ */
+struct TimelineEntry: Identifiable, Codable {
+    let id: UUID
+    let userId: UUID
+    let locationName: String
+    let city: String
+    let latitude: Double
+    let longitude: Double
+    let arrivalTime: Date
+    let departureTime: Date?
+    let duration: TimeInterval? // in seconds
+    let isCurrentLocation: Bool
+    let createdAt: Date
+    let updatedAt: Date
+    
+    // Computed property for duration display
+    var durationString: String {
+        guard let duration = duration else { return "Currently here" }
+        
+        let hours = Int(duration) / 3600
+        let minutes = (Int(duration) % 3600) / 60
+        
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
+        }
+    }
+    
+    init(id: UUID = UUID(), userId: UUID, locationName: String, city: String, latitude: Double, longitude: Double, arrivalTime: Date, departureTime: Date? = nil, isCurrentLocation: Bool = true) {
+        self.id = id
+        self.userId = userId
+        self.locationName = locationName
+        self.city = city
+        self.latitude = latitude
+        self.longitude = longitude
+        self.arrivalTime = arrivalTime
+        self.departureTime = departureTime
+        self.isCurrentLocation = isCurrentLocation
+        self.createdAt = Date()
+        self.updatedAt = Date()
+        
+        // Calculate duration if departure time is set
+        if let departure = departureTime {
+            self.duration = departure.timeIntervalSince(arrivalTime)
+        } else {
+            self.duration = nil
+        }
+    }
+}
+
+/**
+ * PostDraftSharingType
+ * 
+ * Defines who can see a post when it's published from a draft.
+ */
+enum PostDraftSharingType: String, CaseIterable, Codable {
+    case justMe = "just_me"
+    case closeFriends = "close_friends"
+    case mutuals = "mutuals"
+    case publicPost = "public"
+    
+    var displayName: String {
+        switch self {
+        case .justMe: return "Just Me"
+        case .closeFriends: return "Close Friends"
+        case .mutuals: return "Mutuals"
+        case .publicPost: return "Public"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .justMe: return "person.fill"
+        case .closeFriends: return "heart.fill"
+        case .mutuals: return "person.2.fill"
+        case .publicPost: return "globe"
+        }
+    }
+}
+
+/**
+ * PostDraft
+ * 
+ * Represents an automatic post draft created from a timeline entry.
+ * Users can then edit these drafts and publish them as full posts.
+ */
+struct PostDraft: Identifiable, Codable {
+    var id: UUID
+    let userId: UUID
+    let timelineEntryId: UUID
+    let locationName: String
+    let city: String
+    let latitude: Double
+    let longitude: Double
+    let arrivalTime: Date
+    let departureTime: Date?
+    let duration: TimeInterval?
+    
+    // Post content that user can edit
+    var title: String
+    var content: String
+    var rating: Double?
+    var reaction: Reaction?
+    var mediaURLs: [String]
+    var tags: [String]
+    var mentionedFriends: [UUID]
+    
+    // Publishing settings
+    var sharingType: PostDraftSharingType
+    var isPublished: Bool
+    var publishedAt: Date?
+    
+    // Metadata
+    let createdAt: Date
+    var updatedAt: Date
+    
+    init(from timelineEntry: TimelineEntry) {
+        self.id = UUID()
+        self.userId = timelineEntry.userId
+        self.timelineEntryId = timelineEntry.id
+        self.locationName = timelineEntry.locationName
+        self.city = timelineEntry.city
+        self.latitude = timelineEntry.latitude
+        self.longitude = timelineEntry.longitude
+        self.arrivalTime = timelineEntry.arrivalTime
+        self.departureTime = timelineEntry.departureTime
+        self.duration = timelineEntry.duration
+        
+        // Default post content
+        self.title = timelineEntry.locationName
+        self.content = ""
+        self.rating = nil
+        self.reaction = nil
+        self.mediaURLs = []
+        self.tags = []
+        self.mentionedFriends = []
+        
+        // Default to private
+        self.sharingType = .justMe
+        self.isPublished = false
+        self.publishedAt = nil
+        
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+}
+
+// MARK: - Database Models for Timeline and Post Drafts
+
+struct TimelineEntryDB: Codable {
+    let id: String
+    let user_id: String
+    let location_name: String
+    let city: String
+    let latitude: Double
+    let longitude: Double
+    let arrival_time: String
+    let departure_time: String?
+    let duration: Double?
+    let is_current_location: Bool
+    let created_at: String
+    let updated_at: String
+}
+
+struct PostDraftDB: Codable {
+    let id: String
+    let user_id: String
+    let timeline_entry_id: String
+    let location_name: String
+    let city: String
+    let latitude: Double
+    let longitude: Double
+    let arrival_time: String
+    let departure_time: String?
+    let duration: Double?
+    let title: String
+    let content: String
+    let rating: Double?
+    let reaction: String?
+    let media_urls: [String]
+    let tags: [String]
+    let mentioned_friends: [String]
+    let sharing_type: String
+    let is_published: Bool
+    let published_at: String?
+    let created_at: String
+    let updated_at: String
+}
+
+// MARK: - Timeline Entry Extensions
+
+extension TimelineEntry {
+    func toDatabaseModel() -> TimelineEntryDB {
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        return TimelineEntryDB(
+            id: id.uuidString,
+            user_id: userId.uuidString,
+            location_name: locationName,
+            city: city,
+            latitude: latitude,
+            longitude: longitude,
+            arrival_time: iso8601Formatter.string(from: arrivalTime),
+            departure_time: departureTime.map { iso8601Formatter.string(from: $0) },
+            duration: duration,
+            is_current_location: isCurrentLocation,
+            created_at: iso8601Formatter.string(from: createdAt),
+            updated_at: iso8601Formatter.string(from: updatedAt)
+        )
+    }
+}
+
+extension TimelineEntryDB {
+    func toTimelineEntry() -> TimelineEntry? {
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        guard let entryId = UUID(uuidString: id),
+              let userId = UUID(uuidString: user_id),
+              let arrivalDate = iso8601Formatter.date(from: arrival_time),
+              let createdDate = iso8601Formatter.date(from: created_at),
+              let updatedDate = iso8601Formatter.date(from: updated_at) else {
+            return nil
+        }
+        
+        let departureDate = departure_time.flatMap { iso8601Formatter.date(from: $0) }
+        
+        var entry = TimelineEntry(
+            id: entryId,
+            userId: userId,
+            locationName: location_name,
+            city: city,
+            latitude: latitude,
+            longitude: longitude,
+            arrivalTime: arrivalDate,
+            departureTime: departureDate,
+            isCurrentLocation: is_current_location
+        )
+        
+        return entry
+    }
+}
+
+extension PostDraft {
+    func toDatabaseModel() -> PostDraftDB {
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        return PostDraftDB(
+            id: id.uuidString,
+            user_id: userId.uuidString,
+            timeline_entry_id: timelineEntryId.uuidString,
+            location_name: locationName,
+            city: city,
+            latitude: latitude,
+            longitude: longitude,
+            arrival_time: iso8601Formatter.string(from: arrivalTime),
+            departure_time: departureTime.map { iso8601Formatter.string(from: $0) },
+            duration: duration,
+            title: title,
+            content: content,
+            rating: rating,
+            reaction: reaction?.rawValue,
+            media_urls: mediaURLs,
+            tags: tags,
+            mentioned_friends: mentionedFriends.map { $0.uuidString },
+            sharing_type: sharingType.rawValue,
+            is_published: isPublished,
+            published_at: publishedAt.map { iso8601Formatter.string(from: $0) },
+            created_at: iso8601Formatter.string(from: createdAt),
+            updated_at: iso8601Formatter.string(from: updatedAt)
+        )
+    }
+}
+
+extension PostDraftDB {
+    func toPostDraft() -> PostDraft? {
+        let iso8601Formatter = ISO8601DateFormatter()
+        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        guard let draftId = UUID(uuidString: id),
+              let userId = UUID(uuidString: user_id),
+              let timelineEntryId = UUID(uuidString: timeline_entry_id),
+              let arrivalDate = iso8601Formatter.date(from: arrival_time),
+              let createdDate = iso8601Formatter.date(from: created_at),
+              let updatedDate = iso8601Formatter.date(from: updated_at) else {
+            return nil
+        }
+        
+        let departureDate = departure_time.flatMap { iso8601Formatter.date(from: $0) }
+        let publishedDate = published_at.flatMap { iso8601Formatter.date(from: $0) }
+        let reactionValue = reaction.flatMap { Reaction(rawValue: $0) }
+        let sharingTypeValue = PostDraftSharingType(rawValue: sharing_type) ?? .justMe
+        let mentionedFriendsUUIDs = mentioned_friends.compactMap { UUID(uuidString: $0) }
+        
+        // Create a timeline entry first (needed for PostDraft init)
+        let timelineEntry = TimelineEntry(
+            id: timelineEntryId,
+            userId: userId,
+            locationName: location_name,
+            city: city,
+            latitude: latitude,
+            longitude: longitude,
+            arrivalTime: arrivalDate,
+            departureTime: departureDate,
+            isCurrentLocation: false
+        )
+        
+        var draft = PostDraft(from: timelineEntry)
+        // Update the draft with database values
+        draft.id = draftId
+        draft.title = title
+        draft.content = content
+        draft.rating = rating
+        draft.reaction = reactionValue
+        draft.mediaURLs = media_urls
+        draft.tags = tags
+        draft.mentionedFriends = mentionedFriendsUUIDs
+        draft.sharingType = sharingTypeValue
+        draft.isPublished = is_published
+        draft.publishedAt = publishedDate
+        draft.updatedAt = updatedDate
+        
+        return draft
+    }
+}
+
 

@@ -2514,6 +2514,27 @@ struct NavigationSidebar: View {
                         }
                     })
                     
+                    // Timeline
+                    NavigationLink(destination: TimelineView()
+                        .environmentObject(authManager)
+                        .onAppear {
+                            print("📱 TimelineView appeared from sidebar")
+                        }
+                    ) {
+                        SidebarMenuItemView(
+                            icon: "clock.arrow.circlepath",
+                            title: "Timeline",
+                            isSelected: false
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        print("📱 Timeline navigation link tapped")
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            showSideMenu = false
+                        }
+                    })
+                    
                     // Smart Recommendations
                     NavigationLink(destination: SmartRecommendationsView()
                         .environmentObject(authManager)
