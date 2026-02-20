@@ -21,6 +21,15 @@
 import SwiftUI
 import SwiftData
 
+#if canImport(GoogleMaps)
+import GoogleMaps
+#endif
+
+#if canImport(GooglePlaces)
+import GooglePlaces
+#endif
+
+
 // MARK: - Main Application Structure
 
 /**
@@ -56,9 +65,25 @@ struct Project_ColumbusApp: App {
     
     /**
      * Initializes the application and performs startup tasks
-     * Currently clears the image cache to ensure fresh image loading
+     * - Initializes Google Maps SDK with API key
+     * - Clears the image cache to ensure fresh image loading
      */
     init() {
+        // Initialize Google Maps and Places SDK
+        if let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
+           let plist = NSDictionary(contentsOfFile: path),
+           let apiKey = plist["GMSApiKey"] as? String {
+            #if canImport(GoogleMaps)
+            GMSServices.provideAPIKey(apiKey)
+            #endif
+            #if canImport(GooglePlaces)
+            GMSPlacesClient.provideAPIKey(apiKey)
+            #endif
+            print("✅ Google Maps and Places SDK initialized successfully")
+        } else {
+            print("❌ Failed to initialize Google Maps/Places SDK - API key not found")
+        }
+        
         // Clear image cache on app launch to prevent stale images
         ImageCache.shared.clearCache()
     }

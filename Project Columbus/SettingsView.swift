@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("themePreference") private var themePreference: String = "Auto"
     @AppStorage("selectedMapType") private var selectedMapType: String = "Standard"
     @AppStorage("biometricEnabled") private var biometricEnabled: Bool = UserDefaults.standard.bool(forKey: "biometricEnabled")
+    @StateObject private var mapConfig = MapConfiguration.shared
     
     // Phase 1 Settings - Core User Settings
     @AppStorage("isPrivateAccount") private var isPrivateAccount: Bool = false
@@ -69,6 +70,13 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("Map Preferences")) {
+                    Picker("Map Provider", selection: $mapConfig.provider) {
+                        ForEach(MapProvider.allCases, id: \.self) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    
                     Picker("Map Type", selection: $selectedMapType) {
                         Text("Standard").tag("Standard")
                         Text("Satellite").tag("Satellite")

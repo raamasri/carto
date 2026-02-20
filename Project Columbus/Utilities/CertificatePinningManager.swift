@@ -2,7 +2,40 @@ import Foundation
 import Network
 import CryptoKit
 
-/// Manages SSL certificate pinning for enhanced network security
+/**
+ * CertificatePinningManager
+ * 
+ * Manages SSL certificate pinning for enhanced network security.
+ * 
+ * ⚠️ STATUS: CONFIGURED BUT PINS NOT SET
+ * 
+ * This manager is set up and ready to use, but certificate pins are intentionally 
+ * left empty for development flexibility. The validation logic (line 56-59) allows
+ * connections when pins are empty, printing a warning to console.
+ * 
+ * SECURITY CONSIDERATION:
+ * - Development: Empty pins allow connections (current state)
+ * - Production: Should populate pins and set validateCertificate to return false when empty
+ * 
+ * HOW TO ADD CERTIFICATE PINS:
+ * 
+ * 1. Get your server's certificate pin:
+ * ```bash
+ * openssl s_client -servername your-project.supabase.co -connect your-project.supabase.co:443 \
+ *   | openssl x509 -pubkey -noout \
+ *   | openssl rsa -pubin -outform der \
+ *   | shasum -a 256 \
+ *   | awk '{print $1}'
+ * ```
+ * 
+ * 2. Add the hash to the appropriate array below
+ * 
+ * 3. For production, change line 58 from `return true` to `return false`
+ * 
+ * REFERENCES:
+ * - OWASP Certificate Pinning Guide: https://owasp.org/www-community/controls/Certificate_and_Public_Key_Pinning
+ * - Apple's App Transport Security: https://developer.apple.com/documentation/security/preventing_insecure_network_connections
+ */
 class CertificatePinningManager: NSObject {
     static let shared = CertificatePinningManager()
     
@@ -13,18 +46,19 @@ class CertificatePinningManager: NSObject {
     // MARK: - Certificate Pins
     
     /// Known certificate pins for trusted domains
+    /// ⚠️ Currently empty - connections will be allowed but logged (see documentation above)
     private let certificatePins: [String: Set<String>] = [
         // Supabase API endpoints
+        // Example: "your-project.supabase.co": ["sha256_hash_of_public_key"]
         "supabase.co": [
-            // Add your Supabase project's certificate pins here
-            // You can get these by running: openssl s_client -servername YOUR_PROJECT.supabase.co -connect YOUR_PROJECT.supabase.co:443 | openssl x509 -pubkey -noout | openssl rsa -pubin -outform der | shasum -a 256
+            // TODO: Add your Supabase project's certificate pins here
         ],
         "supabase.com": [
-            // Supabase main domain pins
+            // TODO: Add Supabase main domain pins if needed
         ],
         // Add other domains you want to pin
         "api.apple.com": [
-            // Apple API pins for Apple Sign In
+            // TODO: Add Apple API pins for Apple Sign In if needed
         ]
     ]
     

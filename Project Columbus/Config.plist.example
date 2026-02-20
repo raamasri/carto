@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 
+		CARTO Configuration File Example
+		
+		To set up the app:
+		1. Copy this file to "Config.plist" (in the same directory)
+		2. Replace the placeholder values below with your actual credentials
+		3. NEVER commit Config.plist to version control - it's in .gitignore
+		
+		⚠️  SECURITY WARNING: Keep your keys private!
+	-->
+	
+	<!-- Supabase Configuration -->
+	<key>SupabaseURL</key>
+	<string>https://your-project-id.supabase.co</string>
+	
+	<key>SupabaseKey</key>
+	<string>your-supabase-anon-key-here</string>
+	
+	<!-- Google Maps API Key -->
+	<key>GMSApiKey</key>
+	<string>your-google-maps-api-key-here</string>
+	
+	<!-- 
+		How to get your credentials:
+		
+		Supabase:
+		1. Go to https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
+		2. Copy the "Project URL" → SupabaseURL
+		3. Copy the "anon public" key → SupabaseKey
+		
+		Google Maps:
+		1. Go to https://console.cloud.google.com/google/maps-apis/credentials
+		2. Create or copy an API key with Maps SDK enabled
+		3. Paste it as GMSApiKey
+	-->
+</dict>
+</plist>
+

@@ -10,9 +10,11 @@ import MapKit
 
 struct FriendActivityFeedView: View {
     @EnvironmentObject var authManager: AuthManager
-    @EnvironmentObject var supabaseManager: SupabaseManager
     @EnvironmentObject var pinStore: PinStore
     @StateObject private var notificationManager = NotificationManager.shared
+    
+    // Use singleton instead of environment object
+    private let supabaseManager = SupabaseManager.shared
     
     @State private var activities: [FriendActivity] = []
     @State private var isLoading = false
@@ -96,7 +98,6 @@ struct FriendActivityFeedView: View {
                 if let activity = selectedActivity {
                     ActivityDetailView(activity: activity)
                         .environmentObject(authManager)
-                        .environmentObject(supabaseManager)
                         .environmentObject(pinStore)
                 }
             }
@@ -491,8 +492,10 @@ struct PinPreviewCard: View {
 struct ActivityDetailView: View {
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var authManager: AuthManager
-    @EnvironmentObject var supabaseManager: SupabaseManager
     @EnvironmentObject var pinStore: PinStore
+    
+    // Use singleton instead of environment object
+    private let supabaseManager = SupabaseManager.shared
     
     let activity: FriendActivity
     @State private var showPinDetail = false

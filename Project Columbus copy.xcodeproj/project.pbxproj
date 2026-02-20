@@ -13,6 +13,7 @@
 		7D8D5FE62DB1CCA000377CA9 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FE52DB1CCA000377CA9 /* Realtime */; };
 		7D8D5FE82DB1CCA000377CA9 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FE72DB1CCA000377CA9 /* Storage */; };
 		7D8D5FEE2DB1CCFB00377CA9 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 7D8D5FED2DB1CCFB00377CA9 /* Supabase */; };
+		7DFAC8F22E331BE600DD5218 /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 7DFAC8F12E331BE600DD5218 /* GoogleMaps */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +67,7 @@
 				7D8D5FEE2DB1CCFB00377CA9 /* Supabase in Frameworks */,
 				7D8D5FE02DB1CCA000377CA9 /* Auth in Frameworks */,
 				7D8D5FE82DB1CCA000377CA9 /* Storage in Frameworks */,
+				7DFAC8F22E331BE600DD5218 /* GoogleMaps in Frameworks */,
 				7D8D5FE62DB1CCA000377CA9 /* Realtime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -141,6 +143,7 @@
 				7D8D5FE52DB1CCA000377CA9 /* Realtime */,
 				7D8D5FE72DB1CCA000377CA9 /* Storage */,
 				7D8D5FED2DB1CCFB00377CA9 /* Supabase */,
+				7DFAC8F12E331BE600DD5218 /* GoogleMaps */,
 			);
 			productName = "Project Columbus";
 			productReference = 38BB88392D8766D900D84636 /* Project Columbus.app */;
@@ -200,7 +203,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					38BB88382D8766D900D84636 = {
 						CreatedOnToolsVersion = 16.2;
@@ -226,6 +229,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				7DFAC8F02E331BE600DD5218 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 38BB883A2D8766D900D84636 /* Products */;
@@ -359,6 +363,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -415,6 +420,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -436,7 +442,10 @@
 				INFOPLIST_KEY_CFBundleDisplayName = CARTO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID to securely log you into your CARTO account.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "we use your location while you use the app for search";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We use your location to show nearby places and provide location-based features.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to show nearby places and improve search results.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We use your microphone for voice search and location intelligence features.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "We use speech recognition to understand your voice commands for finding places and locations.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -449,7 +458,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.74.1;
+				MARKETING_VERSION = 0.74.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -474,7 +483,10 @@
 				INFOPLIST_KEY_CFBundleDisplayName = CARTO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "We use Face ID to securely log you into your CARTO account.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "we use your location while you use the app for search";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We use your location to show nearby places and provide location-based features.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to show nearby places and improve search results.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "We use your microphone for voice search and location intelligence features.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "We use speech recognition to understand your voice commands for finding places and locations.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -487,7 +499,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.74.1;
+				MARKETING_VERSION = 0.74.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.carto.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -614,6 +626,14 @@
 				minimumVersion = 2.26.1;
 			};
 		};
+		7DFAC8F02E331BE600DD5218 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googlemaps/ios-maps-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -646,6 +666,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7D8D5FDE2DB1CCA000377CA9 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		7DFAC8F12E331BE600DD5218 /* GoogleMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7DFAC8F02E331BE600DD5218 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */;
+			productName = GoogleMaps;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

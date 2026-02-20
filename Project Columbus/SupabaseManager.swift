@@ -68,6 +68,8 @@ class SupabaseManager: ObservableObject, @unchecked Sendable {
     let baseURL: URL
     
     let client: SupabaseClient
+    private(set) var isConfigured: Bool = false
+    private(set) var configurationError: String?
 
     private init() {
         // Load credentials from secure configuration
@@ -76,15 +78,31 @@ class SupabaseManager: ObservableObject, @unchecked Sendable {
               let urlString = config["SupabaseURL"] as? String,
               let key = config["SupabaseKey"] as? String,
               let supabaseUrl = URL(string: urlString) else {
-            fatalError("Failed to load Supabase configuration. Please ensure Config.plist exists with SupabaseURL and SupabaseKey.")
+            
+            // Log the error but don't crash - allow app to show configuration screen
+            let errorMessage = "Failed to load Supabase configuration. Please ensure Config.plist exists with SupabaseURL and SupabaseKey."
+            print("❌ CONFIGURATION ERROR: \(errorMessage)")
+            
+            // Store error for UI to display
+            self.configurationError = errorMessage
+            
+            // Provide placeholder values to satisfy initialization requirements
+            // The app should check isConfigured before using SupabaseManager
+            self.baseURL = URL(string: "https://placeholder.supabase.co")!
+            self.client = SupabaseClient(
+                supabaseURL: URL(string: "https://placeholder.supabase.co")!,
+                supabaseKey: "placeholder_key_app_needs_configuration"
+            )
+            return
         }
         
         self.baseURL = supabaseUrl
-        
         self.client = SupabaseClient(
             supabaseURL: supabaseUrl,
             supabaseKey: key
         )
+        self.isConfigured = true
+        print("✅ SupabaseManager: Successfully configured with URL: \(supabaseUrl)")
     }
 
     // MARK: - Apple Sign In Integration

@@ -6,7 +6,12 @@
 //
 
 import SwiftUI
+import CoreLocation
 import MapKit
+
+#if canImport(GoogleMaps)
+import GoogleMaps
+#endif
 
 /// A small triangular tail for the pin.
 struct PinTail: Shape {
@@ -88,27 +93,66 @@ struct FriendPinView: View {
 
 struct FriendHistoryView: View {
     let user: AppUser
-    @State private var cameraPosition: MapCameraPosition
+    @ObservedObject private var mapConfig = MapConfiguration.shared
+    @State private var cameraPosition: GMSCameraPosition
+    @State private var appleMapsPosition: MapCameraPosition
 
     init(user: AppUser) {
         self.user = user
         let defaultCoordinate = CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
-        self._cameraPosition = State(initialValue: .region(MKCoordinateRegion(
-            center: CLLocationCoordinate2D(
-                latitude: user.latitude ?? defaultCoordinate.latitude,
-                longitude: user.longitude ?? defaultCoordinate.longitude
-            ),
+        let coordinate = CLLocationCoordinate2D(
+            latitude: user.latitude ?? defaultCoordinate.latitude,
+            longitude: user.longitude ?? defaultCoordinate.longitude
+        )
+        self._cameraPosition = State(initialValue: GMSCameraPosition.standard(coordinate: coordinate, zoom: 13.0))
+        self._appleMapsPosition = State(initialValue: .region(MKCoordinateRegion(
+            center: coordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )))
     }
 
     var body: some View {
-        Map(position: $cameraPosition) {
-            Annotation("", coordinate: CLLocationCoordinate2D(
-                latitude: user.latitude ?? 0,
-                longitude: user.longitude ?? 0
-            )) {
-                FriendPinView(imageName: "person.circle.fill", username: user.username)
+        ZStack {
+            if mapConfig.isGoogleMapsEnabled {
+                #if canImport(GoogleMaps)
+                GoogleMapsView(
+                    cameraPosition: $cameraPosition,
+                    selectedAnnotation: .constant(nil),
+                    annotations: [
+                        PinAnnotation(
+                            id: UUID(),
+                            latitude: user.latitude ?? 0,
+                            longitude: user.longitude ?? 0,
+                            title: user.username,
+                            customView: AnyView(FriendPinView(imageName: "person.circle.fill", username: user.username))
+                        )
+                    ],
+                    mapType: .normal,
+                    showsUserLocation: false,
+                    onCameraChange: nil,
+                    onAnnotationTap: nil
+                )
+                #else
+                // Fallback to Apple Maps when Google Maps SDK is not available
+                Map(position: $appleMapsPosition) {
+                    Annotation("", coordinate: CLLocationCoordinate2D(
+                        latitude: user.latitude ?? 0,
+                        longitude: user.longitude ?? 0
+                    )) {
+                        FriendPinView(imageName: "person.circle.fill", username: user.username)
+                    }
+                }
+                #endif
+            } else {
+                // Apple Maps when user selects it
+                Map(position: $appleMapsPosition) {
+                    Annotation("", coordinate: CLLocationCoordinate2D(
+                        latitude: user.latitude ?? 0,
+                        longitude: user.longitude ?? 0
+                    )) {
+                        FriendPinView(imageName: "person.circle.fill", username: user.username)
+                    }
+                }
             }
         }
         .ignoresSafeArea()
@@ -175,12 +219,12 @@ struct FindFriendsView: View {
     @EnvironmentObject var locationManager: AppLocationManager
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var pinStore: PinStore
-    @State private var cameraPosition: MapCameraPosition = .region(
-        MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
-            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-        )
-    )
+    @ObservedObject private var mapConfig = MapConfiguration.shared
+    @State private var cameraPosition: GMSCameraPosition = GMSCameraPosition.defaultSanFrancisco
+    @State private var appleMapsPosition: MapCameraPosition = .region(MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+    ))
     @State private var selectedUser: AppUser?
     @State private var showChat = false
     @State private var showProfile = false
@@ -209,11 +253,51 @@ struct FindFriendsView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                Map(position: $cameraPosition) {
-                    ForEach(allUsers) { user in
-                        if let coordinate = user.location {
-                            Annotation("", coordinate: coordinate) {
-                                FriendPinView(imageName: "person.circle.fill", username: user.username)
+                ZStack {
+                    if mapConfig.isGoogleMapsEnabled {
+                        #if canImport(GoogleMaps)
+                        GoogleMapsView(
+                            cameraPosition: $cameraPosition,
+                            selectedAnnotation: .constant(nil),
+                            annotations: allUsers.compactMap { user in
+                                guard let coordinate = user.location else { return nil }
+                                return PinAnnotation(
+                                    id: UUID(),
+                                    latitude: coordinate.latitude,
+                                    longitude: coordinate.longitude,
+                                    title: user.username,
+                                    customView: AnyView(FriendPinView(imageName: "person.circle.fill", username: user.username))
+                                )
+                            },
+                            mapType: .normal,
+                            showsUserLocation: true,
+                            onCameraChange: nil,
+                            onAnnotationTap: { annotationId in
+                                // Handle annotation tap
+                                // Note: We would need to map back to the user here
+                            }
+                        )
+                        #else
+                        // Fallback to Apple Maps when Google Maps SDK is not available
+                        Map(position: $appleMapsPosition) {
+                            ForEach(allUsers) { user in
+                                if let coordinate = user.location {
+                                    Annotation("", coordinate: coordinate) {
+                                        FriendPinView(imageName: "person.circle.fill", username: user.username)
+                                    }
+                                }
+                            }
+                        }
+                        #endif
+                    } else {
+                        // Apple Maps when user selects it
+                        Map(position: $appleMapsPosition) {
+                            ForEach(allUsers) { user in
+                                if let coordinate = user.location {
+                                    Annotation("", coordinate: coordinate) {
+                                        FriendPinView(imageName: "person.circle.fill", username: user.username)
+                                    }
+                                }
                             }
                         }
                     }
@@ -227,6 +311,13 @@ struct FindFriendsView: View {
                             latitude: location.coordinate.latitude,
                             longitude: location.coordinate.longitude
                         )
+                        
+                        // Update camera position to user's location for both map types
+                        cameraPosition = GMSCameraPosition.standard(coordinate: location.coordinate, zoom: 13.0)
+                        appleMapsPosition = .region(MKCoordinateRegion(
+                            center: location.coordinate,
+                            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                        ))
                     }
                     do {
                         print("FindFriendsView: fetching users...")

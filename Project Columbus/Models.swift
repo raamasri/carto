@@ -502,6 +502,38 @@ struct UserPublicKeyDB: Codable {
     let updated_at: String
 }
 
+// MARK: - Google Maps Support
+
+/**
+ * PinAnnotation
+ * 
+ * A data structure that represents map annotations for Google Maps,
+ * converting from our existing Pin model while supporting custom views.
+ */
+struct PinAnnotation: Identifiable {
+    let id: UUID
+    let latitude: Double
+    let longitude: Double
+    let title: String
+    let customView: AnyView?
+    
+    init(id: UUID, latitude: Double, longitude: Double, title: String, customView: AnyView? = nil) {
+        self.id = id
+        self.latitude = latitude
+        self.longitude = longitude
+        self.title = title
+        self.customView = customView
+    }
+    
+    init(from pin: Pin, customView: AnyView? = nil) {
+        self.id = pin.id
+        self.latitude = pin.latitude
+        self.longitude = pin.longitude
+        self.title = pin.locationName
+        self.customView = customView
+    }
+}
+
 // MARK: - Conversion Extensions
 extension Pin {
     func toMapItem() -> MKMapItem {
@@ -509,6 +541,11 @@ extension Pin {
         let item = MKMapItem(placemark: placemark)
         item.name = locationName
         return item
+    }
+    
+    // Google Maps conversion
+    func toGoogleMapsAnnotation(customView: AnyView? = nil) -> PinAnnotation {
+        return PinAnnotation(from: self, customView: customView)
     }
     
     func toPinDB(userId: String) -> PinDBInsert {
