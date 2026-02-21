@@ -91,6 +91,7 @@ iOSInjectionProject/
 
 # Configuration files with sensitive data
 Config.plist
+Project-Columbus-Info.plist
 *.plist.secret
 
 # macOS
