@@ -13,10 +13,11 @@ struct GeofenceManagementView: View {
     @EnvironmentObject var locationManager: AppLocationManager
     @Environment(\.dismiss) private var dismiss
     
-    @State private var geofences: [MockGeofence] = []
+    @State private var geofences: [Geofence] = []
     @State private var showingCreateGeofence: Bool = false
-    @State private var selectedGeofence: MockGeofence?
+    @State private var selectedGeofence: Geofence?
     @State private var isLoading: Bool = true
+    @State private var loadError: String?
     
     var body: some View {
         NavigationView {
@@ -24,6 +25,26 @@ struct GeofenceManagementView: View {
                 if isLoading {
                     ProgressView("Loading geofences...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let error = loadError {
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 64))
+                            .foregroundColor(.orange)
+                        Text("Failed to Load")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        Text(error)
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        Button("Retry") {
+                            loadError = nil
+                            loadGeofences()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if geofences.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "location.circle")
@@ -78,73 +99,70 @@ struct GeofenceManagementView: View {
                 loadGeofences()
             }
             .sheet(isPresented: $showingCreateGeofence) {
-                CreateGeofenceView { newGeofence in
-                    geofences.append(newGeofence)
+                CreateGeofenceView {
+                    loadGeofences()
                 }
             }
             .sheet(item: $selectedGeofence) { geofence in
-                GeofenceDetailView(geofence: geofence) { updatedGeofence in
-                    if let index = geofences.firstIndex(where: { $0.id == updatedGeofence.id }) {
-                        geofences[index] = updatedGeofence
-                    }
+                GeofenceDetailView(geofence: geofence) {
+                    loadGeofences()
                 }
             }
         }
     }
     
     private func loadGeofences() {
-        isLoading = true
-        
-        // Simulate loading with mock data
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            geofences = generateMockGeofences()
-            isLoading = false
+        Task {
+            isLoading = true
+            loadError = nil
+            
+            do {
+                let session = try await SupabaseManager.shared.client.auth.session
+                let userId = session.user.id.uuidString
+                
+                let fetched: [Geofence] = try await SupabaseManager.shared.client
+                    .from("geofences")
+                    .select()
+                    .eq("user_id", value: userId)
+                    .order("created_at", ascending: false)
+                    .execute()
+                    .value
+                
+                await MainActor.run {
+                    geofences = fetched
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    loadError = error.localizedDescription
+                    geofences = []
+                    isLoading = false
+                }
+            }
         }
     }
     
     private func deleteGeofences(at offsets: IndexSet) {
-        geofences.remove(atOffsets: offsets)
+        let geofencesToDelete = offsets.map { geofences[$0] }
+        
+        Task {
+            let client = SupabaseManager.shared.client
+            for geofence in geofencesToDelete {
+                _ = try? await client
+                    .from("geofences")
+                    .delete()
+                    .eq("id", value: geofence.id)
+                    .execute()
+            }
+            await MainActor.run {
+                geofences.remove(atOffsets: offsets)
+            }
+        }
     }
-    
-    private func generateMockGeofences() -> [MockGeofence] {
-        return [
-            MockGeofence(
-                id: UUID(),
-                name: "Home",
-                description: "Get notified when arriving home",
-                latitude: 37.7749,
-                longitude: -122.4194,
-                radius: 100,
-                isActive: true,
-                notificationType: "both"
-            ),
-            MockGeofence(
-                id: UUID(),
-                name: "Work",
-                description: "Track work arrivals and departures",
-                latitude: 37.7849,
-                longitude: -122.4094,
-                radius: 50,
-                isActive: true,
-                notificationType: "enter"
-            )
-        ]
-    }
-}
-
-struct MockGeofence: Identifiable {
-    let id: UUID
-    var name: String
-    var description: String
-    var latitude: Double
-    var longitude: Double
-    var radius: Double
-    var isActive: Bool
-    var notificationType: String
 }
 
 struct GeofenceRow: View {
-    let geofence: MockGeofence
+    let geofence: Geofence
     let onTap: () -> Void
     
     var body: some View {
@@ -155,10 +173,12 @@ struct GeofenceRow: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Text(geofence.description)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
+                    if let description = geofence.description, !description.isEmpty {
+                        Text(description)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
                     
                     HStack {
                         Label("\(Int(geofence.radius))m", systemImage: "location.circle")
@@ -210,7 +230,7 @@ struct GeofenceRow: View {
 
 struct CreateGeofenceView: View {
     @Environment(\.dismiss) private var dismiss
-    let onSave: (MockGeofence) -> Void
+    let onSaveComplete: () -> Void
     
     @State private var name: String = ""
     @State private var description: String = ""
@@ -218,6 +238,8 @@ struct CreateGeofenceView: View {
     @State private var radius: Double = 100
     @State private var notificationType: String = "both"
     @State private var showingLocationPicker: Bool = false
+    @State private var isSaving: Bool = false
+    @State private var saveError: String?
     
     let notificationTypes = [
         ("enter", "When Entering"),
@@ -228,6 +250,13 @@ struct CreateGeofenceView: View {
     var body: some View {
         NavigationView {
             Form {
+                if let error = saveError {
+                    Section {
+                        Text(error)
+                            .foregroundColor(.red)
+                    }
+                }
+                
                 Section(header: Text("Basic Information")) {
                     TextField("Name", text: $name)
                     TextField("Description", text: $description)
@@ -285,13 +314,14 @@ struct CreateGeofenceView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .disabled(isSaving)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         saveGeofence()
                     }
-                    .disabled(!canSave)
+                    .disabled(!canSave || isSaving)
                 }
             }
         }
@@ -309,38 +339,70 @@ struct CreateGeofenceView: View {
     private func saveGeofence() {
         guard let location = selectedLocation else { return }
         
-        let newGeofence = MockGeofence(
-            id: UUID(),
-            name: name,
-            description: description.isEmpty ? "Geofence for \(name)" : description,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            radius: radius,
-            isActive: true,
-            notificationType: notificationType
-        )
+        isSaving = true
+        saveError = nil
         
-        onSave(newGeofence)
-        dismiss()
+        Task {
+            do {
+                let session = try await SupabaseManager.shared.client.auth.session
+                
+                let insert = GeofenceInsert(
+                    user_id: session.user.id.uuidString,
+                    name: name,
+                    description: description.isEmpty ? nil : description,
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    radius: radius,
+                    notification_type: notificationType
+                )
+                
+                _ = try await SupabaseManager.shared.client
+                    .from("geofences")
+                    .insert(insert)
+                    .execute()
+                
+                await MainActor.run {
+                    onSaveComplete()
+                    dismiss()
+                    isSaving = false
+                }
+            } catch {
+                await MainActor.run {
+                    saveError = error.localizedDescription
+                    isSaving = false
+                }
+            }
+        }
     }
+}
+
+/// Payload for updating geofence fields in Supabase
+private struct GeofenceUpdatePayload: Encodable {
+    let name: String
+    let description: String?
+    let radius: Double
+    let is_active: Bool
+    let notification_type: String
 }
 
 struct GeofenceDetailView: View {
     @Environment(\.dismiss) private var dismiss
-    let geofence: MockGeofence
-    let onUpdate: (MockGeofence) -> Void
+    let geofence: Geofence
+    let onUpdateComplete: () -> Void
     
     @State private var name: String
     @State private var description: String
     @State private var radius: Double
     @State private var isActive: Bool
     @State private var notificationType: String
+    @State private var isSaving: Bool = false
+    @State private var saveError: String?
     
-    init(geofence: MockGeofence, onUpdate: @escaping (MockGeofence) -> Void) {
+    init(geofence: Geofence, onUpdateComplete: @escaping () -> Void) {
         self.geofence = geofence
-        self.onUpdate = onUpdate
+        self.onUpdateComplete = onUpdateComplete
         self._name = State(initialValue: geofence.name)
-        self._description = State(initialValue: geofence.description)
+        self._description = State(initialValue: geofence.description ?? "")
         self._radius = State(initialValue: geofence.radius)
         self._isActive = State(initialValue: geofence.isActive)
         self._notificationType = State(initialValue: geofence.notificationType)
@@ -349,6 +411,13 @@ struct GeofenceDetailView: View {
     var body: some View {
         NavigationView {
             Form {
+                if let error = saveError {
+                    Section {
+                        Text(error)
+                            .foregroundColor(.red)
+                    }
+                }
+                
                 Section(header: Text("Basic Information")) {
                     TextField("Name", text: $name)
                     TextField("Description", text: $description)
@@ -391,31 +460,51 @@ struct GeofenceDetailView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .disabled(isSaving)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         saveChanges()
                     }
+                    .disabled(isSaving)
                 }
             }
         }
     }
     
     private func saveChanges() {
-        let updatedGeofence = MockGeofence(
-            id: geofence.id,
-            name: name,
-            description: description,
-            latitude: geofence.latitude,
-            longitude: geofence.longitude,
-            radius: radius,
-            isActive: isActive,
-            notificationType: notificationType
-        )
+        isSaving = true
+        saveError = nil
         
-        onUpdate(updatedGeofence)
-        dismiss()
+        Task {
+            do {
+                let payload = GeofenceUpdatePayload(
+                    name: name,
+                    description: description.isEmpty ? nil : description,
+                    radius: radius,
+                    is_active: isActive,
+                    notification_type: notificationType
+                )
+                
+                _ = try await SupabaseManager.shared.client
+                    .from("geofences")
+                    .update(payload)
+                    .eq("id", value: geofence.id)
+                    .execute()
+                
+                await MainActor.run {
+                    onUpdateComplete()
+                    dismiss()
+                    isSaving = false
+                }
+            } catch {
+                await MainActor.run {
+                    saveError = error.localizedDescription
+                    isSaving = false
+                }
+            }
+        }
     }
 }
 
@@ -435,11 +524,10 @@ struct LocationPickerView: View {
                 Map(position: .constant(.region(region))) {
                     UserAnnotation()
                 }
-                    .onTapGesture { location in
-                        // Convert tap location to coordinate
-                        // This is a simplified version - actual implementation would need proper coordinate conversion
-                        selectedCoordinate = region.center
-                    }
+                .onTapGesture {
+                    // Use center as selected coordinate; tap location would require MapReader for proper conversion
+                    selectedCoordinate = region.center
+                }
                 
                 // Center pin
                 VStack {
@@ -473,8 +561,19 @@ struct LocationPickerView: View {
     }
 }
 
+// MARK: - Geofence Hashable for sheet(item:)
+extension Geofence: Hashable {
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    public static func == (lhs: Geofence, rhs: Geofence) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 struct GeofenceManagementView_Previews: PreviewProvider {
     static var previews: some View {
         GeofenceManagementView()
     }
-} 
+}

@@ -429,12 +429,12 @@ struct CreateStoryView: View {
         Task {
             isUploading = true
             do {
-                let mediaURL: String? = nil
-                
-                // Upload media if needed
-                if let _ = selectedImage {
-                    // TODO: Implement image upload to storage
-                    // mediaURL = try await uploadImage(image)
+                var mediaURL: String? = nil
+
+                if let image = selectedImage, let imageData = image.jpegData(compressionQuality: 0.8) {
+                    let fileName = "story_\(UUID().uuidString).jpg"
+                    let path = "story-images/\(fileName)"
+                    mediaURL = try await SupabaseManager.shared.storageService.uploadImage(imageData, to: "story-images", path: path)
                 }
                 
                 let story = try await supabaseManager.createLocationStory(

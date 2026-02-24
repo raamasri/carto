@@ -680,8 +680,16 @@ struct WriteReviewView: View {
         Task {
             isSubmitting = true
             do {
-                // TODO: Upload images and get URLs
-                let mediaURLs: [String] = []
+                var mediaURLs: [String] = []
+                for image in selectedImages {
+                    if let imageData = image.jpegData(compressionQuality: 0.8) {
+                        let fileName = "review_\(UUID().uuidString).jpg"
+                        let path = "review-images/\(pin.id.uuidString)/\(fileName)"
+                        if let url = try? await SupabaseManager.shared.storageService.uploadImage(imageData, to: "review-images", path: path) {
+                            mediaURLs.append(url)
+                        }
+                    }
+                }
                 
                 let review = try await supabaseManager.createLocationReview(
                     pinId: pin.id,

@@ -5,13 +5,11 @@
 //  Created by raama srivatsan on 5/20/25.
 //
 
-
 import SwiftUI
 import MapKit
 import Foundation
 import AVKit
 import PhotosUI
-// Pin is defined in Models.swift in the same module
 
 struct PinCardView: View {
     let pin: Pin
@@ -24,63 +22,91 @@ struct PinCardView: View {
     @State private var showLocationDetail = false
     @State private var selectedPhotoIndex = 0
     @State private var showAddPhotoSheet = false
+    @State private var showCommentsSheet = false
+    @State private var reactions: [PinReaction] = []
+    @State private var userReaction: PinReactionType? = nil
+    @State private var commentsCount: Int = 0
+    @State private var authorAvatarURL: String? = nil
     @EnvironmentObject var pinStore: PinStore
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var locationManager: AppLocationManager
 
-    // Helper: Relative date string
     private var relativeDateString: String {
         let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
+        formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: pin.createdAt, relativeTo: Date())
     }
 
-    // Helper: Calculate distance from current location
     private var distanceFromUser: String? {
         guard let currentLocation = locationManager.currentLocation else { return nil }
         let pinLocation = CLLocation(latitude: pin.latitude, longitude: pin.longitude)
         let distance = currentLocation.distance(from: pinLocation)
-        
-        // Convert to miles and format
         let miles = distance * 0.000621371
-        if miles < 0.1 {
-            return "< 0.1mi"
-        } else if miles < 10 {
-            return String(format: "%.1fmi", miles)
-        } else {
-            return String(format: "%.0fmi", miles)
-        }
+        if miles < 0.1 { return "< 0.1mi" }
+        else if miles < 10 { return String(format: "%.1fmi", miles) }
+        else { return String(format: "%.0fmi", miles) }
     }
 
-    // Helper: Check if current user is the author
     private var isCurrentUserAuthor: Bool {
         guard let currentUsername = authManager.currentUsername else { return false }
         return pin.authorHandle.contains(currentUsername)
     }
 
-    // Helper: Get lists containing this pin
+    private var authorFirstName: String {
+        let handle = pin.authorHandle.replacingOccurrences(of: "@", with: "")
+        let name = handle.split(separator: " ").first.map(String.init) ?? handle
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
+
+    private var actionVerb: String {
+        switch pin.reaction {
+        case .lovedIt: return "tried"
+        case .wantToGo: return "saved"
+        }
+    }
+
+    private var categoryEmoji: String {
+        let name = pin.locationName.lowercased()
+        let lists = pinStore.lists.filter { list in
+            list.pins.contains(where: { $0.id == pin.id })
+        }
+        let listName = lists.first?.name.lowercased() ?? ""
+        
+        if listName.contains("coffee") || name.contains("coffee") || name.contains("cafe") { return "☕" }
+        if listName.contains("restaurant") || name.contains("restaurant") { return "🍽️" }
+        if listName.contains("bar") || name.contains("bar") || name.contains("pub") || name.contains("brewery") { return "🍸" }
+        if listName.contains("bakery") || name.contains("bakery") || name.contains("croissant") { return "🥐" }
+        if name.contains("taco") || name.contains("mexican") { return "🌮" }
+        if name.contains("pizza") { return "🍕" }
+        if name.contains("trail") || name.contains("hike") || name.contains("park") { return "🌲" }
+        if name.contains("beach") { return "🏖️" }
+        if name.contains("museum") || name.contains("gallery") { return "🏛️" }
+        if name.contains("gym") || name.contains("fitness") { return "💪" }
+        return ""
+    }
+
     private func getListsContainingPin() -> [PinList] {
         return pinStore.lists.filter { list in
             list.pins.contains { existingPin in
-                let latitudeDiff = abs(existingPin.latitude - pin.latitude)
-                let longitudeDiff = abs(existingPin.longitude - pin.longitude)
-                let isLocationMatch = latitudeDiff < 0.0001 && longitudeDiff < 0.0001
-                let isNameMatch = existingPin.locationName.lowercased() == pin.locationName.lowercased()
-                return isLocationMatch || isNameMatch
+                let latDiff = abs(existingPin.latitude - pin.latitude)
+                let lngDiff = abs(existingPin.longitude - pin.longitude)
+                return (latDiff < 0.0001 && lngDiff < 0.0001) ||
+                       existingPin.locationName.lowercased() == pin.locationName.lowercased()
             }
         }
     }
 
-    // Helper: Get list indicator text
-    private func getListIndicatorText(_ lists: [PinList]) -> String {
-        if lists.count == 1 {
-            return "In \(lists.first!.name)"
-        } else {
-            return "In \(lists.count) lists"
-        }
+    private func friendsWhoReviewed() -> [(AppUser, Pin)] {
+        let allPins = pinStore.masterPins
+        let placePins = allPins.filter { abs($0.latitude - pin.latitude) < 0.0001 && abs($0.longitude - pin.longitude) < 0.0001 }
+        return placePins.compactMap { p in
+            if let user = friends.first(where: { $0.username == p.authorHandle.replacingOccurrences(of: "@", with: "") }) {
+                return (user, p)
+            }
+            return nil
+        }.sorted { $0.1.createdAt > $1.1.createdAt }
     }
 
-    // Helper: Styled review text with mentions
     private func styledReview(_ text: String) -> Text {
         let words = text.split(separator: " ")
         var result = Text("")
@@ -95,370 +121,37 @@ struct PinCardView: View {
         return result
     }
 
-    // Helper: Avatars for friends who reviewed this place
-    private func friendsWhoReviewed() -> [(AppUser, Pin)] {
-        let allPins = pinStore.masterPins
-        let placePins = allPins.filter { abs($0.latitude - pin.latitude) < 0.0001 && abs($0.longitude - pin.longitude) < 0.0001 }
-        return placePins.compactMap { p in
-            if let user = friends.first(where: { $0.username == p.authorHandle.replacingOccurrences(of: "@", with: "") }) {
-                return (user, p)
-            }
-            return nil
-        }.sorted { $0.1.createdAt > $1.1.createdAt }
-    }
-
-    // Friend Avatar View Component
-    private struct FriendAvatarView: View {
-        let user: AppUser
-        
-        var body: some View {
-            if let avatar = user.avatarURL, !avatar.isEmpty, let url = URL(string: avatar) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    default:
-                        Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray)
-                    }
-                }
-                .frame(width: 24, height: 24)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
-            } else {
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .foregroundColor(.gray)
-                    .frame(width: 24, height: 24)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
-            }
-        }
-    }
-
-    // Friend Avatars Row Content
-    private struct FriendAvatarsRowContent: View {
-        let friendPins: [(AppUser, Pin)]
-        let count: Int
-        let onTap: () -> Void
-        
-        var body: some View {
-            HStack(spacing: -10) {
-                ForEach(Array(friendPins.prefix(3).enumerated()), id: \.element.0.id) { _, element in
-                    let (user, _) = element
-                    FriendAvatarView(user: user)
-                }
-                if count > 3 {
-                    Text("+\(count - 3)")
-                        .font(.caption)
-                        .padding(.leading, 4)
-                }
-            }
-            .padding(.vertical, 2)
-            .onTapGesture(perform: onTap)
-        }
-    }
-
-    private var friendsAvatarsRow: some View {
-        let friendPins = friendsWhoReviewed()
-        let count = friendPins.count
-        
-        return Group {
-            if isLoadingFriends {
-                ProgressView().frame(width: 24, height: 24)
-            } else if count > 0 {
-                FriendAvatarsRowContent(
-                    friendPins: friendPins,
-                    count: count,
-                    onTap: { showFriendReviewList = true }
-                )
-            }
-        }
-    }
-
-    // Helper: Trip tag
-    private var tripTag: some View {
-        Group {
-            if let trip = pin.tripName, !trip.isEmpty {
-                Text(trip)
-                    .font(.caption2)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.blue.opacity(0.15))
-                    .foregroundColor(.blue)
-                    .cornerRadius(8)
-            }
-        }
-    }
-
-    // Helper: List indicator
-    private var listIndicator: some View {
-        Group {
-            let listsContainingPin = getListsContainingPin()
-            if !listsContainingPin.isEmpty {
-                Button(action: {
-                    showAddToList = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.caption)
-                        Text(getListIndicatorText(listsContainingPin))
-                            .font(.caption)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.green)
-                    .cornerRadius(12)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    var hasReviewOrMedia: Bool {
-        (pin.reviewText?.isEmpty == false) || !(pin.mediaURLs?.isEmpty ?? true)
-    }
-
-    // Enhanced header with rating, distance, and mini map
-    private var enhancedHeader: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 10) {
-                    Text(pin.locationName)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    if let rating = pin.starRating {
-                        HStack(spacing: 3) {
-                            Text(String(format: "%.1f", rating))
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                            Image(systemName: "star.fill")
-                                .font(.caption)
-                                .foregroundColor(.yellow)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.yellow.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    // Show city/address information
-                    if !pin.city.isEmpty {
-                        HStack(spacing: 6) {
-                            Image(systemName: "mappin.circle")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            Text(pin.city)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    
-                    // Show distance from user
-                    if let distance = distanceFromUser {
-                        HStack(spacing: 6) {
-                            Image(systemName: "location")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            Text(distance)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-            }
-            
-            Spacer(minLength: 12)
-            
-            // Mini map
-            miniMap
-        }
-    }
-
-    private var miniMap: some View {
-        Map(
-            coordinateRegion: .constant(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
-                span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
-            )),
-            annotationItems: [pin]
-        ) { pin in
-            MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                Image(systemName: "mappin.circle.fill")
-                    .resizable()
-                    .frame(width: 20, height: 20)
-                    .foregroundColor(.red)
-                    .shadow(radius: 1)
-            }
-        }
-        .frame(width: 56, height: 56)
-        .cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.blue.opacity(0.3), lineWidth: 1))
-        .onTapGesture { showLocationDetail = true }
-    }
-
-    // Enhanced photo carousel with add photo functionality
-    private var photoCarousel: some View {
-        ZStack(alignment: .bottomTrailing) {
-            TabView(selection: $selectedPhotoIndex) {
-                ForEach(Array((pin.mediaURLs ?? []).enumerated()), id: \.offset) { index, urlString in
-                    if urlString.hasSuffix(".mp4"), let url = URL(string: urlString) {
-                        VideoPlayer(player: AVPlayer(url: url))
-                            .aspectRatio(16/9, contentMode: .fit)
-                            .clipped()
-                            .tag(index)
-                    } else if let url = URL(string: urlString) {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .clipped()
-                            } else {
-                                Color.gray.opacity(0.2)
-                            }
-                        }
-                        .tag(index)
-                    } else {
-                        Color.gray.opacity(0.2).tag(index)
-                    }
-                }
-            }
-            .frame(height: 200)
-            .tabViewStyle(.page(indexDisplayMode: .always))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // Photo + button (only for current user's pins)
-            if isCurrentUserAuthor {
-                Button(action: {
-                    showAddPhotoSheet = true
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "photo")
-                            .font(.caption)
-                        Text("+")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.black.opacity(0.7))
-                    .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
-                .padding(10)
-            }
-        }
-    }
+    // MARK: - Body
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Enhanced header with rating, distance, MAP button
-                enhancedHeader
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 16)
-                
-                // Friends avatars row (if any)
-                let friendPins = friendsWhoReviewed()
-                if !friendPins.isEmpty {
-                    friendsAvatarsRow
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 12)
-                }
-                
-                // Review text (expanded)
-                if let review = pin.reviewText, !review.isEmpty {
-                    styledReview(review)
-                        .font(.body)
-                        .foregroundColor(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .lineLimit(nil)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
-                }
-                
-                // Enhanced photo carousel
-                if let media = pin.mediaURLs, !media.isEmpty {
-                    photoCarousel
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
-                }
-                
-                // Trip tag and timestamp
-                HStack(spacing: 8) {
-                    tripTag
-                    Text(relativeDateString)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
-                
-                // Action icons and author
-                HStack {
-                    Text(pin.authorHandle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    HStack(spacing: 20) {
-                        Image(systemName: "heart")
-                            .font(.system(size: 16))
-                        Image(systemName: "message")
-                            .font(.system(size: 16))
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16))
-                        Image(systemName: "bookmark")
-                            .font(.system(size: 16))
-                    }
-                    .foregroundColor(.gray)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
-            }
-            .background(Color(.systemBackground))
-            .cornerRadius(16)
-            .shadow(color: Color.black.opacity(hasReviewOrMedia ? 0.1 : 0.04), radius: hasReviewOrMedia ? 8 : 4, x: 0, y: hasReviewOrMedia ? 4 : 2)
+        VStack(alignment: .leading, spacing: 0) {
+            userHeader
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 8)
 
-            // List indicator in bottom left corner
-            VStack {
-                Spacer()
-                HStack {
-                    listIndicator
-                    Spacer()
-                    
-                    // Add to List button (only for non-current user pins)
-                    if !isCurrentUserAuthor {
-                        Button(action: {
-                            print("Add to List tapped for \(pin.locationName)")
-                            showAddToList = true
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.blue)
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "plus")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
-                        }
-                        .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(12)
+            heroSection
+
+            if let review = pin.reviewText, !review.isEmpty {
+                styledReview(review)
+                    .font(.system(size: 14))
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 10)
             }
+
+            Divider()
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+
+            actionBar
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
         }
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
         .sheet(isPresented: $showAddToList) {
             AddToListSheet(pin: pin) { list in
                 pinStore.addPin(pin, to: list)
@@ -468,7 +161,9 @@ struct PinCardView: View {
         .sheet(isPresented: $showLocationDetail) {
             LocationDetailView(
                 mapItem: pin.toMapItem(),
-                onAddPin: { _ in }
+                onAddPin: { newPin in
+                    pinStore.addPin(newPin, to: "Favorites")
+                }
             )
             .environmentObject(pinStore)
             .environmentObject(authManager)
@@ -478,6 +173,19 @@ struct PinCardView: View {
         }
         .alert("Added to List!", isPresented: $showAddedAlert) {
             Button("OK", role: .cancel) { }
+        }
+        .sheet(isPresented: $showFriendReviewList) {
+            FriendReviewListView(
+                placeName: pin.locationName,
+                latitude: pin.latitude,
+                longitude: pin.longitude,
+                allPins: pinStore.masterPins,
+                friends: friends
+            )
+        }
+        .sheet(isPresented: $showCommentsSheet) {
+            CommentsAndReactionsView(pin: pin)
+                .environmentObject(authManager)
         }
         .onAppear {
             if friends.isEmpty, let userID = authManager.currentUserID {
@@ -491,26 +199,374 @@ struct PinCardView: View {
                 }
             }
         }
-        .sheet(isPresented: $showFriendReviewList) {
-            FriendReviewListView(
-                placeName: pin.locationName,
-                latitude: pin.latitude,
-                longitude: pin.longitude,
-                allPins: pinStore.masterPins,
-                friends: friends
+        .task {
+            await loadSocialData()
+            await loadAuthorAvatar()
+        }
+    }
+
+    private static let avatarColors: [Color] = [
+        Color(red: 0.85, green: 0.92, blue: 0.95),
+        Color(red: 0.95, green: 0.88, blue: 0.85),
+        Color(red: 0.88, green: 0.95, blue: 0.88),
+        Color(red: 0.93, green: 0.88, blue: 0.95),
+        Color(red: 0.95, green: 0.93, blue: 0.85),
+    ]
+
+    private var avatarColor: Color {
+        let index = abs(pin.authorHandle.hashValue) % Self.avatarColors.count
+        return Self.avatarColors[index]
+    }
+
+    private var avatarFallback: some View {
+        Circle()
+            .fill(avatarColor)
+            .frame(width: 34, height: 34)
+            .overlay(
+                Text(authorFirstName.prefix(1).uppercased())
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
             )
+    }
+
+    // MARK: - User Header
+
+    private var userHeader: some View {
+        HStack(spacing: 10) {
+            // Real avatar from Supabase user profile, with initial-letter fallback
+            if let urlStr = authorAvatarURL, !urlStr.isEmpty, let url = URL(string: urlStr) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        avatarFallback
+                    }
+                }
+                .frame(width: 34, height: 34)
+                .clipShape(Circle())
+            } else {
+                avatarFallback
+            }
+
+            HStack(spacing: 0) {
+                Text(authorFirstName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                Text(" \(actionVerb)")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                Text(" · \(relativeDateString)")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(.tertiaryLabel))
+            }
+
+            Spacer()
+
+            Menu {
+                Button { showLocationDetail = true } label: {
+                    Label("View Details", systemImage: "info.circle")
+                }
+                Button { sharePin() } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                if !isCurrentUserAuthor {
+                    Button { showAddToList = true } label: {
+                        Label("Add to List", systemImage: "plus.circle")
+                    }
+                }
+                if isCurrentUserAuthor {
+                    Button { showAddPhotoSheet = true } label: {
+                        Label("Add Photos", systemImage: "photo")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(.tertiaryLabel))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+        }
+    }
+
+    // MARK: - Hero Section
+
+    private var heroSection: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                if let media = pin.mediaURLs, !media.isEmpty {
+                    photoCarousel(media, width: geo.size.width)
+                } else {
+                    mapSnapshot
+                }
+
+                // Dark gradient overlay for text readability
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.3),
+                        .init(color: .black.opacity(0.7), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                // Name and city overlay
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 5) {
+                        Text(pin.locationName)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        if !categoryEmoji.isEmpty {
+                            Text(categoryEmoji)
+                                .font(.system(size: 16))
+                        }
+                        Spacer()
+                        if let rating = pin.starRating, rating > 0 {
+                            Text("❤️")
+                                .font(.system(size: 14))
+                        }
+                    }
+
+                    if !pin.city.isEmpty {
+                        HStack(spacing: 4) {
+                            Text(pin.city)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.65))
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
+            }
+        }
+        .frame(height: 180)
+        .clipped()
+    }
+
+    private func photoCarousel(_ media: [String], width: CGFloat) -> some View {
+        TabView(selection: $selectedPhotoIndex) {
+            ForEach(Array(media.enumerated()), id: \.offset) { index, urlString in
+                if urlString.hasSuffix(".mp4"), let url = URL(string: urlString) {
+                    VideoPlayer(player: AVPlayer(url: url))
+                        .frame(width: width, height: 180)
+                        .clipped()
+                        .tag(index)
+                } else if let url = URL(string: urlString) {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: width, height: 180)
+                                .clipped()
+                        } else {
+                            Color.gray.opacity(0.1)
+                                .frame(width: width, height: 180)
+                        }
+                    }
+                    .tag(index)
+                } else {
+                    Color.gray.opacity(0.1)
+                        .frame(width: width, height: 180)
+                        .tag(index)
+                }
+            }
+        }
+        .frame(height: 180)
+        .tabViewStyle(.page(indexDisplayMode: media.count > 1 ? .always : .never))
+        .clipped()
+    }
+
+    @State private var snapshotImage: UIImage? = nil
+
+    private var mapSnapshot: some View {
+        Group {
+            if let img = snapshotImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: 180)
+                    .clipped()
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.08))
+                    .frame(height: 180)
+                    .overlay(
+                        ProgressView()
+                    )
+                    .onAppear { generateSnapshot() }
+            }
+        }
+    }
+
+    private func generateSnapshot() {
+        let options = MKMapSnapshotter.Options()
+        options.region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
+            span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
+        )
+        options.size = CGSize(width: 400, height: 220)
+        options.scale = UIScreen.main.scale
+
+        let snapshotter = MKMapSnapshotter(options: options)
+        snapshotter.start { snapshot, error in
+            guard let snapshot = snapshot else { return }
+
+            let renderer = UIGraphicsImageRenderer(size: snapshot.image.size)
+            let annotatedImage = renderer.image { ctx in
+                snapshot.image.draw(at: .zero)
+                let point = snapshot.point(for: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
+                let pinSize: CGFloat = 24
+                let rect = CGRect(x: point.x - pinSize/2, y: point.y - pinSize, width: pinSize, height: pinSize)
+                ctx.cgContext.setFillColor(UIColor.systemRed.cgColor)
+                ctx.cgContext.fillEllipse(in: CGRect(x: rect.midX - 8, y: rect.minY, width: 16, height: 16))
+                ctx.cgContext.setFillColor(UIColor.white.cgColor)
+                ctx.cgContext.fillEllipse(in: CGRect(x: rect.midX - 4, y: rect.minY + 4, width: 8, height: 8))
+            }
+            DispatchQueue.main.async {
+                snapshotImage = annotatedImage
+            }
+        }
+    }
+
+    private let tealAccent = Color(red: 0.18, green: 0.55, blue: 0.53)
+
+    // MARK: - Action Bar
+
+    private var actionBar: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 14) {
+                // Save -> opens AddToListSheet which persists via pinStore.addPin -> SupabaseManager.addPinToListById -> createPin (creates friend activity)
+                Button { showAddToList = true } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Save")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                // Comment -> opens CommentsAndReactionsView which uses SupabaseManager.addComment / getComments
+                Button { showCommentsSheet = true } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "bubble.left.fill")
+                            .font(.system(size: 14))
+                        if commentsCount > 0 {
+                            Text("\(commentsCount)")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                    }
+                    .foregroundColor(Color(.tertiaryLabel))
+                }
+                .buttonStyle(.plain)
+
+                // Share -> opens iOS share sheet
+                Button { sharePin() } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(.tertiaryLabel))
+                }
+                .buttonStyle(.plain)
+
+                // Heart reaction -> SupabaseManager.addReaction / removeReaction
+                Button {
+                    Task { await toggleReaction() }
+                } label: {
+                    Image(systemName: userReaction != nil ? "heart.fill" : "heart")
+                        .font(.system(size: 14))
+                        .foregroundColor(userReaction != nil ? .red : Color(.tertiaryLabel))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+
+            // Add to Map -> adds to user's list and opens detail
+            Button { addToMapAndShow() } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 12))
+                    Text("Add to Map")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundColor(tealAccent)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func sharePin() {
+        let text = "Check out \(pin.locationName) in \(pin.city)!"
+        let activityVC = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = scene.windows.first?.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+    }
+
+    private func addToMapAndShow() {
+        if !isCurrentUserAuthor {
+            pinStore.addPin(pin, to: "Favorites")
+        }
+        showLocationDetail = true
+    }
+
+    private func toggleReaction() async {
+        if userReaction != nil {
+            let success = await SupabaseManager.shared.removeReaction(pinId: pin.id)
+            if success {
+                await MainActor.run { userReaction = nil }
+                await loadSocialData()
+            }
+        } else {
+            let success = await SupabaseManager.shared.addReaction(pinId: pin.id, reactionType: .like)
+            if success {
+                await MainActor.run { userReaction = .like }
+                await loadSocialData()
+            }
+        }
+    }
+
+    private func loadSocialData() async {
+        guard let userId = authManager.currentUserID else { return }
+        async let reactionsTask = SupabaseManager.shared.getReactions(for: pin.id)
+        async let commentsTask = SupabaseManager.shared.getComments(for: pin.id, currentUserId: userId)
+        let (fetchedReactions, fetchedComments) = await (reactionsTask, commentsTask)
+        await MainActor.run {
+            reactions = fetchedReactions
+            commentsCount = fetchedComments.count
+            userReaction = fetchedReactions.first(where: { $0.userId == userId })?.reactionType
+        }
+    }
+
+    private func loadAuthorAvatar() async {
+        let username = pin.authorHandle.replacingOccurrences(of: "@", with: "")
+        if let user = try? await SupabaseManager.shared.getUserByUsername(username) {
+            await MainActor.run {
+                authorAvatarURL = user.avatarURL
+            }
         }
     }
 }
 
 // MARK: - Add Photo to Existing Pin Sheet
+
 struct AddPhotoToExistingPinSheet: View {
     let pin: Pin
     @Environment(\.dismiss) var dismiss
     @State private var showingPhotoPicker = false
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isUploading = false
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
@@ -518,15 +574,15 @@ struct AddPhotoToExistingPinSheet: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                     .multilineTextAlignment(.center)
-                
+
                 Text("Add more photos or videos to this location")
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
-                
-                Button(action: {
+
+                Button {
                     showingPhotoPicker = true
-                }) {
+                } label: {
                     HStack {
                         Image(systemName: "photo.on.rectangle.angled")
                         Text("Select Photos")
@@ -538,12 +594,12 @@ struct AddPhotoToExistingPinSheet: View {
                     .background(Color.blue)
                     .cornerRadius(12)
                 }
-                
+
                 if isUploading {
                     ProgressView("Uploading photos...")
                         .padding()
                 }
-                
+
                 Spacer()
             }
             .padding()
@@ -567,23 +623,39 @@ struct AddPhotoToExistingPinSheet: View {
             }
         }
     }
-    
+
     private func uploadPhotos(_ items: [PhotosPickerItem]) {
         isUploading = true
-        // TODO: Implement photo upload functionality
-        // This would involve:
-        // 1. Converting PhotosPickerItems to Data
-        // 2. Uploading to Supabase Storage
-        // 3. Updating the pin's mediaURLs array
-        // 4. Refreshing the pin store
-        
-        // For now, just simulate upload
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            isUploading = false
-            dismiss()
+        Task {
+            var uploadedURLs: [String] = pin.mediaURLs ?? []
+            for item in items {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    do {
+                        let url = try await SupabaseManager.shared.storageService.uploadPinImage(data, for: pin.id.uuidString)
+                        uploadedURLs.append(url)
+                    } catch {
+                        print("Failed to upload image: \(error)")
+                    }
+                }
+            }
+            do {
+                try await SupabaseManager.shared.client
+                    .from("pins")
+                    .update(["media_urls": uploadedURLs])
+                    .eq("id", value: pin.id.uuidString)
+                    .execute()
+            } catch {
+                print("Failed to update pin media URLs: \(error)")
+            }
+            await MainActor.run {
+                isUploading = false
+                dismiss()
+            }
         }
     }
 }
+
+// MARK: - Add To List Sheet
 
 struct AddToListSheet: View {
     let pin: Pin
@@ -594,57 +666,42 @@ struct AddToListSheet: View {
     @State private var newListName = ""
     @State private var showCreateList = false
 
-    // Helper to check if a list contains this pin (by coordinates or name)
     private func listContainsPin(_ list: PinList) -> Bool {
         list.pins.contains { existingPin in
-            let latitudeDiff = abs(existingPin.latitude - pin.latitude)
-            let longitudeDiff = abs(existingPin.longitude - pin.longitude)
-            let isLocationMatch = latitudeDiff < 0.0001 && longitudeDiff < 0.0001
-            let isNameMatch = existingPin.locationName.lowercased() == pin.locationName.lowercased()
-            return isLocationMatch || isNameMatch
+            let latDiff = abs(existingPin.latitude - pin.latitude)
+            let lngDiff = abs(existingPin.longitude - pin.longitude)
+            return (latDiff < 0.0001 && lngDiff < 0.0001) ||
+                   existingPin.locationName.lowercased() == pin.locationName.lowercased()
         }
     }
-    
+
     private var filteredLists: [PinList] {
-        if searchText.isEmpty {
-            return pinStore.lists.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        } else {
-            return pinStore.lists.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        }
+        let sorted = pinStore.lists.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        if searchText.isEmpty { return sorted }
+        return sorted.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // Header with location info
                 VStack(spacing: 12) {
                     HStack {
                         Image(systemName: "mappin.circle.fill")
                             .foregroundColor(.blue)
                             .font(.title2)
-                        
                         VStack(alignment: .leading, spacing: 2) {
                             Text(pin.locationName)
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                                .lineLimit(1)
-                            
+                                .font(.headline).fontWeight(.semibold).lineLimit(1)
                             Text(pin.city)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
+                                .font(.subheadline).foregroundColor(.secondary).lineLimit(1)
                         }
-                        
                         Spacer()
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
-                    
-                    // Search bar
+
                     HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.gray)
+                        Image(systemName: "magnifyingglass").foregroundColor(.gray)
                         TextField("Search lists...", text: $searchText)
                             .textFieldStyle(PlainTextFieldStyle())
                     }
@@ -655,86 +712,49 @@ struct AddToListSheet: View {
                     .padding(.horizontal)
                 }
                 .padding(.bottom, 16)
-                
-                // Lists section
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Your Lists")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        
+                        Text("Your Lists").font(.title3).fontWeight(.semibold)
                         Spacer()
-                        
                         Text("\(pinStore.lists.count)")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.regularMaterial)
-                            .cornerRadius(8)
+                            .font(.caption).fontWeight(.medium).foregroundColor(.secondary)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(.regularMaterial).cornerRadius(8)
                     }
                     .padding(.horizontal, 20)
-                    
+
                     ScrollView {
                         LazyVStack(spacing: 8) {
                             ForEach(filteredLists, id: \.id) { list in
-                                Button(action: {
+                                Button {
                                     onSelect(list.name)
                                     dismiss()
-                                }) {
+                                } label: {
                                     HStack(spacing: 16) {
-                                        // List icon
                                         ZStack {
-                                            Circle()
-                                                .fill(.blue.opacity(0.1))
-                                                .frame(width: 44, height: 44)
-                                            
+                                            Circle().fill(.blue.opacity(0.1)).frame(width: 44, height: 44)
                                             Image(systemName: iconForList(list.name))
-                                                .font(.system(size: 18, weight: .medium))
-                                                .foregroundColor(.blue)
+                                                .font(.system(size: 18, weight: .medium)).foregroundColor(.blue)
                                         }
-                                        
-                                        // List info
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(list.name)
-                                                .font(.headline)
-                                                .fontWeight(.medium)
-                                                .foregroundColor(.primary)
-                                                .lineLimit(1)
-                                            
-                                            Text("\(list.pins.count) places")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                            Text(list.name).font(.headline).fontWeight(.medium).foregroundColor(.primary).lineLimit(1)
+                                            Text("\(list.pins.count) places").font(.subheadline).foregroundColor(.secondary)
                                         }
-                                        
                                         Spacer()
-                                        
-                                        // Checkmark for existing lists
                                         if listContainsPin(list) {
                                             ZStack {
-                                                Circle()
-                                                    .fill(.green)
-                                                    .frame(width: 28, height: 28)
-                                                
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 12, weight: .bold))
-                                                    .foregroundColor(.white)
+                                                Circle().fill(.green).frame(width: 28, height: 28)
+                                                Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
                                             }
                                         } else {
-                                            Image(systemName: "plus.circle")
-                                                .font(.system(size: 24))
-                                                .foregroundColor(.blue)
+                                            Image(systemName: "plus.circle").font(.system(size: 24)).foregroundColor(.blue)
                                         }
                                     }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
                                     .background(listContainsPin(list) ? .green.opacity(0.05) : .clear)
                                     .background(.regularMaterial)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(listContainsPin(list) ? .green.opacity(0.3) : .clear, lineWidth: 1)
-                                    )
+                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(listContainsPin(list) ? .green.opacity(0.3) : .clear, lineWidth: 1))
                                     .cornerRadius(12)
                                     .padding(.horizontal)
                                 }
@@ -744,30 +764,19 @@ struct AddToListSheet: View {
                         .padding(.vertical, 8)
                     }
                 }
-                
+
                 Spacer()
-                
-                // Create new list button
-                Button(action: {
-                    showCreateList = true
-                }) {
+
+                Button { showCreateList = true } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                        Text("Create New List")
-                            .font(.headline)
-                            .fontWeight(.medium)
+                        Image(systemName: "plus.circle.fill").font(.title2)
+                        Text("Create New List").font(.headline).fontWeight(.medium)
                         Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right").font(.caption).foregroundColor(.secondary)
                     }
                     .foregroundColor(.blue)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(.regularMaterial)
-                    .cornerRadius(10)
-                    .padding(.horizontal)
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .background(.regularMaterial).cornerRadius(10).padding(.horizontal)
                 }
                 .padding(.bottom, 20)
             }
@@ -775,9 +784,7 @@ struct AddToListSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
                 }
             }
         }
@@ -792,22 +799,17 @@ struct AddToListSheet: View {
                     dismiss()
                 }
             }
-            Button("Cancel", role: .cancel) {
-                newListName = ""
-            }
+            Button("Cancel", role: .cancel) { newListName = "" }
         } message: {
             Text("Enter a name for your new list")
         }
         .onAppear {
-            // Ensure lists are loaded when sheet appears
             if pinStore.lists.isEmpty {
-                Task {
-                    await pinStore.refresh()
-                }
+                Task { await pinStore.refresh() }
             }
         }
     }
-    
+
     private func iconForList(_ name: String) -> String {
         switch name.lowercased() {
         case "favorites": return "heart.fill"

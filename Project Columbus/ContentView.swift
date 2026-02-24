@@ -2119,6 +2119,8 @@ struct MainMapView: View {
         .sheet(isPresented: $showAccountSettings) {
             SettingsView()
                 .environmentObject(authManager)
+                .environmentObject(locationManager)
+                .environmentObject(pinStore)
         }
         .sheet(isPresented: $showSearchResults) {
             VStack(spacing: 0) {
@@ -2583,6 +2585,8 @@ struct NavigationSidebar: View {
     @Binding var showAccountMenu: Bool
     @Binding var showProfileEdit: Bool
     @Binding var showAccountSettings: Bool
+    @EnvironmentObject var pinStore: PinStore
+    @EnvironmentObject var locationManager: AppLocationManager
     
     var body: some View {
         HStack {
@@ -2662,7 +2666,7 @@ struct NavigationSidebar: View {
                     NavigationLink(destination: FriendActivityFeedView()
                         .environmentObject(authManager)
                         .environmentObject(SupabaseManager.shared)
-                        .environmentObject(PinStore())
+                        .environmentObject(pinStore)
                         .onAppear {
                             print("📱 FriendActivityFeedView appeared from sidebar")
                         }
@@ -2685,7 +2689,7 @@ struct NavigationSidebar: View {
                     NavigationLink(destination: SmartRecommendationsView()
                         .environmentObject(authManager)
                         .environmentObject(SupabaseManager.shared)
-                        .environmentObject(PinStore())
+                        .environmentObject(pinStore)
                         .onAppear {
                             print("📱 SmartRecommendationsView appeared from sidebar")
                         }
@@ -2752,6 +2756,8 @@ struct NavigationSidebar: View {
                     // Settings
                     NavigationLink(destination: SettingsView()
                         .environmentObject(authManager)
+                        .environmentObject(locationManager)
+                        .environmentObject(pinStore)
                         .onAppear {
                             print("📱 SettingsView appeared")
                         }

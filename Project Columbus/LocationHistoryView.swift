@@ -7,18 +7,22 @@
 
 import SwiftUI
 import MapKit
+import UIKit
 
 struct LocationHistoryView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var locationManager: AppLocationManager
     @Environment(\.dismiss) private var dismiss
     
-    @State private var locationHistory: [MockLocationEntry] = []
+    @State private var locationHistory: [LocationHistoryEntry] = []
     @State private var isLoading: Bool = true
     @State private var selectedTimeRange: TimeRange = .week
     @State private var showingMap: Bool = false
-    @State private var selectedEntry: MockLocationEntry?
+    @State private var selectedEntry: LocationHistoryEntry?
     @State private var isLocationHistoryEnabled: Bool = false
+    @State private var showDeleteAlert: Bool = false
+    @State private var showExportSheet: Bool = false
+    @State private var exportURL: URL?
     
     enum TimeRange: String, CaseIterable {
         case day = "Today"
@@ -135,53 +139,96 @@ struct LocationHistoryView: View {
                     LocationHistoryMapView(entry: entry)
                 }
             }
+            .sheet(isPresented: $showExportSheet) {
+                if let url = exportURL {
+                    ShareSheet(items: [url])
+                }
+            }
+            .alert("Delete All Location History", isPresented: $showDeleteAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    deleteAllLocationHistory()
+                }
+            } message: {
+                Text("This will permanently delete all your location history. This action cannot be undone.")
+            }
         }
     }
     
-    private var groupedLocationHistory: [(key: String, value: [MockLocationEntry])] {
+    private var groupedLocationHistory: [(key: String, value: [LocationHistoryEntry])] {
         let grouped = Dictionary(grouping: locationHistory) { entry in
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
-            return formatter.string(from: entry.timestamp)
+            return formatter.string(from: entry.createdAt)
         }
         
         return grouped.sorted { $0.key > $1.key }
     }
     
     private func loadLocationHistory() {
+        guard isLocationHistoryEnabled else {
+            locationHistory = []
+            isLoading = false
+            return
+        }
+        
         isLoading = true
         
-        // Load from LocationManager's cached data
-        let cachedHistory = locationManager.getLocationHistory()
-        
-        // Convert to MockLocationEntry format
-        var entries: [MockLocationEntry] = []
-        
-        for (index, locationData) in cachedHistory.enumerated() {
-            if let latitude = locationData["latitude"] as? Double,
-               let longitude = locationData["longitude"] as? Double,
-               let timestamp = locationData["timestamp"] as? TimeInterval {
+        Task {
+            do {
+                guard let session = try? await SupabaseManager.shared.client.auth.session else {
+                    await MainActor.run {
+                        locationHistory = []
+                        isLoading = false
+                    }
+                    return
+                }
                 
-                let entry = MockLocationEntry(
-                    id: UUID(),
-                    timestamp: Date(timeIntervalSince1970: timestamp),
-                    latitude: latitude,
-                    longitude: longitude,
-                    locationName: "Location \(index + 1)",
-                    activityType: "unknown"
-                )
-                entries.append(entry)
+                let userId = session.user.id.uuidString
+                let iso8601Formatter = ISO8601DateFormatter()
+                iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                
+                let dateFilter: String? = {
+                    switch selectedTimeRange {
+                    case .day:
+                        let todayStart = Calendar.current.startOfDay(for: Date())
+                        return iso8601Formatter.string(from: todayStart)
+                    case .week:
+                        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+                        return iso8601Formatter.string(from: sevenDaysAgo)
+                    case .month:
+                        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+                        return iso8601Formatter.string(from: thirtyDaysAgo)
+                    case .all:
+                        return nil
+                    }
+                }()
+                
+                var query = SupabaseManager.shared.client
+                    .from("location_history")
+                    .select("*")
+                    .eq("user_id", value: userId)
+                
+                if let filterDate = dateFilter {
+                    query = query.gte("created_at", value: filterDate)
+                }
+                
+                let entries: [LocationHistoryEntry] = try await query
+                    .order("created_at", ascending: false)
+                    .execute()
+                    .value
+                
+                await MainActor.run {
+                    locationHistory = entries
+                    isLoading = false
+                }
+            } catch {
+                print("❌ Failed to load location history: \(error)")
+                await MainActor.run {
+                    locationHistory = []
+                    isLoading = false
+                }
             }
-        }
-        
-        // If no real data, use mock data for demonstration
-        if entries.isEmpty {
-            entries = generateMockLocationHistory()
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.locationHistory = entries
-            self.isLoading = false
         }
     }
     
@@ -203,51 +250,67 @@ struct LocationHistoryView: View {
         } else {
             locationManager.disableLocationHistory()
         }
+        loadLocationHistory()
     }
     
     private func exportLocationHistory() {
-        // TODO: Implement export functionality
-        print("Exporting location history...")
+        guard !locationHistory.isEmpty else { return }
+        
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        do {
+            let data = try encoder.encode(locationHistory)
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("location_history_\(Date().timeIntervalSince1970).json")
+            try data.write(to: tempURL)
+            
+            exportURL = tempURL
+            showExportSheet = true
+        } catch {
+            print("❌ Failed to export location history: \(error)")
+        }
     }
     
     private func showDeleteConfirmation() {
-        // TODO: Show confirmation alert
-        print("Delete confirmation...")
+        showDeleteAlert = true
     }
     
-    private func generateMockLocationHistory() -> [MockLocationEntry] {
-        let now = Date()
-        var entries: [MockLocationEntry] = []
-        
-        for i in 0..<20 {
-            let timestamp = Calendar.current.date(byAdding: .hour, value: -i * 2, to: now) ?? now
-            let entry = MockLocationEntry(
-                id: UUID(),
-                timestamp: timestamp,
-                latitude: 37.7749 + Double.random(in: -0.01...0.01),
-                longitude: -122.4194 + Double.random(in: -0.01...0.01),
-                locationName: ["Home", "Work", "Coffee Shop", "Gym", "Restaurant"].randomElement() ?? "Unknown",
-                activityType: ["walking", "driving", "stationary"].randomElement() ?? "unknown"
-            )
-            entries.append(entry)
+    private func deleteAllLocationHistory() {
+        Task {
+            do {
+                guard let session = try? await SupabaseManager.shared.client.auth.session else { return }
+                
+                let userId = session.user.id.uuidString
+                
+                try await SupabaseManager.shared.client
+                    .from("location_history")
+                    .delete()
+                    .eq("user_id", value: userId)
+                    .execute()
+                
+                await MainActor.run {
+                    locationHistory = []
+                }
+            } catch {
+                print("❌ Failed to delete location history: \(error)")
+            }
         }
-        
-        return entries
     }
-}
-
-struct MockLocationEntry: Identifiable {
-    let id: UUID
-    let timestamp: Date
-    let latitude: Double
-    let longitude: Double
-    let locationName: String
-    let activityType: String
 }
 
 struct LocationHistoryRow: View {
-    let entry: MockLocationEntry
+    let entry: LocationHistoryEntry
     let onTap: () -> Void
+    
+    private var displayLocationName: String {
+        entry.locationName ?? "Unknown Location"
+    }
+    
+    private var displayActivityType: String {
+        entry.activityType ?? "unknown"
+    }
     
     var body: some View {
         Button(action: onTap) {
@@ -258,7 +321,7 @@ struct LocationHistoryRow: View {
                     .frame(width: 24)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.locationName)
+                    Text(displayLocationName)
                         .font(.body)
                         .foregroundColor(.primary)
                     
@@ -270,7 +333,7 @@ struct LocationHistoryRow: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(entry.activityType.capitalized)
+                    Text(displayActivityType.capitalized)
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -286,30 +349,38 @@ struct LocationHistoryRow: View {
     private var timeString: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
-        return formatter.string(from: entry.timestamp)
+        return formatter.string(from: entry.createdAt)
     }
     
     private var activityIcon: String {
-        switch entry.activityType {
+        switch displayActivityType.lowercased() {
         case "walking":
             return "figure.walk"
-        case "driving":
+        case "driving", "automotive":
             return "car.fill"
         case "stationary":
             return "figure.stand"
+        case "running":
+            return "figure.run"
+        case "cycling":
+            return "bicycle"
         default:
             return "location.fill"
         }
     }
     
     private var activityColor: Color {
-        switch entry.activityType {
+        switch displayActivityType.lowercased() {
         case "walking":
             return .green
-        case "driving":
+        case "driving", "automotive":
             return .blue
         case "stationary":
             return .orange
+        case "running":
+            return .purple
+        case "cycling":
+            return .cyan
         default:
             return .gray
         }
@@ -317,12 +388,16 @@ struct LocationHistoryRow: View {
 }
 
 struct LocationHistoryMapView: View {
-    let entry: MockLocationEntry
+    let entry: LocationHistoryEntry
     @Environment(\.dismiss) private var dismiss
     
     @State private var region: MKCoordinateRegion
     
-    init(entry: MockLocationEntry) {
+    private var displayLocationName: String {
+        entry.locationName ?? "Unknown Location"
+    }
+    
+    init(entry: LocationHistoryEntry) {
         self.entry = entry
         self._region = State(initialValue: MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: entry.latitude, longitude: entry.longitude),
@@ -333,12 +408,12 @@ struct LocationHistoryMapView: View {
     var body: some View {
         NavigationView {
             Map(position: .constant(.region(region))) {
-                Annotation(entry.locationName, coordinate: CLLocationCoordinate2D(latitude: entry.latitude, longitude: entry.longitude)) {
+                Annotation(displayLocationName, coordinate: CLLocationCoordinate2D(latitude: entry.latitude, longitude: entry.longitude)) {
                     VStack {
                         Image(systemName: "location.fill")
                             .foregroundColor(.red)
                             .font(.title2)
-                        Text(entry.locationName)
+                        Text(displayLocationName)
                             .font(.caption)
                             .padding(4)
                             .background(Color.white.opacity(0.8))
@@ -346,7 +421,7 @@ struct LocationHistoryMapView: View {
                     }
                 }
             }
-            .navigationTitle(entry.locationName)
+            .navigationTitle(displayLocationName)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
@@ -362,4 +437,4 @@ struct LocationHistoryView_Previews: PreviewProvider {
     static var previews: some View {
         LocationHistoryView()
     }
-} 
+}

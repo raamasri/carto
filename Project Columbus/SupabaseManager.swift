@@ -70,6 +70,20 @@ class SupabaseManager: ObservableObject, @unchecked Sendable {
     let client: SupabaseClient
     private(set) var isConfigured: Bool = false
     private(set) var configurationError: String?
+    
+    // MARK: - Domain Services
+    lazy var authService = AuthService(client: client)
+    lazy var pinService = PinService(client: client)
+    lazy var listService = ListService(client: client)
+    lazy var messagingService = MessagingService(client: client)
+    lazy var socialService = SocialService(client: client)
+    lazy var userService = UserService(client: client)
+    lazy var storageService = StorageService(client: client)
+    lazy var videoService = VideoService(client: client)
+    lazy var locationPrivacyService = LocationPrivacyService(client: client)
+    lazy var storyService = StoryService(client: client)
+    lazy var reviewService = ReviewService(client: client)
+    lazy var proximityService = ProximityService(client: client)
 
     private init() {
         // Load credentials from secure configuration
@@ -1351,550 +1365,112 @@ class SupabaseManager: ObservableObject, @unchecked Sendable {
         }
     }
     
-    // MARK: - Messaging Functions
+    // MARK: - Messaging Functions (delegated to MessagingService)
     
     /// Get all conversations for the current user
     func getUserConversations() async -> [Conversation] {
-        guard let session = try? await client.auth.session else { return [] }
-        
-        do {
-            // Call our custom function to get conversations with details
-            let conversationDetails: [ConversationDetailDB] = try await client
-                .rpc("get_user_conversations", params: ["user_uuid": session.user.id])
-                .execute()
-                .value
-            
-            var conversations: [Conversation] = []
-            
-            // Convert each conversation detail to Conversation object
-            for conversationDetail in conversationDetails {
-                print("🔄 Processing conversation: \(conversationDetail.conversation_id)")
-                print("  - Last message content: \(conversationDetail.last_message_content ?? "nil")")
-                print("  - Last message sender: \(conversationDetail.last_message_sender_id ?? "nil")")
-                print("  - Last message time: \(conversationDetail.last_message_created_at ?? "nil")")
-                
-                // Create AppUser objects for participants
-                let participants = zip(zip(conversationDetail.participant_ids, conversationDetail.participant_usernames), conversationDetail.participant_full_names).map { (idUsername, fullName) in
-                    let (id, username) = idUsername
-                    return AppUser(
-                        id: id,
-                        username: username,
-                        full_name: fullName,
-                        email: nil,
-                        bio: nil,
-                        follower_count: 0,
-                        following_count: 0,
-                        isFollowedByCurrentUser: false,
-                        latitude: nil,
-                        longitude: nil,
-                        isCurrentUser: false,
-                        avatarURL: nil
-                    )
-                }
-                
-                // Create conversation title
-                let title: String
-                if conversationDetail.is_group {
-                    if let groupName = conversationDetail.conversation_name {
-                        title = groupName
-                    } else {
-                        let names = participants.prefix(2).map { $0.full_name }
-                        title = names.joined(separator: ", ") + (participants.count > 2 ? "..." : "")
-                    }
-                } else {
-                    // Direct conversation - show the other person's name (not current user)
-                    let currentUserId = session.user.id.uuidString.lowercased()
-                    if let otherUser = participants.first(where: { $0.id.lowercased() != currentUserId }) {
-                        title = otherUser.full_name
-                    } else {
-                        title = "Direct Message"
-                    }
-                }
-                
-                // Convert to Conversation object
-                let conversation = conversationDetail.toConversation(with: participants, title: title)
-                print("✅ Created conversation with title: '\(conversation.title)'")
-                print("  - Last message: \(conversation.lastMessage?.content ?? "nil")")
-                conversations.append(conversation)
-            }
-            
-            return conversations
-        } catch {
-            print("❌ Failed to fetch user conversations: \(error)")
-            return []
-        }
+        await messagingService.getUserConversations()
     }
     
     /// Get messages for a specific conversation
     func getConversationMessages(conversationId: String, limit: Int = 50, offset: Int = 0) async -> [Message] {
-        guard let session = try? await client.auth.session else { 
-            print("❌ No session found for getting messages")
-            return [] 
-        }
-        
-        print("📥 SupabaseManager: Getting messages for conversation: \(conversationId)")
-        print("  - Requesting user: \(session.user.id.uuidString)")
-        
-        do {
-            // Create parameters with proper typing
-            struct MessageParams: Codable {
-                let conversation_uuid: String
-                let requesting_user_id: String
-                let limit_count: Int
-                let offset_count: Int
-            }
-            
-            let params = MessageParams(
-                conversation_uuid: conversationId,
-                requesting_user_id: session.user.id.uuidString,
-                limit_count: limit,
-                offset_count: offset
-            )
-            
-            // Call our custom function to get messages
-            let messageDetails: [MessageDetailDB] = try await client
-                .rpc("get_conversation_messages", params: params)
-                .execute()
-                .value
-            
-            print("📥 SupabaseManager: Retrieved \(messageDetails.count) message details")
-            for detail in messageDetails {
-                print("  - Message from \(detail.sender_id): \(detail.content)")
-            }
-            
-            return messageDetails.map { messageDetail in
-                var message = messageDetail.toMessage()
-                message = Message(
-                    id: message.id,
-                    conversationId: conversationId,
-                    senderId: message.senderId,
-                    content: message.content,
-                    createdAt: message.createdAt,
-                    messageType: message.messageType
-                )
-                return message
-            }
-        } catch {
-            print("❌ Failed to fetch conversation messages: \(error)")
-            return []
-        }
+        await messagingService.getConversationMessages(conversationId: conversationId, limit: limit, offset: offset)
     }
     
     /// Send a message to a conversation
     func sendMessage(conversationId: String, content: String, messageType: MessageType = .text) async -> Bool {
-        guard let session = try? await client.auth.session else { 
-            print("❌ No session found for sending message")
-            return false 
-        }
-        
-        print("📤 SupabaseManager: Sending message")
-        print("  - Conversation ID: \(conversationId)")
-        print("  - Sender ID: \(session.user.id.uuidString)")
-        print("  - Content: \(content)")
-        print("  - Type: \(messageType.rawValue)")
-        
-        do {
-            // Call our custom function to send message
-            let messageId: String = try await client
-                .rpc("send_message", params: [
-                    "conversation_uuid": conversationId,
-                    "sender_uuid": session.user.id.uuidString,
-                    "message_content": content,
-                    "msg_type": messageType.rawValue
-                ])
-                .execute()
-                .value
-            
-            print("✅ SupabaseManager: Message sent with ID: \(messageId)")
-            return !messageId.isEmpty
-        } catch {
-            print("❌ Failed to send message: \(error)")
-            return false
-        }
+        await messagingService.sendMessage(conversationId: conversationId, content: content, messageType: messageType)
     }
     
     /// Create a new conversation with specific users
     func createConversation(with userIds: [String], isGroup: Bool = false, name: String? = nil) async -> String? {
-        guard let session = try? await client.auth.session else { return nil }
-        
-        do {
-            // Include current user in participants
-            var allParticipants = [session.user.id.uuidString]
-            allParticipants.append(contentsOf: userIds)
-            
-            // Create parameters with proper typing
-            struct ConversationParams: Codable {
-                let participant_ids: [String]
-                let is_group_chat: Bool
-                let conversation_name: String?
-            }
-            
-            let params = ConversationParams(
-                participant_ids: allParticipants,
-                is_group_chat: isGroup,
-                conversation_name: name
-            )
-            
-            // Call our custom function to create conversation
-            let conversationId: String = try await client
-                .rpc("create_conversation", params: params)
-                .execute()
-                .value
-            
-            return conversationId
-        } catch {
-            print("❌ Failed to create conversation: \(error)")
-            return nil
-        }
+        await messagingService.createConversation(with: userIds, isGroup: isGroup, name: name)
     }
     
     /// Mark a conversation as read
     func markConversationAsRead(conversationId: String) async -> Bool {
-        guard let session = try? await client.auth.session else { return false }
-        
-        do {
-            // Create parameters with proper typing
-            struct MarkReadParams: Codable {
-                let conversation_uuid: String
-                let user_uuid: String
-            }
-            
-            let params = MarkReadParams(
-                conversation_uuid: conversationId,
-                user_uuid: session.user.id.uuidString
-            )
-            
-            // Call our custom function to mark conversation as read
-            try await client
-                .rpc("mark_conversation_read", params: params)
-                .execute()
-            
-            return true
-        } catch {
-            print("❌ Failed to mark conversation as read: \(error)")
-            return false
-        }
+        await messagingService.markConversationAsRead(conversationId: conversationId)
     }
     
     /// Get or create a direct conversation between current user and another user
     func getOrCreateDirectConversation(with userId: String) async -> String? {
-        guard let session = try? await client.auth.session else { return nil }
-        
-        print("🔄 Getting or creating conversation with user: \(userId)")
-        print("  - Current user: \(session.user.id.uuidString)")
-        
-        // First, try to find existing conversation
-        let conversations = await getUserConversations()
-        print("📊 Found \(conversations.count) existing conversations")
-        
-        // Look for a direct conversation (2 participants) with this user
-        for conversation in conversations {
-            print("  - Checking conversation \(conversation.id.uuidString) with \(conversation.participants.count) participants")
-            if conversation.participants.count == 2 {
-                // Check if this user is in the conversation
-                if let participants = conversation.participants as? [AppUser] {
-                    let participantIds = participants.map { $0.id }
-                    print("    - Participant IDs: \(participantIds)")
-                    if participants.contains(where: { $0.id.lowercased() == userId.lowercased() }) {
-                        print("✅ Found existing conversation: \(conversation.id.uuidString)")
-                        return conversation.id.uuidString
-                    }
-                }
-            }
-        }
-        
-        print("🆕 No existing conversation found, creating new one")
-        // If no existing conversation found, create a new one
-        let newConversationId = await createConversation(with: [userId], isGroup: false)
-        print("✅ Created new conversation: \(newConversationId ?? "FAILED")")
-        return newConversationId
+        await messagingService.getOrCreateDirectConversation(with: userId)
     }
 
-    // MARK: - Real-time Messaging
+    // MARK: - Real-time Messaging (Supabase Realtime via MessagingService)
     
     /// Subscribe to real-time message updates for a conversation
     func subscribeToConversationMessages(conversationId: String, onMessageReceived: @escaping (Message) -> Void) async {
-        print("🔔 Setting up real-time messaging subscription for conversation: \(conversationId)")
-        
-        // TODO: Update to newer Supabase Realtime API syntax
-        // For now, fall back to polling until API is updated
-        print("⚠️ Real-time messaging temporarily disabled, using polling fallback")
-        await startMessagePolling(conversationId: conversationId, onMessageReceived: onMessageReceived)
+        await messagingService.subscribeToConversationMessages(conversationId: conversationId, onMessageReceived: onMessageReceived)
     }
     
     /// Subscribe to conversation list updates for a user
     func subscribeToUserConversations(userId: String, onConversationUpdate: @escaping () -> Void) async {
-        print("🔔 Setting up real-time conversation updates for user: \(userId)")
-        
-        // TODO: Update to newer Supabase Realtime API syntax
-        // For now, fall back to polling until API is updated
-        print("⚠️ Real-time conversation updates temporarily disabled, using polling fallback")
-        await startConversationPolling(userId: userId, onConversationUpdate: onConversationUpdate)
+        await messagingService.subscribeToUserConversations(userId: userId, onConversationUpdate: onConversationUpdate)
     }
     
-    /// Fallback polling mechanism for messages when real-time fails
-    private func startMessagePolling(conversationId: String, onMessageReceived: @escaping (Message) -> Void) async {
-        print("🔄 Starting message polling fallback for conversation: \(conversationId)")
-        
-        // Use actor to handle concurrent access to lastMessageTime
-        actor MessageTimeTracker {
-            private var lastMessageTime: Date = Date()
-            
-            func updateLastMessageTime(to newTime: Date) {
-                lastMessageTime = max(lastMessageTime, newTime)
-            }
-            
-            func getLastMessageTime() -> Date {
-                return lastMessageTime
-            }
-        }
-        
-        let timeTracker = MessageTimeTracker()
-        
-        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { timer in
-            Task {
-                let lastTime = await timeTracker.getLastMessageTime()
-                let newMessages = await self.getMessagesAfter(conversationId: conversationId, after: lastTime)
-                for message in newMessages {
-                    onMessageReceived(message)
-                    await timeTracker.updateLastMessageTime(to: message.createdAt)
-                }
-            }
-        }
-    }
-    
-    /// Fallback polling mechanism for conversations when real-time fails
-    private func startConversationPolling(userId: String, onConversationUpdate: @escaping () -> Void) async {
-        print("🔄 Starting conversation polling fallback for user: \(userId)")
-        
-        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { timer in
-            Task {
-                onConversationUpdate()
-            }
-        }
-    }
-    
-    /// Helper method to get messages after a specific timestamp
-    private func getMessagesAfter(conversationId: String, after: Date) async -> [Message] {
-        do {
-            let afterString = ISO8601DateFormatter().string(from: after)
-            let messagesDB: [MessageDB] = try await client
-                .from("messages")
-                .select("*")
-                .eq("conversation_id", value: conversationId)
-                .gt("created_at", value: afterString)
-                .order("created_at", ascending: true)
-                .execute()
-                .value
-            
-            return messagesDB.map { $0.toMessage() }
-        } catch {
-            print("❌ Failed to fetch messages after timestamp: \(error)")
-            return []
-        }
-    }
-    
-    /// Unsubscribe from real-time updates
+    /// Unsubscribe from all real-time updates
     func unsubscribeFromRealTimeUpdates() async {
-        print("🔕 Unsubscribing from all real-time updates")
-        // TODO: Update to newer Supabase API
-        // await client.removeAllChannels()
+        await messagingService.unsubscribeFromRealTimeUpdates()
     }
     
     /// Unsubscribe from specific conversation
     func unsubscribeFromConversation(conversationId: String) async {
-        print("🔕 Unsubscribing from conversation: \(conversationId)")
-        // TODO: Update to newer Supabase API
-        // let channelName = "conversation:\(conversationId)"
-        // if let channel = client.getChannels().first(where: { $0.topic == channelName }) {
-        //     await channel.unsubscribe()
-        // }
+        await messagingService.unsubscribeFromConversation(conversationId: conversationId)
     }
     
     /// Unsubscribe from user conversations
     func unsubscribeFromUserConversations(userId: String) async {
-        print("🔕 Unsubscribing from user conversations: \(userId)")
-        // TODO: Update to newer Supabase API
-        // let channelName = "user_conversations:\(userId)"
-        // if let channel = client.getChannels().first(where: { $0.topic == channelName }) {
-        //     await channel.unsubscribe()
-        // }
+        await messagingService.unsubscribeFromUserConversations(userId: userId)
     }
     
     /// Mark message as read and update read status
     func markMessageAsRead(conversationId: String, messageId: String) async -> Bool {
-        guard let session = try? await client.auth.session else { return false }
-        
-        do {
-            let _: String = try await client
-                .rpc("mark_message_as_read", params: [
-                    "conversation_uuid": conversationId,
-                    "user_uuid": session.user.id.uuidString,
-                    "message_uuid": messageId
-                ])
-                .execute()
-                .value
-            
-            print("✅ Marked message as read: \(messageId)")
-            return true
-        } catch {
-            print("❌ Failed to mark message as read: \(error)")
-            return false
-        }
+        await messagingService.markMessageAsRead(conversationId: conversationId, messageId: messageId)
     }
     
     /// Get message read status for a conversation
     func getMessageReadStatus(conversationId: String, messageId: String) async -> [String] {
-        do {
-            let readByUserIds: [String] = try await client
-                .rpc("get_message_read_status", params: [
-                    "conversation_uuid": conversationId,
-                    "message_uuid": messageId
-                ])
-                .execute()
-                .value
-            
-            return readByUserIds
-        } catch {
-            print("❌ Failed to get message read status: \(error)")
-            return []
-        }
+        await messagingService.getMessageReadStatus(conversationId: conversationId, messageId: messageId)
     }
     
-    // MARK: - Rich Media Messaging
+    // MARK: - Rich Media Messaging (delegated to MessagingService)
     
     /// Upload image for messaging and return URL
     func uploadMessageImage(_ imageData: Data, conversationId: String) async -> String? {
-        let fileName = "message_\(UUID().uuidString).jpg"
-        let filePath = "message-images/\(conversationId)/\(fileName)"
-        
-        do {
-            try await client.storage
-                .from("message-images")
-                .upload(filePath, data: imageData, options: FileOptions(contentType: "image/jpeg"))
-            
-            let response = try client.storage
-                .from("message-images")
-                .getPublicURL(path: filePath)
-            
-            print("✅ Message image uploaded: \(response.absoluteString)")
-            return response.absoluteString
-        } catch {
-            print("❌ Failed to upload message image: \(error)")
-            return nil
-        }
+        await messagingService.uploadMessageImage(imageData, conversationId: conversationId)
     }
     
     /// Send image message
     func sendImageMessage(conversationId: String, imageData: Data, caption: String? = nil) async -> Bool {
-        guard let imageURL = await uploadMessageImage(imageData, conversationId: conversationId) else {
-            return false
-        }
-        
-        let content = caption ?? imageURL
-        let messageType: MessageType = .image
-        
-        return await sendMessage(conversationId: conversationId, content: content, messageType: messageType)
+        await messagingService.sendImageMessage(conversationId: conversationId, imageData: imageData, caption: caption)
     }
     
     /// Send location message
     func sendLocationMessage(conversationId: String, latitude: Double, longitude: Double, locationName: String? = nil) async -> Bool {
-        let locationData: [String: Any] = [
-            "latitude": latitude,
-            "longitude": longitude,
-            "name": locationName ?? "Shared Location"
-        ]
-        
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: locationData),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            return false
-        }
-        
-        return await sendMessage(conversationId: conversationId, content: jsonString, messageType: .location)
+        await messagingService.sendLocationMessage(conversationId: conversationId, latitude: latitude, longitude: longitude, locationName: locationName)
     }
     
     /// Send pin message (share a pin from the app)
     func sendPinMessage(conversationId: String, pin: Pin) async -> Bool {
-        let pinData: [String: Any] = [
-            "id": pin.id.uuidString,
-            "locationName": pin.locationName,
-            "city": pin.city,
-            "latitude": pin.latitude,
-            "longitude": pin.longitude,
-            "reaction": pin.reaction.rawValue,
-            "reviewText": pin.reviewText ?? "",
-            "starRating": pin.starRating ?? 0,
-            "authorHandle": pin.authorHandle
-        ]
-        
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: pinData),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            return false
-        }
-        
-        return await sendMessage(conversationId: conversationId, content: jsonString, messageType: .pin)
+        await messagingService.sendPinMessage(conversationId: conversationId, pin: pin)
     }
     
-    // MARK: - Notification Support
+    // MARK: - Notification Support (delegated to MessagingService)
     
     /// Request notification permissions
     func requestNotificationPermissions() async -> Bool {
-        do {
-            let granted = try await UNUserNotificationCenter.current().requestAuthorization(
-                options: [.alert, .sound, .badge]
-            )
-            print(granted ? "✅ Notification permissions granted" : "❌ Notification permissions denied")
-            return granted
-        } catch {
-            print("❌ Failed to request notification permissions: \(error)")
-            return false
-        }
+        await messagingService.requestNotificationPermissions()
     }
     
     /// Send local notification for new message
     func sendMessageNotification(message: Message, conversationTitle: String) {
-        let content = UNMutableNotificationContent()
-        content.title = conversationTitle
-        content.body = message.displayContent
-        content.sound = .default
-        content.badge = 1
-        
-        // Add conversation ID to userInfo for handling tap
-        content.userInfo = [
-            "conversationId": message.conversationId,
-            "messageId": message.id.uuidString
-        ]
-        
-        let request = UNNotificationRequest(
-            identifier: message.id.uuidString,
-            content: content,
-            trigger: nil // Immediate delivery
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("❌ Failed to send notification: \(error)")
-            } else {
-                print("✅ Message notification sent")
-            }
-        }
+        messagingService.sendMessageNotification(message: message, conversationTitle: conversationTitle)
     }
     
     /// Clear notifications for a conversation
     func clearNotifications(conversationId: String) {
-        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-            let identifiersToRemove = requests.compactMap { request in
-                if let userInfo = request.content.userInfo as? [String: Any],
-                   let notificationConversationId = userInfo["conversationId"] as? String,
-                   notificationConversationId == conversationId {
-                    return request.identifier
-                }
-                return nil
-            }
-            
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiersToRemove)
-        }
+        messagingService.clearNotifications(conversationId: conversationId)
     }
 
     /// Delete an image from storage
@@ -3271,81 +2847,18 @@ extension SupabaseManager {
         content: String,
         messageType: MessageType = .text
     ) async throws -> String {
-        // Get recipient's public key
-        guard let recipientPublicKeyString = try await getUserPublicKey(userID: recipientId) else {
-            throw EncryptionError.invalidKey("Recipient public key not found")
-        }
-        
-        // Get sender's private key
-        guard let senderPrivateKey = try? EncryptionManager.shared.retrievePrivateKey(for: senderId) else {
-            throw EncryptionError.invalidKey("Sender private key not found")
-        }
-        
-        // Convert recipient's public key string to key object
-        let recipientPublicKey = try EncryptionManager.shared.stringToPublicKey(recipientPublicKeyString)
-        
-        // Encrypt the message
-        let encryptedMessage = try EncryptionManager.shared.encryptMessage(
-            content,
-            senderPrivateKey: senderPrivateKey,
-            recipientPublicKey: recipientPublicKey
+        try await messagingService.sendEncryptedMessage(
+            conversationId: conversationId,
+            senderId: senderId,
+            recipientId: recipientId,
+            content: content,
+            messageType: messageType
         )
-        
-        // Store encrypted message in database
-        let messageId = UUID().uuidString
-        let messageInsert = MessageInsert(
-            id: messageId,
-            conversation_id: conversationId,
-            sender_id: senderId,
-            content: "", // Empty content for encrypted messages
-            message_type: messageType.rawValue,
-            is_encrypted: true,
-            encrypted_content: encryptedMessage.ciphertext,
-            encryption_nonce: encryptedMessage.nonce,
-            encryption_tag: encryptedMessage.tag
-        )
-        
-        try await client
-            .from("messages")
-            .insert(messageInsert)
-            .execute()
-        
-        print("✅ [Encryption] Encrypted message sent")
-        return messageId
     }
     
     /// Decrypt message for current user
     func decryptMessage(_ message: Message, currentUserId: String) async throws -> String {
-        guard message.isEncrypted,
-              let encryptedContent = message.encryptedContent,
-              let nonce = message.encryptionNonce,
-              let tag = message.encryptionTag else {
-            // Return original content if not encrypted
-            return message.content
-        }
-        
-        // Get current user's private key
-        let currentUserPrivateKey = try EncryptionManager.shared.retrievePrivateKey(for: currentUserId)
-        
-        // Get sender's public key
-        guard let senderPublicKeyString = try await getUserPublicKey(userID: message.senderId) else {
-            throw EncryptionError.invalidKey("Sender public key not found")
-        }
-        
-        let senderPublicKey = try EncryptionManager.shared.stringToPublicKey(senderPublicKeyString)
-        
-        // Decrypt the message
-        let encryptedMessage = EncryptedMessage(
-            ciphertext: encryptedContent,
-            nonce: nonce,
-            tag: tag
-        )
-        
-        return try EncryptionManager.shared.decryptMessage(
-            encryptedMessage,
-            recipientPrivateKey: currentUserPrivateKey,
-            senderPublicKey: senderPublicKey
-        )
+        try await messagingService.decryptMessage(message, currentUserId: currentUserId)
     }
 }
 
@@ -4385,8 +3898,12 @@ extension SupabaseManager {
         }
         
         // Add owner as first member
+        guard let groupListId = UUID(uuidString: createdDB.id) else {
+            throw NSError(domain: "Database", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid group list ID returned from database"])
+        }
+        
         _ = try await addGroupListMember(
-            groupListId: UUID(uuidString: createdDB.id)!,
+            groupListId: groupListId,
             userId: userId,
             role: .owner
         )
@@ -5035,54 +4552,6 @@ extension SupabaseManager {
         } catch {
             print("❌ Failed to update user location for proximity: \(error)")
             return false
-        }
-    }
-}
-
-// MARK: - Location Social Context Model
-
-struct LocationSocialContext {
-    let locationName: String
-    let latitude: Double
-    let longitude: Double
-    let totalVisits: Int
-    let uniqueVisitors: Int
-    let averageRating: Double
-    let recentActivity: [FriendActivity]
-    let friendsCurrentlyHere: [AppUser]
-    let lastVisit: Date?
-    let topReviews: [String]
-    
-    var socialScore: Double {
-        var score = 0.0
-        
-        // Recent activity score
-        let recentVisits = recentActivity.filter { $0.createdAt.timeIntervalSinceNow > -604800 } // Last week
-        score += Double(recentVisits.count) * 0.3
-        
-        // Rating score
-        if averageRating > 0 {
-            score += averageRating * 0.4
-        }
-        
-        // Unique visitors score
-        score += Double(uniqueVisitors) * 0.2
-        
-        // Current friends score
-        score += Double(friendsCurrentlyHere.count) * 0.1
-        
-        return score
-    }
-    
-    var recommendationText: String {
-        if friendsCurrentlyHere.count > 0 {
-            return "\(friendsCurrentlyHere.count) friend\(friendsCurrentlyHere.count == 1 ? "" : "s") \(friendsCurrentlyHere.count == 1 ? "is" : "are") here now"
-        } else if !recentActivity.isEmpty {
-            return "\(recentActivity.count) friend\(recentActivity.count == 1 ? "" : "s") visited recently"
-        } else if averageRating > 0 {
-            return String(format: "%.1f star rating from friends", averageRating)
-        } else {
-            return "Popular with your friends"
         }
     }
 }
